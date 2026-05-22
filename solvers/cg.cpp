@@ -107,6 +107,7 @@ void xpay(const Grid& x, double a, Grid& y) {
             y(i,j) = x(i,j) + a * y(i,j);
 }
 
+#ifndef TEST_MODE
 int main(int argc, char* argv[]) {
     int N = 64;
     if (argc > 1) N = std::atoi(argv[1]);
@@ -183,3 +184,4 @@ int main(int argc, char* argv[]) {
     std::cout << "Did not converge\n";
     return 1;
 }
+#endif

@@ -106,6 +106,7 @@ double residual_max(const Grid& x, const Grid& b) {
     return rmax;
 }
 
+#ifndef TEST_MODE
 int main(int argc, char* argv[]) {
     int N = 64;
     if (argc > 1) N = std::atoi(argv[1]);
@@ -162,3 +163,4 @@ int main(int argc, char* argv[]) {
     std::cout << "But as a standalone solver it is still too slow — the real use of RBGS is as a smoother in multigrid (Step 4)\n";
     return 0;
 }
+#endif

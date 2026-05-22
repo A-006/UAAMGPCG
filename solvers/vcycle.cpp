@@ -216,6 +216,7 @@ void solve_with_fmg(Grid& x, const Grid& b, const std::vector<int>& levels,
             x(i,j) = storage_x[0](i,j);
 }
 
+#ifndef TEST_MODE
 int main(int argc, char* argv[]) {
     int N = 64;
     int max_cycles = 100;
@@ -256,3 +257,4 @@ int main(int argc, char* argv[]) {
     std::cout << "\nKey feature of FMG: convergence speed hardly deteriorates as N increases\n";
     return 0;
 }
+#endif

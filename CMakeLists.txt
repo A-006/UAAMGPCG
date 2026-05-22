@@ -16,3 +16,4 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 # Subdirectories
 add_subdirectory(solvers)   # Ax=b solvers (jacobi, rbgs, cg, vcycle, amgpcg)
 add_subdirectory(src)       # 2D fluid simulation (LFM, uses Jacobi for pressure)
+add_subdirectory(test)      # Unit tests

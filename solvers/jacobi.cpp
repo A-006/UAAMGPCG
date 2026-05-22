@@ -83,6 +83,7 @@ double Ax_at(const Grid& x, int i, int j) {
     return (4*x(i,j) - x(i+1,j) - x(i-1,j) - x(i,j+1) - x(i,j-1)) * inv_h2;
 }
 
+#ifndef TEST_MODE
 int main(int argc, char* argv[]) {
     int N = 64;
     if (argc > 1) N = std::atoi(argv[1]);
@@ -149,3 +150,4 @@ int main(int argc, char* argv[]) {
     std::cout << "未收敛 (N=" << N << ")\n";
     return 1;
 }
+#endif

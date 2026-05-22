@@ -259,6 +259,7 @@ Grid amgpcg_solve(const Grid& b, int max_iter, double tol, int& out_iters) {
     return x;
 }
 
+#ifndef TEST_MODE
 int main(int argc, char* argv[]) {
     int N = 64;
     int max_iter = 50;
@@ -295,3 +296,4 @@ int main(int argc, char* argv[]) {
     std::cout << "\n\nAMGPCG ≈ CG convergence speed × 10+, and hardly degrades as N grows\n";
     return 0;
 }
+#endif

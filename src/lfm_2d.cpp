@@ -567,6 +567,7 @@ void print_status(int step, double t, const Grid& g) {
 // ===========================================================================
 // Main program
 // ===========================================================================
+#ifndef TEST_MODE
 int main(int argc, char* argv[]) {
     Config cfg;
 
@@ -657,3 +658,4 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+#endif
