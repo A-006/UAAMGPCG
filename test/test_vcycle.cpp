@@ -1,6 +1,6 @@
 // Unit tests for V-Cycle / FMG — exercises code in ../solvers/vcycle.cpp
 #define TEST_MODE
-#include "../solvers/vcycle.cpp"
+#include "../src/solver/vcycle.cpp"
 #include "test_utils.h"
 
 int main() {

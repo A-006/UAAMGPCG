@@ -1,6 +1,6 @@
 // Unit tests for AMGPCG — exercises code in ../solvers/amgpcg.cpp
 #define TEST_MODE
-#include "../solvers/amgpcg.cpp"
+#include "../src/solver/amgpcg.cpp"
 #include "test_utils.h"
 
 int main() {

@@ -1,7 +1,9 @@
-// Unit tests for LFM 2D fluid simulation — exercises code in ../src/lfm_2d.cpp
-#define TEST_MODE
-#include "../src/lfm_2d.cpp"
+#include "lfm/grid.h"
+#include "lfm/advection.h"
+#include "lfm/boundary.h"
+#include "lfm/poisson_jacobi.h"
 #include "test_utils.h"
+#include <cmath>
 
 int main() {
     test_header("LFM 2D Fluid Simulation Unit Tests");
@@ -80,7 +82,7 @@ int main() {
         check(ok, "sample_v exact at v-face centers");
     }
 
-    // Test 6: clamps out-of-bounds coordinates
+    // Test 6: clamp
     {
         check(clamp(-1.0, 0.0, 10.0) == 0.0, "clamp lower bound");
         check(clamp(100.0, 0.0, 10.0) == 10.0, "clamp upper bound");
@@ -102,6 +104,30 @@ int main() {
         g.set_solid(4,4);
         check(g.is_solid(4,4), "set_solid marks cell as solid");
         check(!g.is_solid(5,5), "adjacent cell unaffected");
+    }
+
+    // Test 9: Jacobi Poisson solver with manufactured solution
+    // p_exact = sin(2*pi*x)*sin(2*pi*y)  (zero-mean, compatible with Neumann BC)
+    {
+        Grid g(32, 32, 1.0, 1.0);
+        std::vector<double> rhs(g.p.size(), 0.0);
+        for (int i = 1; i <= 32; i++)
+            for (int j = 1; j <= 32; j++) {
+                double x = (i-0.5)*g.dx, y = (j-0.5)*g.dy;
+                rhs[g.ip(i,j)] = 8.0*M_PI*M_PI * std::sin(2*M_PI*x) * std::sin(2*M_PI*y);
+            }
+
+        std::fill(g.p.begin(), g.p.end(), 0.0);
+        jacobi_solve(g, rhs, 5000);
+
+        double max_res = 0;
+        for (int i = 2; i <= 31; i++)
+            for (int j = 2; j <= 31; j++) {
+                double lap = (g.p_at(i+1,j) + g.p_at(i-1,j) - 2*g.p_at(i,j))/(g.dx*g.dx)
+                           + (g.p_at(i,j+1) + g.p_at(i,j-1) - 2*g.p_at(i,j))/(g.dy*g.dy);
+                max_res = std::max(max_res, std::abs(lap - rhs[g.ip(i,j)]));
+            }
+        check(max_res < 1.0, "Jacobi Poisson solve converges (manufactured solution)");
     }
 
     return test_summary();

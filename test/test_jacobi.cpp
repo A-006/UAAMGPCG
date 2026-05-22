@@ -1,6 +1,6 @@
 // Unit tests for Jacobi solver — exercises code in ../solvers/jacobi.cpp
 #define TEST_MODE
-#include "../solvers/jacobi.cpp"
+#include "../src/solver/jacobi.cpp"
 #include "test_utils.h"
 
 int main() {

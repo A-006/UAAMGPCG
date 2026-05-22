@@ -1,6 +1,6 @@
 // Unit tests for CG solver — exercises code in ../solvers/cg.cpp
 #define TEST_MODE
-#include "../solvers/cg.cpp"
+#include "../src/solver/cg.cpp"
 #include "test_utils.h"
 
 int main() {

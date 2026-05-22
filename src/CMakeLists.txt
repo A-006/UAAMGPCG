@@ -1,6 +1,18 @@
-cmake_minimum_required(VERSION 3.10)
+# ── LFM 2D Fluid Simulation (library) ──
+set(LFM_SOURCES
+    lfm/grid.cpp
+    lfm/advection.cpp
+    lfm/poisson_jacobi.cpp
+    lfm/pressure.cpp
+    lfm/boundary.cpp
+    lfm/vtk_io.cpp
+)
 
-# LFM 2D fluid simulation (Jacobi solves the pressure Poisson equation)
-add_executable(lfm_2d lfm_2d.cpp)
-target_compile_features(lfm_2d PRIVATE cxx_std_17)
-target_compile_options(lfm_2d PRIVATE -O2)
+add_library(lfm_lib ${LFM_SOURCES})
+
+# ── Main executable ──
+add_executable(lfm_2d main.cpp)
+target_link_libraries(lfm_2d PRIVATE lfm_lib)
+
+# ── Ax=b solvers ──
+add_subdirectory(solver)

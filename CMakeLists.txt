@@ -10,10 +10,11 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# Optimization flags
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 
+# Global include path
+include_directories(${CMAKE_SOURCE_DIR}/include)
+
 # Subdirectories
-add_subdirectory(solvers)   # Ax=b solvers (jacobi, rbgs, cg, vcycle, amgpcg)
-add_subdirectory(src)       # 2D fluid simulation (LFM, uses Jacobi for pressure)
-add_subdirectory(test)      # Unit tests
+add_subdirectory(src)
+add_subdirectory(test)
