@@ -1,7 +1,7 @@
-#include "lfm/grid.h"
-#include "lfm/advection.h"
-#include "lfm/boundary.h"
-#include "lfm/poisson_jacobi.h"
+#include "core/grid.h"
+#include "advection/advection.h"
+#include "boundary/boundary.h"
+#include "solver/poisson_jacobi.h"
 #include "test_utils.h"
 #include <cmath>
 
@@ -32,7 +32,7 @@ int main() {
         double max_div = 0;
         for (int i = 1; i <= 16; i++)
             for (int j = 1; j <= 8; j++)
-                max_div = std::max(max_div, std::abs(divergence(g,i,j)));
+                max_div = std::max(max_div, std::abs(g.divergence(i,j)));
         check(max_div < 1e-12, "uniform flow divergence = 0");
     }
 
@@ -48,11 +48,11 @@ int main() {
         double max_div = 0;
         for (int i = 1; i <= 8; i++)
             for (int j = 1; j <= 8; j++)
-                max_div = std::max(max_div, std::abs(divergence(g,i,j)));
+                max_div = std::max(max_div, std::abs(g.divergence(i,j)));
         check(max_div < 1e-12, "u=x, v=-y => div = 0");
     }
 
-    // Test 4: sample_u is exact at u-face centers
+    // Test 4: sampleU is exact at u-face centers
     {
         Grid g(8, 8, 1.0, 1.0);
         for (int i = 0; i <= 8; i++)
@@ -62,12 +62,12 @@ int main() {
         for (int i = 0; i <= 8; i++)
             for (int j = 1; j <= 8; j++) {
                 double x = i * g.dx, y = (j - 0.5) * g.dy;
-                if (std::abs(sample_u(g,x,y) - g.u_at(i,j)) > 1e-12) ok = false;
+                if (std::abs(AdvectionScheme::sampleU(g,x,y) - g.u_at(i,j)) > 1e-12) ok = false;
             }
-        check(ok, "sample_u exact at u-face centers");
+        check(ok, "sampleU exact at u-face centers");
     }
 
-    // Test 5: sample_v is exact at v-face centers
+    // Test 5: sampleV is exact at v-face centers
     {
         Grid g(8, 8, 1.0, 1.0);
         for (int i = 1; i <= 8; i++)
@@ -77,16 +77,16 @@ int main() {
         for (int i = 1; i <= 8; i++)
             for (int j = 0; j <= 8; j++) {
                 double x = (i - 0.5) * g.dx, y = j * g.dy;
-                if (std::abs(sample_v(g,x,y) - g.v_at(i,j)) > 1e-12) ok = false;
+                if (std::abs(AdvectionScheme::sampleV(g,x,y) - g.v_at(i,j)) > 1e-12) ok = false;
             }
-        check(ok, "sample_v exact at v-face centers");
+        check(ok, "sampleV exact at v-face centers");
     }
 
     // Test 6: clamp
     {
-        check(clamp(-1.0, 0.0, 10.0) == 0.0, "clamp lower bound");
-        check(clamp(100.0, 0.0, 10.0) == 10.0, "clamp upper bound");
-        check(clamp(5.0, 0.0, 10.0) == 5.0, "clamp in range");
+        check(Grid::clamp(-1.0, 0.0, 10.0) == 0.0, "clamp lower bound");
+        check(Grid::clamp(100.0, 0.0, 10.0) == 10.0, "clamp upper bound");
+        check(Grid::clamp(5.0, 0.0, 10.0) == 5.0, "clamp in range");
     }
 
     // Test 7: Pressure array indexing is consistent
@@ -118,7 +118,8 @@ int main() {
             }
 
         std::fill(g.p.begin(), g.p.end(), 0.0);
-        jacobi_solve(g, rhs, 5000);
+        JacobiSolver solver;
+        solver.solve(g, rhs, 5000, 0.0);
 
         double max_res = 0;
         for (int i = 2; i <= 31; i++)

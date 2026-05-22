@@ -1,7 +1,7 @@
-#include "lfm/boundary.h"
+#include "boundary/boundary.h"
 #include <cmath>
 
-void apply_bc_karman(Grid& g, double U_inf) {
+void BoundaryConditions::applyKarman(Grid& g, double U_inf) {
     int nx = g.nx, ny = g.ny;
 
     for (int j = 1; j <= ny; j++) {
@@ -24,7 +24,7 @@ void apply_bc_karman(Grid& g, double U_inf) {
     g.v_at(nx+1, 0) = g.v_at(nx+1, ny) = 0.0;
 }
 
-void apply_bc_smoke(Grid& g) {
+void BoundaryConditions::applySmoke(Grid& g) {
     int nx = g.nx, ny = g.ny;
 
     for (int j = 1; j <= ny; j++) {
@@ -45,7 +45,7 @@ void apply_bc_smoke(Grid& g) {
     }
 }
 
-void apply_solid_bc(Grid& g) {
+void BoundaryConditions::applySolid(Grid& g) {
     for (int i = 1; i <= g.nx; i++) {
         for (int j = 1; j <= g.ny; j++) {
             if (!g.is_solid(i,j)) continue;
@@ -57,7 +57,7 @@ void apply_solid_bc(Grid& g) {
     }
 }
 
-void setup_cylinder(Grid& g, double cx, double cy, double R) {
+void BoundaryConditions::setupCylinder(Grid& g, double cx, double cy, double R) {
     for (int i = 1; i <= g.nx; i++) {
         for (int j = 1; j <= g.ny; j++) {
             double xc = (i - 0.5) * g.dx;

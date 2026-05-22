@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <algorithm>
 
 // MAC staggered grid (2D)
 //
@@ -37,4 +38,15 @@ public:
     double& p_at(int i, int j);
     bool    is_solid(int i, int j) const;
     void    set_solid(int i, int j);
+
+    // Divergence at cell (i,j): du/dx + dv/dy
+    double divergence(int i, int j) const {
+        return (u_at(i,j) - u_at(i-1,j)) / dx
+             + (v_at(i,j) - v_at(i,j-1)) / dy;
+    }
+
+    // Clamp value to [lo, hi]
+    static double clamp(double v, double lo, double hi) {
+        return v < lo ? lo : (v > hi ? hi : v);
+    }
 };

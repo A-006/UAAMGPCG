@@ -1,5 +1,4 @@
-#include "lfm/vtk_io.h"
-#include "lfm/advection.h"
+#include "io/vtk_writer.h"
 #include <fstream>
 #include <sstream>
 #include <iomanip>
@@ -7,7 +6,7 @@
 #include <algorithm>
 #include <cmath>
 
-void write_vtk(const Grid& g, int frame, const Config& cfg) {
+void VtkWriter::write(const Grid& g, int frame, const Config& cfg) {
     std::ostringstream ss;
     ss << cfg.out_dir << "/frame_" << std::setw(5) << std::setfill('0') << frame << ".vtk";
     std::ofstream f(ss.str());
@@ -62,9 +61,9 @@ void write_vtk(const Grid& g, int frame, const Config& cfg) {
     f << "LOOKUP_TABLE default\n";
     for (int j = 0; j <= g.ny; j++) {
         for (int i = 0; i <= g.nx; i++) {
-            int ci = clamp(i, 1, g.nx);
-            int cj = clamp(j, 1, g.ny);
-            f << divergence(g, ci, cj) << "\n";
+            int ci = Grid::clamp(i, 1, g.nx);
+            int cj = Grid::clamp(j, 1, g.ny);
+            f << g.divergence(ci, cj) << "\n";
         }
     }
 
@@ -73,8 +72,8 @@ void write_vtk(const Grid& g, int frame, const Config& cfg) {
     f << "LOOKUP_TABLE default\n";
     for (int j = 0; j <= g.ny; j++) {
         for (int i = 0; i <= g.nx; i++) {
-            int ci = clamp(i, 1, g.nx);
-            int cj = clamp(j, 1, g.ny);
+            int ci = Grid::clamp(i, 1, g.nx);
+            int cj = Grid::clamp(j, 1, g.ny);
             f << (g.is_solid(ci,cj) ? 1.0 : 0.0) << "\n";
         }
     }
@@ -82,7 +81,7 @@ void write_vtk(const Grid& g, int frame, const Config& cfg) {
     f.close();
 }
 
-void print_status(int step, double t, const Grid& g) {
+void VtkWriter::printStatus(int step, double t, const Grid& g) {
     double max_u = 0.0, max_div = 0.0;
     for (int i = 1; i <= g.nx; i++) {
         for (int j = 1; j <= g.ny; j++) {
@@ -90,7 +89,7 @@ void print_status(int step, double t, const Grid& g) {
             double uc = 0.5 * (g.u_at(i-1,j) + g.u_at(i,j));
             double vc = 0.5 * (g.v_at(i,j-1) + g.v_at(i,j));
             max_u = std::max(max_u, std::sqrt(uc*uc + vc*vc));
-            max_div = std::max(max_div, std::abs(divergence(g,i,j)));
+            max_div = std::max(max_div, std::abs(g.divergence(i,j)));
         }
     }
     std::cout << "  step=" << std::setw(6) << step

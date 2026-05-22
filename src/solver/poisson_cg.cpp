@@ -1,4 +1,4 @@
-#include "lfm/poisson_cg.h"
+#include "solver/poisson_cg.h"
 #include <algorithm>
 #include <cmath>
 
@@ -42,7 +42,7 @@ static void mac_axpy(double a, const std::vector<double>& x,
                 y[g.ip(i,j)] += a * x[g.ip(i,j)];
 }
 
-int cg_solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double tol) {
+void CGSolver::solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double tol) {
     const int nx = g.nx, ny = g.ny;
 
     // Zero-mean RHS
@@ -81,7 +81,7 @@ int cg_solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double to
     for (int k = 0; k < max_iter; k++) {
         mac_matvec(g, p, Ap);
         double pAp = mac_dot(g, p, Ap);
-        if (pAp < 1e-15) return k + 1;
+        if (pAp < 1e-15) return;
 
         double alpha = rsold / pAp;
         mac_axpy( alpha, p, x, g);    // x += alpha*p
@@ -100,7 +100,7 @@ int cg_solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double to
         }
 
         double rsnew = mac_dot(g, r, r);
-        if (std::sqrt(rsnew) < tol) return k + 1;
+        if (std::sqrt(rsnew) < tol) return;
 
         double beta = rsnew / rsold;
         // p = r + beta*p
@@ -126,5 +126,4 @@ int cg_solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double to
                 if (!g.is_solid(i,j)) x[g.ip(i,j)] -= mean;
     }
 
-    return max_iter;
 }

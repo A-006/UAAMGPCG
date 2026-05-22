@@ -1,4 +1,4 @@
-#include "lfm/poisson_pcg.h"
+#include "solver/poisson_pcg.h"
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -173,7 +173,7 @@ static void v_cycle(std::vector<Level>& lv, int level, int nlevels) {
 }
 
 // ── PCG: CG with V-Cycle preconditioner ──
-int pcg_solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double tol) {
+void PCGSolver::solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double tol) {
     const int nx = g.nx, ny = g.ny;
 
     // Zero-mean RHS
@@ -270,7 +270,7 @@ int pcg_solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double t
         matvec(p, Ap);
 
         double pAp = dot(p, Ap);
-        if (pAp < 1e-15) return k + 1;
+        if (pAp < 1e-15) return;
 
         double alpha = rsold / pAp;
         for (int i = 1; i <= nx; i++)
@@ -284,7 +284,7 @@ int pcg_solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double t
         subtract_mean(r);
 
         double rsnew = dot(r, r);
-        if (std::sqrt(rsnew) < tol) return k + 1;
+        if (std::sqrt(rsnew) < tol) return;
 
         precondition(z, r);
 
@@ -298,5 +298,4 @@ int pcg_solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double t
         rsold = dot(r, z);
     }
 
-    return max_iter;
 }
