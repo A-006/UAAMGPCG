@@ -46,7 +46,7 @@ static void lfm_time_step(Grid& g, double dt, const Config& cfg,
     else                          apply_bc_smoke(g);
     apply_solid_bc(g);
 
-    pressure_projection(g, dt, cfg.jacobi_iters);
+    pressure_projection(g, dt, cfg);
 
     if (cfg.scenario == "karman") apply_bc_karman(g, cfg.U_inf);
     else                          apply_bc_smoke(g);
@@ -59,6 +59,13 @@ int main(int argc, char* argv[]) {
     if (argc > 1) cfg.scenario = argv[1];
     if (argc > 2) cfg.NX = std::atoi(argv[2]);
     if (argc > 3) cfg.t_end = std::atof(argv[3]);
+    if (argc > 4) {
+        std::string s = argv[4];
+        if (s == "jacobi") cfg.solver = Solver::Jacobi;
+        else if (s == "rbgs") cfg.solver = Solver::RBGS;
+        else if (s == "cg")   cfg.solver = Solver::CG;
+        else if (s == "pcg")  cfg.solver = Solver::PCG;
+    }
 
     if (cfg.scenario == "karman") {
         cfg.Lx = 4.0; cfg.Ly = 1.0;
@@ -66,15 +73,15 @@ int main(int argc, char* argv[]) {
         if (cfg.NY < 16) cfg.NY = 16;
         cfg.out_dir = "output_karman";
         cfg.dt = 0.5 * (cfg.Lx / cfg.NX) / cfg.U_inf;
-        cfg.jacobi_iters = 2000;
+        cfg.solve_iters = (cfg.solver <= Solver::RBGS) ? 2000 : 50;
     } else if (cfg.scenario == "smoke") {
         cfg.Lx = 1.0; cfg.Ly = 1.0;
         cfg.NY = cfg.NX;
         cfg.out_dir = "output_smoke";
         cfg.dt = 0.005;
-        cfg.jacobi_iters = 2000;
+        cfg.solve_iters = (cfg.solver <= Solver::RBGS) ? 2000 : 50;
     } else {
-        std::cerr << "Usage: lfm_2d [karman|smoke] [NX] [t_end]\n";
+        std::cerr << "Usage: lfm_2d [karman|smoke] [NX] [t_end] [jacobi|rbgs|cg|pcg]\n";
         return 1;
     }
 
@@ -90,7 +97,7 @@ int main(int argc, char* argv[]) {
               << "  dy=" << (cfg.Ly/cfg.NY)
               << "  dt=" << cfg.dt
               << "  t_end=" << cfg.t_end << "        |\n";
-    std::cout << "| Jacobi iters=" << cfg.jacobi_iters
+    std::cout << "| Solver=" << solver_name(cfg.solver) << "  iters=" << cfg.solve_iters
               << "  output: " << cfg.out_dir << "/frame_*.vtk |\n";
     std::cout << "+" << std::string(52, '-') << "+\n\n";
 

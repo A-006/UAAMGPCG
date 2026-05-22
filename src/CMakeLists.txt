@@ -3,6 +3,9 @@ set(LFM_SOURCES
     lfm/grid.cpp
     lfm/advection.cpp
     lfm/poisson_jacobi.cpp
+    lfm/poisson_rbgs.cpp
+    lfm/poisson_cg.cpp
+    lfm/poisson_pcg.cpp
     lfm/pressure.cpp
     lfm/boundary.cpp
     lfm/vtk_io.cpp

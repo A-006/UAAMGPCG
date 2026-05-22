@@ -47,10 +47,8 @@
 //
 //   D⁻¹ = h²/4  (reciprocal of diagonal: 1 ÷ (4/h²))
 //
-//   每个格点: x_{i,j}^{new} = x_{i,j}^{old} + (h²/4)·[b_{i,j} - (Ax)^{old}_{i,j}]
+//   Each grid point: x_{i,j}^{new} = x_{i,j}^{old} + (h²/4)·[b_{i,j} - (Ax)^{old}_{i,j}]
 //                                                   └────── residual ──────────┘
-//
-//   Intuition: residual>0 → current value is too small, add a bit; residual<0 → current value is too large, subtract a bit
 //
 //   Feature: all points are updated synchronously with old values → inherently parallel
 //   Drawback: information propagates only 1 grid cell per round → very slow convergence on large grids
@@ -61,27 +59,21 @@
 #include <cmath>
 #include <chrono>
 #include <iomanip>
+#include "solver/jacobi.h"
 
 // ── Grid: 2D array (N+2)×(N+2), flattened into 1D storage ──
 // Index: (i,j) → i*(N+2)+j
 // Boundary rows/cols (i=0, N+1, j=0, N+1) store boundary conditions, do not participate in iteration
 struct Grid {
-    int N;                     // number of interior grid points
-    double h;                  // grid spacing = 1/(N+1)
-    std::vector<double> v;     // data, length (N+2)*(N+2)
+    int N;
+    double h;
+    std::vector<double> v;
 
     Grid(int n) : N(n), h(1.0/(n+1)), v((n+2)*(n+2), 0.0) {}
 
     double  operator()(int i, int j) const { return v[i*(N+2) + j]; }
     double& operator()(int i, int j)       { return v[i*(N+2) + j]; }
 };
-
-// ── Matrix-free A*x — 5-point Laplacian ──
-// Do not store A, compute (Ax)_{i,j} directly from neighbor values
-double Ax_at(const Grid& x, int i, int j) {
-    double inv_h2 = 1.0 / (x.h * x.h);  // 1/h²
-    return (4*x(i,j) - x(i+1,j) - x(i-1,j) - x(i,j+1) - x(i,j-1)) * inv_h2;
-}
 
 #ifndef TEST_MODE
 int main(int argc, char* argv[]) {
@@ -90,13 +82,10 @@ int main(int argc, char* argv[]) {
 
     const double TOL   = 1e-6;
     const int MAX_ITER = 50000;
-    double inv_diag    = 1.0 / ((N+1.0)*(N+1.0)) / 4.0;  // h²/4 = D⁻¹
+    double inv_h2 = 1.0 / ((N+1.0)*(N+1.0));
 
-    Grid x(N);   // solution, initially all 0
-    Grid b(N);   // RHS f
-    Grid u(N);   // true solution, for final verification
+    Grid x(N), b(N), u(N);
 
-    // ── Initialize RHS and true solution ──
     // True solution u=sin(πx)sin(πy) → f=-Δu=2π²·sin(πx)·sin(πy)
     for (int i = 1; i <= N; i++)
         for (int j = 1; j <= N; j++) {
@@ -107,47 +96,25 @@ int main(int argc, char* argv[]) {
         }
 
     auto t0 = std::chrono::high_resolution_clock::now();
-    std::vector<double> x_new(x.v.size());
 
-    // ═══════════════ Jacobi main loop ═══════════════
-    for (int iter = 0; iter < MAX_ITER; iter++) {
+    // Matrix-free Ax: 5-point Laplacian with Dirichlet BC
+    auto Ax = [&](int i, int j) -> double {
+        return (4*x(i,j) - x(i+1,j) - x(i-1,j) - x(i,j+1) - x(i,j-1)) * inv_h2;
+    };
+    // D⁻¹ = h²/4, uniform
+    auto inv_diag = [&](int, int) -> double { return x.h * x.h / 4.0; };
 
-        // Use x_old to compute x_new for all points simultaneously (Jacobi feature)
-        for (int i = 1; i <= N; i++)
-            for (int j = 1; j <= N; j++)
-                x_new[i*(N+2)+j] = x(i,j) + inv_diag * (b(i,j) - Ax_at(x, i, j));
+    jacobi_solve(x.v, b.v, Ax, inv_diag, N, N, N+2, MAX_ITER, TOL);
 
-        // Write back to x
-        for (int i = 1; i <= N; i++)
-            for (int j = 1; j <= N; j++)
-                x(i,j) = x_new[i*(N+2)+j];
+    auto t1 = std::chrono::high_resolution_clock::now();
+    double s = std::chrono::duration<double>(t1 - t0).count();
 
-        // Report and check convergence every 200 iterations
-        if (iter % 200 == 0) {
-            double rmax = 0;
-            for (int i = 1; i <= N; i++)
-                for (int j = 1; j <= N; j++)
-                    rmax = std::max(rmax, std::abs(b(i,j) - Ax_at(x, i, j)));
+    double err = 0;
+    for (int i = 1; i <= N; i++)
+        for (int j = 1; j <= N; j++)
+            err = std::max(err, std::abs(x(i,j) - u(i,j)));
 
-            std::cout << "iter " << std::setw(6) << iter
-                      << "  res = " << rmax << '\n';
-
-            if (rmax < TOL) {
-                auto t1 = std::chrono::high_resolution_clock::now();
-                double s = std::chrono::duration<double>(t1 - t0).count();
-
-                double err = 0;
-                for (int i = 1; i <= N; i++)
-                    for (int j = 1; j <= N; j++)
-                        err = std::max(err, std::abs(x(i,j) - u(i,j)));
-
-                std::cout << "\n收敛: " << iter << " 次, "
-                          << s << " s, 误差 " << err << '\n';
-                return 0;
-            }
-        }
-    }
-    std::cout << "未收敛 (N=" << N << ")\n";
-    return 1;
+    std::cout << "N=" << N << "  time=" << s << " s  error=" << err << '\n';
+    return 0;
 }
 #endif
