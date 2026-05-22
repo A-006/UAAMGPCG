@@ -6,11 +6,12 @@ set(LFM_SOURCES
     io/vtk_writer.cpp
     pressure/pressure.cpp
     simulator/simulator.cpp
-    solver/poisson_jacobi.cpp
-    solver/poisson_rbgs.cpp
-    solver/poisson_cg.cpp
-    solver/poisson_pcg.cpp
-    solver/solver_factory.cpp
+    solver/jacobi.cpp
+    solver/rbgs.cpp
+    solver/pcg.cpp
+    solver/preconditioner/gmg_preconditioner.cpp
+    solver/preconditioner/amg_preconditioner.cpp
+    solver/factory.cpp
 )
 
 add_library(lfm_lib ${LFM_SOURCES})

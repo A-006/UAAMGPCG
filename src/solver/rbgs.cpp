@@ -1,7 +1,13 @@
-#include "solver/poisson_rbgs.h"
+/**
+ * @file rbgs.cpp
+ * @brief Red-Black Gauss-Seidel solver — alternating red/black point updates.
+ * @author liutao
+ * @date 2026-05-22
+ */
+#include "solver/rbgs.h"
 #include <algorithm>
 
-void RBGSSolver::solve(Grid& g, const std::vector<double>& rhs_in,
+void RBGS::solve(Grid& g, const std::vector<double>& rhs_in,
                        int max_iter, double /*tol*/) {
     const double idx2 = 1.0 / (g.dx * g.dx);
     const double idy2 = 1.0 / (g.dy * g.dy);

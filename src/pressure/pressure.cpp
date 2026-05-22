@@ -1,7 +1,7 @@
 #include "pressure/pressure.h"
 #include <algorithm>
 
-void PressureProjection::project(Grid& g, double dt, PoissonSolver& solver,
+void PressureProjection::project(Grid& g, double dt, Solver& solver,
                                   int max_iter, double tol) {
     int nx = g.nx, ny = g.ny;
 

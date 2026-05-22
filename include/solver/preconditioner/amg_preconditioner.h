@@ -1,0 +1,54 @@
+/**
+ * @file amg_preconditioner.h
+ * @brief Algebraic Multigrid (AMG) V-cycle preconditioner.
+ * @author liutao
+ * @date 2026-05-22
+ */
+#pragma once
+#include "solver/preconditioner/preconditioner.h"
+#include <vector>
+
+/**
+ * @brief Unsmoothed Aggregation Algebraic Multigrid preconditioner.
+ *
+ * Builds coarse levels by aggregating unknowns based on matrix connectivity
+ * rather than geometric position. Uses the Galerkin product
+ * \f$A_c = P^T A_f P\f$ to build coarse operators matrix-free.
+ *
+ * - Smoother: Red-Black Gauss-Seidel.
+ * - Aggregation: \f$2 \times 2\f$ blocks mapped to structured coarse grid.
+ * - Prolongation: piecewise-constant (each fine cell belongs to one aggregate).
+ * - Restriction: \f$P^T\f$ (sum of residuals in each aggregate).
+ *
+ * The hierarchy is cached and rebuilt only when grid dimensions change.
+ */
+class AMGPreconditioner : public Preconditioner {
+public:
+    void apply(const Grid& g, const std::vector<double>& r,
+               std::vector<double>& z) override;
+    std::string name() const override { return "AMG"; }
+
+private:
+    /// One level of the AMG hierarchy.
+    struct AggLevel {
+        int nx, ny;
+        double dx, dy;
+        double idx2, idy2, diag;     ///< Cached stencil coefficients.
+        std::vector<double> p;        ///< Pressure / correction.
+        std::vector<double> b;        ///< Right-hand side.
+        std::vector<bool>   solid;    ///< Solid mask.
+        std::vector<int>    agg;      ///< Aggregate id per fine cell (-1 = solid).
+    };
+
+    std::vector<AggLevel> levels_;           ///< Hierarchy (finest to coarsest).
+    int cached_nx_ = -1, cached_ny_ = -1;    ///< Cache key for the hierarchy.
+
+    void buildHierarchy(const Grid& g);
+    void vCycle(int level, int nlevels);
+
+    static void smooth           (AggLevel& L, int sweeps);
+    static void restrictResidual (const AggLevel& fine, AggLevel& coarse);
+    static void prolongateAdd    (const AggLevel& coarse, AggLevel& fine);
+    static void buildAggregates  (AggLevel& fine, const AggLevel& coarse);
+    static void restrictSolid    (const AggLevel& fine, AggLevel& coarse);
+};

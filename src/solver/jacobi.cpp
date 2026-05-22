@@ -1,7 +1,13 @@
-#include "solver/poisson_jacobi.h"
+/**
+ * @file jacobi.cpp
+ * @brief Jacobi solver — damped diagonal preconditioned Richardson iteration.
+ * @author liutao
+ * @date 2026-05-22
+ */
+#include "solver/jacobi.h"
 #include <algorithm>
 
-void JacobiSolver::solve(Grid& g, const std::vector<double>& rhs_in,
+void Jacobi::solve(Grid& g, const std::vector<double>& rhs_in,
                          int max_iter, double /*tol*/) {
     const double idx2 = 1.0 / (g.dx * g.dx);
     const double idy2 = 1.0 / (g.dy * g.dy);

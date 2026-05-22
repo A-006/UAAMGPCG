@@ -1,14 +1,14 @@
 #pragma once
 #include "config/config.h"
 #include "core/grid.h"
-#include "solver/poisson_solver.h"
+#include "solver/solver.h"
 #include <memory>
 
 // Top-level fluid simulator orchestrating the time-stepping loop.
 // Corresponds to OpenFOAM's applications/solvers (e.g., icoFoam).
 class LFMSimulator {
 public:
-    LFMSimulator(const Config& cfg, std::unique_ptr<PoissonSolver> solver);
+    LFMSimulator(const Config& cfg, std::unique_ptr<Solver> solver);
 
     void step();
     void run();
@@ -23,7 +23,7 @@ private:
     Grid   prev_;
     double t_ = 0;
     int    step_ = 0;
-    std::unique_ptr<PoissonSolver> solver_;
+    std::unique_ptr<Solver> solver_;
 
     void apply_forces();
     void advect();

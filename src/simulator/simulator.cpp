@@ -3,13 +3,13 @@
 #include "boundary/boundary.h"
 #include "pressure/pressure.h"
 #include "io/vtk_writer.h"
-#include "solver/solver_factory.h"
+#include "solver/factory.h"
 #include <iostream>
 #include <sys/stat.h>
 #include <chrono>
 #include <iomanip>
 
-LFMSimulator::LFMSimulator(const Config& cfg, std::unique_ptr<PoissonSolver> solver)
+LFMSimulator::LFMSimulator(const Config& cfg, std::unique_ptr<Solver> solver)
     : cfg_(cfg), grid_(cfg.NX, cfg.NY, cfg.Lx, cfg.Ly),
       prev_(cfg.NX, cfg.NY, cfg.Lx, cfg.Ly), solver_(std::move(solver))
 {

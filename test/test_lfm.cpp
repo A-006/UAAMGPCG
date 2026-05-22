@@ -1,7 +1,7 @@
 #include "core/grid.h"
 #include "advection/advection.h"
 #include "boundary/boundary.h"
-#include "solver/poisson_jacobi.h"
+#include "solver/jacobi.h"
 #include "test_utils.h"
 #include <cmath>
 
@@ -118,7 +118,7 @@ int main() {
             }
 
         std::fill(g.p.begin(), g.p.end(), 0.0);
-        JacobiSolver solver;
+        Jacobi solver;
         solver.solve(g, rhs, 5000, 0.0);
 
         double max_res = 0;

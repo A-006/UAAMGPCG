@@ -1,6 +1,6 @@
 #include "config/config.h"
 #include "simulator/simulator.h"
-#include "solver/solver_factory.h"
+#include "solver/factory.h"
 #include <iostream>
 #include <cstdlib>
 
@@ -27,11 +27,11 @@ int main(int argc, char* argv[]) {
         cfg.dt = 0.005;
         cfg.solve_iters = (solver_arg == "jacobi" || solver_arg == "rbgs") ? 2000 : 50;
     } else {
-        std::cerr << "Usage: lfm_2d [karman|smoke] [NX] [t_end] [jacobi|rbgs|cg|pcg]\n";
+        std::cerr << "Usage: lfm_2d [karman|smoke] [NX] [t_end] [jacobi|rbgs|cg|pcg|pcg_gmg|pcg_amg]\n";
         return 1;
     }
 
-    LFMSimulator sim(cfg, SolverFactory::create(solver_arg));
+    LFMSimulator sim(cfg, Factory::create(solver_arg));
     sim.run();
     return 0;
 }

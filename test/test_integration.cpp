@@ -2,21 +2,22 @@
 #include "core/grid.h"
 #include "advection/advection.h"
 #include "simulator/simulator.h"
-#include "solver/poisson_jacobi.h"
-#include "solver/poisson_rbgs.h"
-#include "solver/poisson_cg.h"
-#include "solver/poisson_pcg.h"
+#include "solver/jacobi.h"
+#include "solver/rbgs.h"
+#include "solver/pcg.h"
+#include "solver/preconditioner/identity_preconditioner.h"
+#include "solver/preconditioner/gmg_preconditioner.h"
 #include "test_utils.h"
 #include <cmath>
 #include <vector>
 #include <memory>
 
-static std::unique_ptr<PoissonSolver> make_solver(const std::string& name) {
-    if (name == "jacobi") return std::make_unique<JacobiSolver>();
-    if (name == "rbgs")   return std::make_unique<RBGSSolver>();
-    if (name == "cg")     return std::make_unique<CGSolver>();
-    if (name == "pcg")    return std::make_unique<PCGSolver>();
-    return std::make_unique<JacobiSolver>();
+static std::unique_ptr<Solver> make_solver(const std::string& name) {
+    if (name == "jacobi") return std::make_unique<Jacobi>();
+    if (name == "rbgs")   return std::make_unique<RBGS>();
+    if (name == "cg")     return std::make_unique<PCG>(std::make_unique<IdentityPreconditioner>());
+    if (name == "pcg")    return std::make_unique<PCG>(std::make_unique<GMGPreconditioner>());
+    return std::make_unique<Jacobi>();
 }
 
 int main() {

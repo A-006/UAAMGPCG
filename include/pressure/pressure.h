@@ -1,6 +1,6 @@
 #pragma once
 #include "core/grid.h"
-#include "solver/poisson_solver.h"
+#include "solver/solver.h"
 
 // Pressure projection: enforce incompressibility ∇·u = 0.
 // Corresponds to OpenFOAM's solution algorithm (PISO/SIMPLE).
@@ -10,6 +10,6 @@
 //   3. u = ũ - Δt·∇p
 class PressureProjection {
 public:
-    static void project(Grid& g, double dt, PoissonSolver& solver,
+    static void project(Grid& g, double dt, Solver& solver,
                         int max_iter, double tol);
 };
