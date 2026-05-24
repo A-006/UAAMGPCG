@@ -24,3 +24,8 @@ Makefile
 tools/karman_vortex_street/inputs/
 tools/karman_vortex_street/output/
 tools/karman_vortex_street/figures/
+tools/karman/openfoam_case/0.*/
+tools/karman/openfoam_case/[0-9]*/
+tools/karman/openfoam_case/constant/polyMesh/
+tools/karman/openfoam_case/constant/triSurface/
+tools/karman/openfoam_case/system/blockMeshDict.bak
