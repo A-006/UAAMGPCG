@@ -121,6 +121,13 @@ __global__ void subtract_mean_kernel(
     if (k < N && !solid[k]) v[k] -= mean;
 }
 
+// ── Negate ──
+__global__ void negate_kernel(double *v, const bool *solid, int N)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k < N && !solid[k]) v[k] = -v[k];
+}
+
 // ── Compute mean of v over fluid cells ──
 static double compute_mean(const double *d_v, const bool *d_solid, int N,
                            double *d_partial, int *d_count, int nblocks) {
@@ -131,6 +138,18 @@ static double compute_mean(const double *d_v, const bool *d_solid, int N,
     cudaDeviceSynchronize();
     int c = host_reduce_int(d_count, nblocks);
     return c > 0 ? s / c : 0.0;
+}
+
+// ── CPU reference dot (allocated once, used for verification) ──
+static std::vector<double> h_a, h_b, h_tmp;
+static std::vector<char>   h_s;
+static double cpu_dot_verify(const double *d_a, const double *d_b, const bool *d_solid, int N) {
+    if ((int)h_a.size() < N) { h_a.resize(N); h_b.resize(N); h_tmp.resize(N); h_s.resize(N); }
+    cudaMemcpy(h_a.data(), d_a, N*sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_b.data(), d_b, N*sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_s.data(), d_solid, N*sizeof(bool), cudaMemcpyDeviceToHost);
+    double t = 0; for (int k = 0; k < N; k++) if (!h_s[k]) t += h_a[k] * h_b[k];
+    return t;
 }
 
 // ── CudaPCG ──
@@ -175,9 +194,10 @@ void CudaPCG::solve(CudaGrid& g, double* p, double* rhs, int max_iter, double to
     cudaMemcpy(d_r, rhs, N * sizeof(double), cudaMemcpyDeviceToDevice);
     cudaMemset(p, 0, N * sizeof(double));
 
-    // Subtract mean from r
+    // Zero-mean + negate RHS (match CPU PCG: rhs = -(rhs - mean))
     double mr = compute_mean(d_r, g.solid, N, d_dot_buf, d_count_buf, nblocks1d);
-    subtract_mean_kernel<<<(N+255)/256, 256>>>(d_r, mr, g.solid, N);
+    subtract_mean_kernel<<<(N+255)/256, 256>>>(d_r, mr, g.solid, N); // r -= mean
+    negate_kernel<<<(N+255)/256, 256>>>(d_r, g.solid, N);            // r = -r
 
     // z = M^{-1} * r
     precond_->apply(g, d_r, d_z);
@@ -193,6 +213,12 @@ void CudaPCG::solve(CudaGrid& g, double* p, double* rhs, int max_iter, double to
     cudaDeviceSynchronize();
     double rsold = host_reduce(d_dot_buf, nblocks1d);
     if (rsold < 1e-30) { cudaMemset(p, 0, N * sizeof(double)); return; }
+
+    // Diagnostic: verify initial dot matches CPU
+    if (max_iter > 0) {
+        double cpu_rs = cpu_dot_verify(d_r, d_z, g.solid, N);
+        printf("  PCG init: GPU rsold=%.10e  CPU rsold=%.10e  diff=%.2e\n", rsold, cpu_rs, std::abs(rsold-cpu_rs));
+    }
 
     for (int k = 0; k < max_iter; k++) {
         matvec_kernel<<<grid2d, block2d>>>(d_p, d_Ap, g.solid, nx, ny, stride, g.idx2, g.idy2, g.diag);
@@ -210,12 +236,28 @@ void CudaPCG::solve(CudaGrid& g, double* p, double* rhs, int max_iter, double to
         dot_partial_kernel<<<nblocks1d, 256>>>(d_r, d_r, g.solid, N, d_dot_buf);
         CUDA_CHECK(cudaDeviceSynchronize());
         double rsnew = host_reduce(d_dot_buf, nblocks1d);
-        if (k < 5 || k % 10 == 0)
+
+        // ── Verify: compare every GPU dot product with CPU reference ──
+        if (k < 3) {
+            double cpu_pAp = cpu_dot_verify(d_p, d_Ap, g.solid, N);
+            double cpu_rr  = cpu_dot_verify(d_r, d_r, g.solid, N);
+            printf("  iter %d: GPU pAp=%.6e CPU=%.6e d=%.2e | GPU |r|^2=%.6e CPU=%.6e d=%.2e | alpha=%.6e\n",
+                   k, pAp, cpu_pAp, std::abs(pAp-cpu_pAp), rsnew, cpu_rr, std::abs(rsnew-cpu_rr), alpha);
+        } else if (k < 5 || k % 10 == 0) {
             printf("  PCG iter %d: sqrt(r·r)=%.4e  pAp=%.4e  alpha=%.4e  rsold=%.4e\n",
                    k, std::sqrt(rsnew), pAp, alpha, rsold);
+        }
         if (std::sqrt(rsnew) < tol) break;
 
         precond_->apply(g, d_r, d_z);
+
+        // ── Verify V-cycle output: compare GPU z with CPU UAAMG ──
+        if (k < 2) {
+            // Check if d_z is finite and non-zero
+            cudaMemcpy(h_tmp.data(), d_z, N*sizeof(double), cudaMemcpyDeviceToHost);
+            double zmax=0; for(int i=0;i<N;i++) if(!h_s[i]) zmax=std::max(zmax,std::abs(h_tmp[i]));
+            printf("          after apply: max|d_z|=%e\n", zmax);
+        }
 
         mz = compute_mean(d_z, g.solid, N, d_dot_buf, d_count_buf, nblocks1d);
         subtract_mean_kernel<<<(N+255)/256, 256>>>(d_z, mz, g.solid, N);
@@ -224,6 +266,10 @@ void CudaPCG::solve(CudaGrid& g, double* p, double* rhs, int max_iter, double to
         dot_partial_kernel<<<nblocks1d, 256>>>(d_r, d_z, g.solid, N, d_dot_buf);
         CUDA_CHECK(cudaDeviceSynchronize());
         double rz = host_reduce(d_dot_buf, nblocks1d);
+        if (k < 3) {
+            double cpu_rz = cpu_dot_verify(d_r, d_z, g.solid, N);
+            printf("          GPU dot(r,z)=%.6e CPU=%.6e d=%.2e\n", rz, cpu_rz, std::abs(rz-cpu_rz));
+        }
         double beta = rz / rsold;
         rsold = rz;
 

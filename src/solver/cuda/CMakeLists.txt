@@ -35,3 +35,9 @@ target_include_directories(test_cuda_kernels PRIVATE ${CMAKE_SOURCE_DIR}/include
 add_executable(test_cuda_full test_cuda_full.cu)
 set_target_properties(test_cuda_full PROPERTIES LINKER_LANGUAGE CUDA)
 target_include_directories(test_cuda_full PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Test apply() twice (second call correctness)
+add_executable(test_apply_twice test_apply_twice.cu)
+set_target_properties(test_apply_twice PROPERTIES LINKER_LANGUAGE CUDA)
+target_link_libraries(test_apply_twice PRIVATE cuda_uaamg_lib lfm_lib)
+target_include_directories(test_apply_twice PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
