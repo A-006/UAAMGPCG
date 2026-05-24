@@ -25,3 +25,13 @@ target_include_directories(test_cuda_uaamg PRIVATE ${CMAKE_SOURCE_DIR}/include $
 add_executable(test_rbgs_micro test_rbgs_micro.cu)
 set_target_properties(test_rbgs_micro PROPERTIES LINKER_LANGUAGE CUDA)
 target_include_directories(test_rbgs_micro PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Per-kernel unit tests
+add_executable(test_cuda_kernels test_cuda_kernels.cu)
+set_target_properties(test_cuda_kernels PROPERTIES LINKER_LANGUAGE CUDA)
+target_include_directories(test_cuda_kernels PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Full GPU tests (every kernel + PCG trace)
+add_executable(test_cuda_full test_cuda_full.cu)
+set_target_properties(test_cuda_full PROPERTIES LINKER_LANGUAGE CUDA)
+target_include_directories(test_cuda_full PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})

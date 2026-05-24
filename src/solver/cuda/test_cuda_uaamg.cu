@@ -95,22 +95,36 @@ static bool test_pcg_gpu_vs_cpu() {
 
     CudaPCG pcg;
 
-    // Diagnostic: run with 1 iteration, check if V-cycle output matches Test 1
-    pcg.solve(gpu_grid, d_p, d_rhs, 1, 1e-10);
+    // Diagnostic: run with 0,1,2,5,10 iterations
+    for (int iters : {0, 1, 2, 5, 10, 50}) {
+        cudaMemset(d_p, 0, N*sizeof(double));
+        cudaMemcpy(d_rhs, h_rhs.data(), N*sizeof(double), cudaMemcpyHostToDevice);
+        pcg.solve(gpu_grid, d_p, d_rhs, iters, 1e-10);
+        std::vector<double> gp(N, 0.0);
+        cudaMemcpy(gp.data(), d_p, N*sizeof(double), cudaMemcpyDeviceToHost);
+        double gmax = 0;
+        for (int i = 1; i <= nx; i++)
+            for (int j = 1; j <= ny; j++)
+                if (std::abs(gp[i+j*(nx+2)]) > gmax) gmax = std::abs(gp[i+j*(nx+2)]);
+        printf("  iter=%2d  max|gpu_p|=%e\n", iters, gmax);
+    }
 
+    // Compare CPU vs GPU at 50 iterations
+    pcg.solve(gpu_grid, d_p, d_rhs, 50, 1e-10);
     std::vector<double> gpu_p(N, 0.0);
     cudaMemcpy(gpu_p.data(), d_p, N*sizeof(double), cudaMemcpyDeviceToHost);
 
-    // Check if GPU PCG produced non-zero output
-    double gpu_max = 0;
+    double max_diff = 0, max_cpu = 0;
     for (int i = 1; i <= nx; i++)
-        for (int j = 1; j <= ny; j++)
-            if (std::abs(gpu_p[i + j*(nx+2)]) > gpu_max)
-                gpu_max = std::abs(gpu_p[i + j*(nx+2)]);
-    printf("  GPU PCG(1 iter) max|p| = %e\n", gpu_max);
-    printf("  %s\n", (gpu_max > 1e-15) ? "PASS" : "FAIL");
-
-    bool pass = (gpu_max > 1e-15);
+        for (int j = 1; j <= ny; j++) {
+            int id = i + j*(nx+2);
+            double d = std::abs(cpu_p[id] - gpu_p[id]);
+            if (d > max_diff) max_diff = d;
+            if (std::abs(cpu_p[id]) > max_cpu) max_cpu = std::abs(cpu_p[id]);
+        }
+    printf("  Max |cpu_p - gpu_p| = %e  (max|cpu_p| = %e)\n", max_diff, max_cpu);
+    bool pass = (max_diff < 1e-10 * std::max(1.0, max_cpu));
+    printf("  %s\n", pass ? "PASS" : "FAIL");
 
     cudaFree(d_p); cudaFree(d_rhs); gpu_grid.free();
     return pass;
