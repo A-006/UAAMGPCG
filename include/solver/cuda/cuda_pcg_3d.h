@@ -9,6 +9,9 @@ public:
     ~CudaPCG3D() { free_buffers(); }
     void solve(CudaGrid3D& g, double* p, double* rhs, int max_iter, double tol);
 
+    /// Optimized solve: fused dot products + shared-memory tiled matvec.
+    void solve_optimized(CudaGrid3D& g, double* p, double* rhs, int max_iter, double tol);
+
 private:
     std::unique_ptr<CudaUAAMGPreconditioner3D> precond_{
         std::make_unique<CudaUAAMGPreconditioner3D>()};

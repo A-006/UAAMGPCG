@@ -27,8 +27,8 @@ target_include_directories(cuda_uaamg_lib PUBLIC
 
 add_library(cuda_uaamg_3d_lib STATIC
     cuda_uaamg_preconditioner_3d.cu
-    cuda_uaamg_preconditioner_3d_opt.cu
     cuda_pcg_3d.cu
+    cuda_pcg_3d_opt.cu
     cuda_pcg_solver_3d.cu
 )
 set_target_properties(cuda_uaamg_3d_lib PROPERTIES LINKER_LANGUAGE CUDA)

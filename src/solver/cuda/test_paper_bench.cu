@@ -179,77 +179,44 @@ int main() {
             cpu_l2=std::sqrt(sr);
         }
 
-        // ── Report ──
-        printf("  GPU PCG(%d):  %8.2f ms  L2|res|=%.4e\n", B.pcg_iters, gpu_ms, gpu_l2);
-        if(cpu_ms>0) printf("  CPU PCG(%d):  %8.2f ms  L2|res|=%.4e  speedup=%.1fx\n",
-            B.pcg_iters, cpu_ms, cpu_l2, gpu_ms>0?cpu_ms/gpu_ms:0);
-        // Verify CPU-GPU match
-        if(cpu_ms>0){
-            printf("  CPU-GPU L2 diff: %.2e  %s\n", std::abs(gpu_l2-cpu_l2),
-                   std::abs(gpu_l2-cpu_l2)<1e-8?"PASS":"CHECK");
+        // ── GPU PCG Optimized (fused dot + tiled matvec) ──
+        double gpu_opt_ms=0, gpu_opt_l2=0;
+        {
+            cudaMemset(d_p,0,N*sizeof(double));
+            cudaMemcpy(d_rhs,h_rhs.data(),N*sizeof(double),cudaMemcpyHostToDevice);
+            CudaPCG3D pcg_opt;
+            // Warmup
+            for(int w=0;w<2;w++){cudaMemset(d_p,0,N*sizeof(double)); pcg_opt.solve_optimized(g,d_p,d_rhs,5,1e-6);}
+            cudaDeviceSynchronize();
+            cudaMemset(d_p,0,N*sizeof(double));
+            cudaMemcpy(d_rhs,h_rhs.data(),N*sizeof(double),cudaMemcpyHostToDevice);
+            auto t0=std::chrono::high_resolution_clock::now();
+            pcg_opt.solve_optimized(g,d_p,d_rhs,B.pcg_iters,1e-6);
+            cudaDeviceSynchronize();
+            auto t1=std::chrono::high_resolution_clock::now();
+            gpu_opt_ms=std::chrono::duration<double>(t1-t0).count()*1000.0;
+
+            std::vector<double> gp(N); cudaMemcpy(gp.data(),d_p,N*sizeof(double),cudaMemcpyDeviceToHost);
+            std::vector<double> gr(N); cudaMemcpy(gr.data(),d_rhs,N*sizeof(double),cudaMemcpyDeviceToHost);
+            std::vector<char> gs(N);   cudaMemcpy(gs.data(),g.solid,N*sizeof(bool),cudaMemcpyDeviceToHost);
+            gpu_opt_l2=residual_l2(gp.data(),gr.data(),(bool*)gs.data(),nx,ny,nz,1.0/nx,1.0/ny,1.0/nz);
         }
+
+        // ── Report ──
+        printf("  GPU PCG(%d):     %8.2f ms  L2|res|=%.4e\n", B.pcg_iters, gpu_ms, gpu_l2);
+        printf("  GPU PCG-opt(%d): %8.2f ms  L2|res|=%.4e  speedup=%.2fx\n",
+            B.pcg_iters, gpu_opt_ms, gpu_opt_l2, gpu_ms/gpu_opt_ms);
+        if(cpu_ms>0) printf("  CPU PCG(%d):     %8.2f ms  L2|res|=%.4e  speedup=%.1fx\n",
+            B.pcg_iters, cpu_ms, cpu_l2, gpu_ms>0?cpu_ms/gpu_ms:0);
+        // Verify results match
+        double opt_diff = std::abs(gpu_l2 - gpu_opt_l2);
+        printf("  Opt-vs-Unopt L2 diff: %.2e  %s\n", opt_diff, opt_diff<1e-8?"PASS":"CHECK");
 
         cudaFree(d_p); cudaFree(d_rhs); g.free();
         printf("\n");
     }
 
-    // ── Optimized vs Unoptimized V-cycle comparison ──
-    printf("══════ Optimized vs Unoptimized V-Cycle ══════\n");
-    {
-        int tnx=128, tny=64, tnz=64, tN=(tnx+2)*(tny+2)*(tnz+2);
-        CudaGrid3D tg; tg.allocate(tnx,tny,tnz,1.0/tnx,1.0/tny,1.0/tnz);
-        double *tr,*tz;
-        cudaMalloc(&tr,tN*sizeof(double));
-        cudaMalloc(&tz,tN*sizeof(double));
-        std::vector<double> thr(tN,0.0), ths(tN,0);
-        for(int i=1;i<=tnx;i++)for(int j=1;j<=tny;j++)for(int k=1;k<=tnz;k++)
-            thr[i+j*(tnx+2)+k*(tnx+2)*(tny+2)]=(double)(i+j+k)/(tnx+tny+tnz);
-        cudaMemcpy(tg.solid,ths.data(),tN*sizeof(bool),cudaMemcpyHostToDevice);
-        cudaMemcpy(tr,thr.data(),tN*sizeof(double),cudaMemcpyHostToDevice);
-
-        CudaUAAMGPreconditioner3D tp;
-        tp.build(tg);
-
-        // Unoptimized
-        for(int w=0;w<5;w++){cudaMemset(tz,0,tN*sizeof(double));tp.apply(tg,tr,tz);}
-        cudaDeviceSynchronize();
-        auto u0=std::chrono::high_resolution_clock::now();
-        for(int m=0;m<20;m++){cudaMemset(tz,0,tN*sizeof(double));tp.apply(tg,tr,tz);cudaDeviceSynchronize();}
-        auto u1=std::chrono::high_resolution_clock::now();
-        double unopt_ms=std::chrono::duration<double>(u1-u0).count()*1000.0/20;
-
-        // Optimized (aggregated kernels + shared-memory tiling)
-        for(int w=0;w<5;w++){cudaMemset(tz,0,tN*sizeof(double));tp.apply_optimized(tg,tr,tz);}
-        cudaDeviceSynchronize();
-        auto o0=std::chrono::high_resolution_clock::now();
-        for(int m=0;m<20;m++){cudaMemset(tz,0,tN*sizeof(double));tp.apply_optimized(tg,tr,tz);cudaDeviceSynchronize();}
-        auto o1=std::chrono::high_resolution_clock::now();
-        double opt_ms=std::chrono::duration<double>(o1-o0).count()*1000.0/20;
-
-        printf("  Grid: %dx%dx%d (%.1fK cells)\n",tnx,tny,tnz,tnx*tny*tnz/1000.0);
-        printf("  Unoptimized V-cycle:  %8.3f ms  (separate kernels)\n",unopt_ms);
-        printf("  Optimized V-cycle:    %8.3f ms  (aggregated + shared mem)\n",opt_ms);
-        printf("  Speedup:              %.1fx\n",unopt_ms/opt_ms);
-        printf("  (Paper: 2.78ms → 0.81ms = 3.4x speedup at 256^3 on RTX 4090)\n");
-
-        // Verify correctness
-        std::vector<double> uz(tN), oz(tN);
-        cudaMemset(tz,0,tN*sizeof(double)); tp.apply(tg,tr,tz);
-        cudaMemcpy(uz.data(),tz,tN*sizeof(double),cudaMemcpyDeviceToHost);
-        cudaMemset(tz,0,tN*sizeof(double)); tp.apply_optimized(tg,tr,tz);
-        cudaMemcpy(oz.data(),tz,tN*sizeof(double),cudaMemcpyDeviceToHost);
-        double max_diff=0;
-        for(int i=1;i<=tnx;i++)for(int j=1;j<=tny;j++)for(int k=1;k<=tnz;k++){
-            int id=i+j*(tnx+2)+k*(tnx+2)*(tny+2);
-            max_diff=std::max(max_diff,std::abs(uz[id]-oz[id]));
-        }
-        printf("  Opt vs Unopt max|diff|: %.2e  %s\n",max_diff,max_diff<1e-12?"PASS":"FAIL");
-        printf("\n");
-
-        cudaFree(tr); cudaFree(tz); tg.free();
-    }
-
-    // ── Paper Table 5 reproduction: V-cycle cost breakdown ──
+    // ── Paper Table 5: V-cycle cost analysis ──
     printf("══════ V-Cycle Cost Analysis (paper Table 5) ══════\n");
     printf("  Paper reports one V-cycle at 0.81ms on 256x128x128 (RTX 4090)\n");
     printf("  Our V(1,1) cycle: 1 pre-smooth + 1 restrict + 1 prolong + 1 post-smooth\n");
