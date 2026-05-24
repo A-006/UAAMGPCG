@@ -5,6 +5,7 @@ set(LFM_SOURCES
     config/config.cpp
     advection/advection.cpp
     boundary/boundary.cpp
+    force/force.cpp
     io/vtk_writer.cpp
     pressure/pressure.cpp
     simulator/simulator.cpp

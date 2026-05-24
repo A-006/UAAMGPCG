@@ -35,6 +35,9 @@ target_link_libraries(test_uaamg_3d PRIVATE lfm_lib)
 add_executable(test_karman_bench_3d integration/test_karman_bench_3d.cpp)
 target_link_libraries(test_karman_bench_3d PRIVATE lfm_lib)
 
+add_executable(test_karman_validate integration/test_karman_validate.cpp)
+target_link_libraries(test_karman_validate PRIVATE lfm_lib)
+
 add_executable(test_solver_perf_3d integration/test_solver_perf_3d.cpp)
 target_link_libraries(test_solver_perf_3d PRIVATE lfm_lib)
 

@@ -95,3 +95,113 @@ void AdvectionScheme::advect(const Grid& oldGrid, Grid& newGrid, double dt) {
         }
     }
 }
+
+// ── FVM conservative flux advection — matches icoFoam div(phi,U) Gauss linear ──
+// Each velocity component is updated by summing advective fluxes through
+// its control volume faces. Face velocities are linearly interpolated.
+void AdvectionScheme::advectEulerian(Grid& g, double dt) {
+    int nx = g.nx, ny = g.ny;
+    double dx = g.dx, dy = g.dy;
+    std::vector<double> u_old = g.u, v_old = g.v;
+
+    // ── Advect u (control volume: [i*dx, (i+1)*dx] × [(j-1)*dy, j*dy]) ──
+    for (int i = 1; i < nx; i++) {
+        for (int j = 1; j <= ny; j++) {
+            if (g.is_solid(i,j) || g.is_solid(i+1,j)) continue;
+            double uC = u_old[g.iu(i,j)];
+
+            // === X-fluxes (through left/right faces of u-CV) ===
+            // Left face (x = i*dx): flux = u_face * u_advected
+            // u_face at left = u(i-1,j), advected u = (u(i-1,j) + uC) / 2
+            double flux_L = 0.0;
+            if (i > 1 && !g.is_solid(i-1,j) && !g.is_solid(i,j)) {
+                double uL = u_old[g.iu(i-1,j)];
+                flux_L = 0.5 * (uL + uC) * 0.5 * (uL + uC) * dy;  // u_face * u_interp * dy
+            } else if (i == 1) {
+                // Inlet: u(0,j) = U_inf
+                flux_L = uC * uC * dy;  // u_face=uC, u_advected=uC (inlet BC)
+            }
+            // Right face (x = (i+1)*dx)
+            double flux_R = 0.0;
+            if (i < nx-1 && !g.is_solid(i+1,j) && !g.is_solid(i+2,j)) {
+                double uR = u_old[g.iu(i+1,j)];
+                flux_R = 0.5 * (uC + uR) * 0.5 * (uC + uR) * dy;
+            } else if (i == nx-1) {
+                // Outlet: zero gradient → u(nx,j) = u(nx-1,j)
+                flux_R = uC * uC * dy;
+            }
+
+            // === Y-fluxes (through bottom/top faces of u-CV) ===
+            // Bottom face: v interpolated to u-CV bottom corner
+            double flux_B = 0.0;
+            if (j > 1) {
+                double vB = 0.0; int cnt=0; double s=0;
+                if (!g.is_solid(i,j-1) && !g.is_solid(i,j)) { s+=v_old[g.iv(i,j-1)]; cnt++; }
+                if (i<nx && !g.is_solid(i+1,j-1) && !g.is_solid(i+1,j)) { s+=v_old[g.iv(i+1,j-1)]; cnt++; }
+                if (cnt>0) vB = s/cnt;
+                double uB = u_old[g.iu(i,j-1)];  // u below
+                flux_B = vB * 0.5 * (uC + uB) * dx;
+            }
+            // Top face
+            double flux_T = 0.0;
+            if (j < ny) {
+                double vT = 0.0; int cnt=0; double s=0;
+                if (!g.is_solid(i,j) && !g.is_solid(i,j+1)) { s+=v_old[g.iv(i,j)]; cnt++; }
+                if (i<nx && !g.is_solid(i+1,j) && !g.is_solid(i+1,j+1)) { s+=v_old[g.iv(i+1,j)]; cnt++; }
+                if (cnt>0) vT = s/cnt;
+                double uT = u_old[g.iu(i,j+1)];
+                flux_T = vT * 0.5 * (uC + uT) * dx;
+            }
+
+            double vol = dx * dy;
+            g.u_at(i,j) = uC - dt * (flux_R - flux_L + flux_T - flux_B) / vol;
+        }
+    }
+
+    // ── Advect v (control volume: [(i-1)*dx, i*dx] × [j*dy, (j+1)*dy]) ──
+    for (int i = 1; i <= nx; i++) {
+        for (int j = 1; j < ny; j++) {
+            if (g.is_solid(i,j) || g.is_solid(i,j+1)) continue;
+            double vC = v_old[g.iv(i,j)];
+
+            // === Y-fluxes ===
+            double flux_B = 0.0;
+            if (j > 1 && !g.is_solid(i,j-1) && !g.is_solid(i,j)) {
+                double vB = v_old[g.iv(i,j-1)];
+                flux_B = 0.5 * (vB + vC) * 0.5 * (vB + vC) * dx;
+            } else if (j == 1) {
+                flux_B = vC * vC * dx;  // symmetry/slip
+            }
+            double flux_T = 0.0;
+            if (j < ny-1 && !g.is_solid(i,j+1) && !g.is_solid(i,j+2)) {
+                double vT = v_old[g.iv(i,j+1)];
+                flux_T = 0.5 * (vC + vT) * 0.5 * (vC + vT) * dx;
+            } else if (j == ny-1) {
+                flux_T = vC * vC * dx;  // symmetry
+            }
+
+            // === X-fluxes ===
+            double flux_L = 0.0;
+            if (i > 1) {
+                double uL = 0.0; int cnt=0; double s=0;
+                if (!g.is_solid(i-1,j) && !g.is_solid(i,j)) { s+=u_old[g.iu(i-1,j)]; cnt++; }
+                if (j<ny && !g.is_solid(i-1,j+1) && !g.is_solid(i,j+1)) { s+=u_old[g.iu(i-1,j+1)]; cnt++; }
+                if (cnt>0) uL = s/cnt;
+                double vL = v_old[g.iv(i-1,j)];
+                flux_L = uL * 0.5 * (vC + vL) * dy;
+            }
+            double flux_R = 0.0;
+            if (i < nx) {
+                double uR = 0.0; int cnt=0; double s=0;
+                if (!g.is_solid(i,j) && !g.is_solid(i+1,j)) { s+=u_old[g.iu(i,j)]; cnt++; }
+                if (j<ny && !g.is_solid(i,j+1) && !g.is_solid(i+1,j+1)) { s+=u_old[g.iu(i,j+1)]; cnt++; }
+                if (cnt>0) uR = s/cnt;
+                double vR = v_old[g.iv(i+1,j)];
+                flux_R = uR * 0.5 * (vC + vR) * dy;
+            }
+
+            double vol = dx * dy;
+            g.v_at(i,j) = vC - dt * (flux_R - flux_L + flux_T - flux_B) / vol;
+        }
+    }
+}

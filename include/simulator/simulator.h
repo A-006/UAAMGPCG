@@ -27,6 +27,7 @@ private:
 
     void apply_forces();
     void advect();
+    void diffuse();
     void project();
     void apply_bc();
 };
