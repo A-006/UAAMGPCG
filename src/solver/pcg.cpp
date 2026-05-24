@@ -18,7 +18,8 @@ std::string PCG::name() const {
 void PCG::solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double tol) {
     const int nx = g.nx, ny = g.ny;
 
-    // Zero-mean RHS
+    // Zero-mean RHS, then negate because matvec is -nabla^2
+    // PCG solves (-nabla^2) p = -rhs_in  =>  nabla^2 p = rhs_in
     std::vector<double> rhs = rhs_in;
     {
         double sum = 0; int count = 0;
@@ -28,7 +29,7 @@ void PCG::solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double
         double mean = (count > 0) ? sum / count : 0.0;
         for (int i = 1; i <= nx; i++)
             for (int j = 1; j <= ny; j++)
-                if (!g.is_solid(i,j)) rhs[g.ip(i,j)] -= mean;
+                if (!g.is_solid(i,j)) rhs[g.ip(i,j)] = -(rhs[g.ip(i,j)] - mean);
     }
 
     auto matvec = [&](const std::vector<double>& v, std::vector<double>& Av) {
@@ -72,6 +73,7 @@ void PCG::solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double
     // z = M^{-1} * r
     std::vector<double> z(rhs.size());
     precond_->apply(g, r, z);
+    subtract_mean(z);
 
     std::vector<double> p = z;
     double rsold = dot(r, z);
@@ -93,12 +95,11 @@ void PCG::solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double
                     r[idx]   -= alpha * Ap[idx];
                 }
 
-        subtract_mean(r);
-
         double rsnew = dot(r, r);
         if (std::sqrt(rsnew) < tol) return;
 
         precond_->apply(g, r, z);
+        subtract_mean(z);
 
         double beta = dot(r, z) / rsold;
         for (int i = 1; i <= nx; i++)

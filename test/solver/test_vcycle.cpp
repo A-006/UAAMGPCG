@@ -1,5 +1,5 @@
-#include "test_common.h"
-#include "test_utils.h"
+#include "../test_common.h"
+#include "../test_utils.h"
 #include <algorithm>
 
 // Recursive V-Cycle (from solver/vcycle.cpp)

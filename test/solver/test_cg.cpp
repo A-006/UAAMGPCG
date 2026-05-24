@@ -1,5 +1,5 @@
-#include "test_common.h"
-#include "test_utils.h"
+#include "../test_common.h"
+#include "../test_utils.h"
 
 int main() {
     test_header("Conjugate Gradient Unit Tests");

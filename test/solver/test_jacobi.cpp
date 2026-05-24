@@ -1,5 +1,5 @@
-#include "test_common.h"
-#include "test_utils.h"
+#include "../test_common.h"
+#include "../test_utils.h"
 
 // Simple inline Jacobi solver for test Grid (Dirichlet BC, uniform h)
 static void jacobi_solve(Grid& x, const Grid& b, int max_iter, double tol) {

@@ -47,6 +47,7 @@ private:
     void vCycle(int level, int nlevels);
 
     static void smooth           (AggLevel& L, int sweeps);
+    static void smoothReverse    (AggLevel& L, int sweeps);
     static void restrictResidual (const AggLevel& fine, AggLevel& coarse);
     static void prolongateAdd    (const AggLevel& coarse, AggLevel& fine);
     static void buildAggregates  (AggLevel& fine, const AggLevel& coarse);

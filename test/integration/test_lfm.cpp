@@ -2,7 +2,7 @@
 #include "advection/advection.h"
 #include "boundary/boundary.h"
 #include "solver/jacobi.h"
-#include "test_utils.h"
+#include "../test_utils.h"
 #include <cmath>
 
 int main() {

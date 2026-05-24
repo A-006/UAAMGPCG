@@ -1,6 +1,7 @@
 # LFM simulation library
 set(LFM_SOURCES
     core/grid.cpp
+    config/config.cpp
     advection/advection.cpp
     boundary/boundary.cpp
     io/vtk_writer.cpp
@@ -11,6 +12,7 @@ set(LFM_SOURCES
     solver/pcg.cpp
     solver/preconditioner/gmg_preconditioner.cpp
     solver/preconditioner/amg_preconditioner.cpp
+    solver/preconditioner/uaamg_preconditioner.cpp
     solver/factory.cpp
 )
 

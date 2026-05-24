@@ -1,5 +1,5 @@
-#include "test_common.h"
-#include "test_utils.h"
+#include "../test_common.h"
+#include "../test_utils.h"
 #include <algorithm>
 
 // ── V-Cycle (from solver/amgpcg.cpp) ──

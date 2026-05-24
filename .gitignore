@@ -1,2 +1,26 @@
 build/
 set_proxy.sh
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# CMake build artifacts (in-source builds)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# CUDA build artifacts
+*.o
+*.obj
+*.ptx
+*.cubin
+
+# Karman tool outputs (generated)
+tools/karman_vortex_street/inputs/
+tools/karman_vortex_street/output/
+tools/karman_vortex_street/figures/

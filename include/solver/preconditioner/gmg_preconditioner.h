@@ -43,6 +43,7 @@ private:
 
     static void restrictSolid     (const Level& fine, Level& coarse);
     static void smooth            (Level& L, int sweeps);
+    static void smoothReverse     (Level& L, int sweeps);
     static void restrictResidual  (const Level& fine, Level& coarse);
     static void prolongateAdd     (const Level& coarse, Level& fine);
 };

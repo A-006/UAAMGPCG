@@ -15,4 +15,5 @@ public:
     int    solve_iters = 2000;
     double solve_tol  = 1e-6;
     std::string out_dir = "output";
+    std::string solver = "pcg";
 };

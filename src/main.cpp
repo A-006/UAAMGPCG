@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
         cfg.dt = 0.005;
         cfg.solve_iters = (solver_arg == "jacobi" || solver_arg == "rbgs") ? 2000 : 50;
     } else {
-        std::cerr << "Usage: lfm_2d [karman|smoke] [NX] [t_end] [jacobi|rbgs|cg|pcg|pcg_gmg|pcg_amg]\n";
+        std::cerr << "Usage: lfm_2d [karman|smoke] [NX] [t_end] [jacobi|rbgs|cg|pcg|pcg_gmg|pcg_amg|pcg_uaamg]\n";
         return 1;
     }
 

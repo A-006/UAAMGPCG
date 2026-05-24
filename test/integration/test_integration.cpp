@@ -7,7 +7,7 @@
 #include "solver/pcg.h"
 #include "solver/preconditioner/identity_preconditioner.h"
 #include "solver/preconditioner/gmg_preconditioner.h"
-#include "test_utils.h"
+#include "../test_utils.h"
 #include <cmath>
 #include <vector>
 #include <memory>
