@@ -294,7 +294,7 @@ void CudaPCG3D::solve_optimized(CudaGrid3D& g, double* p, double* rhs, int max_i
     submean_kernel<<<grid3d,block3d>>>(d_r, mr, g.solid, nx, ny, nz, pitch);
     negate_kernel<<<grid3d,block3d>>>(d_r, g.solid, nx, ny, nz, pitch);
 
-    precond_->apply(g, d_r, d_z);
+    precond_->apply_optimized(g, d_r, d_z);
 
     double mz = gpu_mean(d_z, g.solid, nx, ny, nz, pitch, d_dot_buf, d_count_buf, nb1d);
     submean_kernel<<<grid3d,block3d>>>(d_z, mz, g.solid, nx, ny, nz, pitch);
@@ -330,7 +330,7 @@ void CudaPCG3D::solve_optimized(CudaGrid3D& g, double* p, double* rhs, int max_i
 
         if (std::sqrt(rsnew) < tol) break;
 
-        precond_->apply(g, d_r, d_z);
+        precond_->apply_optimized(g, d_r, d_z);
 
         double mz2 = gpu_mean(d_z, g.solid, nx, ny, nz, pitch, d_dot_buf, d_count_buf, nb1d);
         submean_kernel<<<grid3d,block3d>>>(d_z, mz2, g.solid, nx, ny, nz, pitch);

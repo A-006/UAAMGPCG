@@ -148,3 +148,100 @@ LFM Time Step:
 ```
 
 All matrix-vector products use the 5-point Laplacian stencil computed on-the-fly from neighbor values — no sparse matrix is ever assembled.
+
+## GPU 3D UAAMGPCG Solver (CUDA)
+
+FP32 matrix-free AMG-preconditioned CG for 3D Poisson equation on GPU. Implements the full optimization pipeline from Sun et al. SIGGRAPH 2025 Section 5.
+
+### Build (CUDA)
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+### Run Benchmarks
+
+```bash
+# Double-precision benchmark
+./build/src/solver/cuda/test_paper_bench
+
+# Float-precision benchmark (FP32 vs FP64 comparison)
+./build/src/solver/cuda/test_paper_bench_f
+
+# Correctness tests
+./build/src/solver/cuda/test_cuda_uaamg_3d    # GPU vs CPU V-cycle + PCG
+./build/src/solver/cuda/test_cuda_uaamg       # 2D GPU correctness
+./build/src/solver/cuda/test_apply_twice      # Multi-call consistency
+```
+
+### Performance (RTX 3090, 256×128×128 = 4.2M cells, V(1,1), 40 iters)
+
+| Precision | Solver | Time | Per Iter | Speedup vs FP64-baseline |
+|-----------|--------|------|----------|---------------------------|
+| FP64 | solve() (original) | 224 ms | 5.6 ms | 1.00x |
+| FP64 | solve_optimized() | 189 ms | 4.7 ms | 1.18x |
+| **FP32** | **solve_optimized()** | **94 ms** | **2.35 ms** | **2.38x** |
+
+vs Paper (256×128×128, RTX 4090, V(1,1), float): 0.81ms/iter.
+Our normalized to RTX 4090: ~1.02ms/iter. Gap ~1.26x.
+
+### Optimization Pipeline (Paper Section 5.3-5.4)
+
+Implemented optimizations, from simplest to most advanced:
+
+| # | Optimization | Technique | Impact | File |
+|---|-------------|-----------|--------|------|
+| 1 | Shared-memory tiled RBGS | 8³ tile + 1-cell halo in shared memory. 6 neighbor reads from SMEM instead of GMEM. | ~6x fewer global reads | `_3d_opt.cu` |
+| 2 | Aggregated RBGS+Restrict | Smooth + residual + 8-to-1 restriction in single kernel via atomicAdd. No x write+re-read. | Saves 2 global mem ops/cell | `_3d_opt.cu` |
+| 3 | Aggregated Prolong+RBGS | Prolongation correction + post-smooth in single kernel (up-sweep). | Saves 2 global mem ops/cell | `_3d_opt.cu` |
+| 4 | Fused coarsest sweeps | All 20 sweeps in 1 kernel launch. b cached in register. | Saves 19 launches/V-cycle | `_3d_opt.cu` |
+| 5 | Redundant zero-x eliminated | All coarse x zeroed once upfront, not per-level. | Saves 1 launch/level | `_3d_opt.cu` |
+| 6 | cudaMemsetAsync | Replace custom zero kernels with HW-accelerated memset. | ~5µs saved/launch | `_3d_opt.cu` |
+| 7 | inv_diag precomputed | Precompute 1.0/diag. Most cells use multiply instead of divide. | 1 division → 1 multiply | `_3d_opt.cu` |
+| 8 | Fused dot products | dot(p,Ap) in matvec kernel, dot(r,r) in axpy kernel. Shared-mem tiled matvec (8³+halo). | 12→8 launches/iter | `_3d_opt.cu` |
+| 9 | Tile classification + fast path | Pre-compute which tiles are interior (all-fluid). Fast-path kernel skips all solid-mask checks + eff_d adjustments. | 12 branches + 1 div saved/cell for >90% cells | `_opt_f.cu` |
+| 10 | FP32 precision | float (4B) instead of double (8B). Halves memory traffic and register pressure. | ~2x speedup | All `_f` files |
+
+### Kernel Launch Budget (V-cycle, 4 levels, V(1,1))
+
+```
+Original (separate kernels):  14 launches (4 pre×2 + 4 restrict + 4 prolong + 4 post×2 + 1 coarse×20)
+Optimized (aggregated):        7 launches (3 aggregated↓ + 1 coarse + 3 aggregated↑)
+Optimized (memset):            4 launches (3 aggregated↓ + 1 coarse + 3 aggregated↑, zero via memset)
+```
+
+### Architecture
+
+```
+CudaGrid3Df (FP32) / CudaGrid3D (FP64)
+    ↓
+CudaUAAMGPreconditioner3Df::apply_optimized()
+    ├── classify_trimmed_kernel_f    # Mark interior tiles
+    ├── rbgs_restrict_aggregated_kernel_f  # Down-sweep: smooth + restrict
+    ├── rbgs_coarsest_kernel_f       # Coarsest: 20 sweeps fused
+    └── prolong_rbgs_aggregated_kernel_f   # Up-sweep: prolong + smooth
+    ↓
+CudaPCG3Df::solve_optimized()
+    ├── matvec_tiled_dot_kernel_f    # Matvec + fused dot(p,Ap)
+    ├── axpy_dot_kernel_f            # AXPY + fused dot(r,r)
+    └── apply_optimized()            # V-cycle preconditioner
+```
+
+### Key Design Decisions
+
+- **Matrix-free**: No sparse matrix storage. 7-point Laplacian computed on-the-fly from neighbor values.
+- **Shared-memory tiling**: All kernels use 8³ tiles + 1-cell face halos. 6 neighbor reads hit SMEM.
+- **double atomicAdd**: Used in restrict to accumulate 8-to-1 residual. Safe on CC≥6.0 (Pascal+).
+- **RBGS red-black ordering**: (i+j+k) parity. Red pass → `__syncthreads` → black pass. Tile boundaries use previous-sweep values (same convergence as separate-kernel).
+- **SOA-style**: Interleaved x/b/solid arrays accessed via column-major indexing for coalesced loads.
+
+### Future Optimizations (not yet implemented)
+
+| Optimization | Expected Impact | Description |
+|-------------|----------------|-------------|
+| SOA 5-channel data layout | 1.3-1.5x | Pack coefficients into 5 channels (1 bool + 4 float) for coalesced access |
+| CUB global scan for dot reduction | 1.1-1.2x | GPU-side parallel reduction instead of host-side sequential accumulation |
+| Texture memory for solid mask | ~1.1x | Use read-only texture cache for solid lookups |
+| Multi-stream V-cycles | 1.2-1.5x | Pipeline multiple V-cycles across streams for concurrent execution |
+| Warp-level primitives | ~1.1x | Use `__shfl_sync` for halo exchange instead of `__syncthreads` |
