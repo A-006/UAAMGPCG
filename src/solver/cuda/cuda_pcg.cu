@@ -5,13 +5,17 @@
  * Solves (-nabla^2) p = rhs on GPU.
  *
  * Dot products: each block computes a partial sum (via shared-memory reduction),
- * then HOST sums partials sequentially → identical order to CPU → bit-identical.
+ * then HOST sums partials sequentially.
+ *
+ * Value-modifying kernels (submean, negate) use 2D indexing: interior cells only.
  */
 #include "solver/cuda/cuda_pcg.h"
 #include <cstdio>
 #include <cmath>
 
-// ── Per-block partial dot product (a·b over fluid cells) ──
+__device__ inline int idx2d(int i, int j, int s) { return i + j * s; }
+
+// ── 1D dot-product (reads all non-solid cells; safe: ghost=0 adds nothing) ──
 __global__ void dot_partial_kernel(
     const double *a, const double *b, const bool *solid,
     int N, double *d_partial)
@@ -31,42 +35,95 @@ __global__ void dot_partial_kernel(
     if (tid == 0) d_partial[blockIdx.x] = sdata[0];
 }
 
-// ── Per-block partial sum (v over fluid cells, for mean computation) ──
-__global__ void sum_partial_kernel(
-    const double *v, const bool *solid, int N, double *d_partial)
+// ── 2D interior-only kernels (match CPU: operate on 1..nx × 1..ny) ──
+
+__global__ void sum_interior_kernel(const double *v, const bool *solid,
+    int nx, int ny, int stride, double *part)
 {
-    __shared__ double sdata[256];
+    __shared__ double s[256];
     int tid = threadIdx.x;
-    double sum = 0.0;
-    for (int k = blockIdx.x * blockDim.x + tid; k < N; k += blockDim.x * gridDim.x) {
-        if (!solid[k]) sum += v[k];
+    double sum = 0;
+    for (int k = blockIdx.x * blockDim.x + tid; k < nx * ny; k += blockDim.x * gridDim.x) {
+        int i = (k % nx) + 1, j = (k / nx) + 1;
+        int id = idx2d(i, j, stride);
+        if (!solid[id]) sum += v[id];
     }
-    sdata[tid] = sum;
-    __syncthreads();
-    for (int s = blockDim.x/2; s > 0; s >>= 1) {
-        if (tid < s) sdata[tid] += sdata[tid + s];
+    s[tid] = sum; __syncthreads();
+    for (int st = blockDim.x/2; st > 0; st >>= 1) {
+        if (tid < st) s[tid] += s[tid + st];
         __syncthreads();
     }
-    if (tid == 0) d_partial[blockIdx.x] = sdata[0];
+    if (tid == 0) part[blockIdx.x] = s[0];
 }
 
-// ── Count fluid cells ──
-__global__ void count_fluid_kernel(const bool *solid, int N, int *d_count) {
-    __shared__ int scount[256];
-    int tid = threadIdx.x;
-    int sum = 0;
-    for (int k = blockIdx.x * blockDim.x + tid; k < N; k += blockDim.x * gridDim.x)
-        if (!solid[k]) sum++;
-    scount[tid] = sum;
-    __syncthreads();
-    for (int s = blockDim.x/2; s > 0; s >>= 1) {
-        if (tid < s) scount[tid] += scount[tid + s];
+__global__ void count_interior_kernel(const bool *solid,
+    int nx, int ny, int stride, int *part)
+{
+    __shared__ int s[256];
+    int tid = threadIdx.x; int sum = 0;
+    for (int k = blockIdx.x * blockDim.x + tid; k < nx * ny; k += blockDim.x * gridDim.x) {
+        int i = (k % nx) + 1, j = (k / nx) + 1;
+        if (!solid[idx2d(i, j, stride)]) sum++;
+    }
+    s[tid] = sum; __syncthreads();
+    for (int st = blockDim.x/2; st > 0; st >>= 1) {
+        if (tid < st) s[tid] += s[tid + st];
         __syncthreads();
     }
-    if (tid == 0) d_count[blockIdx.x] = scount[0];
+    if (tid == 0) part[blockIdx.x] = s[0];
 }
 
-// ── Reduce partial sums on host (sequential = deterministic = matches CPU) ──
+__global__ void subtract_mean_kernel(double *v, double mean, const bool *solid,
+    int nx, int ny, int stride)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    if (i > nx || j > ny) return;
+    int id = idx2d(i, j, stride);
+    if (!solid[id]) v[id] -= mean;
+}
+
+__global__ void negate_kernel(double *v, const bool *solid,
+    int nx, int ny, int stride)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    if (i > nx || j > ny) return;
+    int id = idx2d(i, j, stride);
+    if (!solid[id]) v[id] = -v[id];
+}
+
+// ── Matvec: Ap = (-nabla^2) p ──
+__global__ void matvec_kernel(
+    const double *p, double *Ap, const bool *solid,
+    int nx, int ny, int stride, double idx2, double idy2, double diag)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    if (i > nx || j > ny) return;
+    int id = idx2d(i, j, stride);
+    if (solid[id]) { Ap[id] = 0.0; return; }
+    double pC = p[id];
+    double pL = (i>1 && !solid[idx2d(i-1,j,stride)]) ? p[idx2d(i-1,j,stride)] : pC;
+    double pR = (i<nx && !solid[idx2d(i+1,j,stride)]) ? p[idx2d(i+1,j,stride)] : pC;
+    double pB = (j>1 && !solid[idx2d(i,j-1,stride)]) ? p[idx2d(i,j-1,stride)] : pC;
+    double pT = (j<ny && !solid[idx2d(i,j+1,stride)]) ? p[idx2d(i,j+1,stride)] : pC;
+    Ap[id] = diag * pC - (pL+pR)*idx2 - (pB+pT)*idy2;
+}
+
+// ── AXPY: y += a * x (interior only) ──
+__global__ void axpy_kernel(
+    double *y, const double *x, double a, const bool *solid,
+    int nx, int ny, int stride)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    if (i > nx || j > ny) return;
+    int id = idx2d(i, j, stride);
+    if (!solid[id]) y[id] += a * x[id];
+}
+
+// ── Host reduction (sequential = deterministic) ──
 static double host_reduce(const double *d_partial, int nblocks) {
     std::vector<double> h(nblocks);
     cudaMemcpy(h.data(), d_partial, nblocks * sizeof(double), cudaMemcpyDeviceToHost);
@@ -83,73 +140,17 @@ static int host_reduce_int(const int *d_partial, int nblocks) {
     return total;
 }
 
-// ── Matvec: Ap = (-nabla^2) p ──
-__global__ void matvec_kernel(
-    const double *p, double *Ap, const bool *solid,
-    int nx, int ny, int stride, double idx2, double idy2, double diag)
+// ── Compute mean of v over INTERIOR fluid cells ──
+static double compute_mean(const double *d_v, const bool *d_solid,
+    int nx, int ny, int stride, double *d_partial, int *d_count, int nblocks)
 {
-    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
-    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
-    if (i > nx || j > ny) return;
-    int id = i + j * stride;
-    if (solid[id]) { Ap[id] = 0.0; return; }
-    double pC = p[id];
-    double pL = (i>1 && !solid[(i-1)+j*stride]) ? p[(i-1)+j*stride] : pC;
-    double pR = (i<nx && !solid[(i+1)+j*stride]) ? p[(i+1)+j*stride] : pC;
-    double pB = (j>1 && !solid[i+(j-1)*stride]) ? p[i+(j-1)*stride] : pC;
-    double pT = (j<ny && !solid[i+(j+1)*stride]) ? p[i+(j+1)*stride] : pC;
-    Ap[id] = diag * pC - (pL+pR)*idx2 - (pB+pT)*idy2;
-}
-
-// ── AXPY: y += a * x  (fluid cells only) ──
-__global__ void axpy_kernel(
-    double *y, const double *x, double a, const bool *solid,
-    int nx, int ny, int stride)
-{
-    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
-    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
-    if (i > nx || j > ny) return;
-    int id = i + j * stride;
-    if (!solid[id]) y[id] += a * x[id];
-}
-
-// ── Subtract mean ──
-__global__ void subtract_mean_kernel(
-    double *v, double mean, const bool *solid, int N)
-{
-    int k = blockIdx.x * blockDim.x + threadIdx.x;
-    if (k < N && !solid[k]) v[k] -= mean;
-}
-
-// ── Negate ──
-__global__ void negate_kernel(double *v, const bool *solid, int N)
-{
-    int k = blockIdx.x * blockDim.x + threadIdx.x;
-    if (k < N && !solid[k]) v[k] = -v[k];
-}
-
-// ── Compute mean of v over fluid cells ──
-static double compute_mean(const double *d_v, const bool *d_solid, int N,
-                           double *d_partial, int *d_count, int nblocks) {
-    sum_partial_kernel<<<nblocks, 256>>>(d_v, d_solid, N, d_partial);
+    sum_interior_kernel<<<nblocks, 256>>>(d_v, d_solid, nx, ny, stride, d_partial);
     cudaDeviceSynchronize();
     double s = host_reduce(d_partial, nblocks);
-    count_fluid_kernel<<<nblocks, 256>>>(d_solid, N, d_count);
+    count_interior_kernel<<<nblocks, 256>>>(d_solid, nx, ny, stride, d_count);
     cudaDeviceSynchronize();
     int c = host_reduce_int(d_count, nblocks);
     return c > 0 ? s / c : 0.0;
-}
-
-// ── CPU reference dot (allocated once, used for verification) ──
-static std::vector<double> h_a, h_b, h_tmp;
-static std::vector<char>   h_s;
-static double cpu_dot_verify(const double *d_a, const double *d_b, const bool *d_solid, int N) {
-    if ((int)h_a.size() < N) { h_a.resize(N); h_b.resize(N); h_tmp.resize(N); h_s.resize(N); }
-    cudaMemcpy(h_a.data(), d_a, N*sizeof(double), cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_b.data(), d_b, N*sizeof(double), cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_s.data(), d_solid, N*sizeof(bool), cudaMemcpyDeviceToHost);
-    double t = 0; for (int k = 0; k < N; k++) if (!h_s[k]) t += h_a[k] * h_b[k];
-    return t;
 }
 
 // ── CudaPCG ──
@@ -195,16 +196,16 @@ void CudaPCG::solve(CudaGrid& g, double* p, double* rhs, int max_iter, double to
     cudaMemset(p, 0, N * sizeof(double));
 
     // Zero-mean + negate RHS (match CPU PCG: rhs = -(rhs - mean))
-    double mr = compute_mean(d_r, g.solid, N, d_dot_buf, d_count_buf, nblocks1d);
-    subtract_mean_kernel<<<(N+255)/256, 256>>>(d_r, mr, g.solid, N); // r -= mean
-    negate_kernel<<<(N+255)/256, 256>>>(d_r, g.solid, N);            // r = -r
+    double mr = compute_mean(d_r, g.solid, nx, ny, stride, d_dot_buf, d_count_buf, nblocks1d);
+    subtract_mean_kernel<<<grid2d, block2d>>>(d_r, mr, g.solid, nx, ny, stride);
+    negate_kernel<<<grid2d, block2d>>>(d_r, g.solid, nx, ny, stride);
 
     // z = M^{-1} * r
     precond_->apply(g, d_r, d_z);
 
     // Subtract mean from z, copy to p
-    double mz = compute_mean(d_z, g.solid, N, d_dot_buf, d_count_buf, nblocks1d);
-    subtract_mean_kernel<<<(N+255)/256, 256>>>(d_z, mz, g.solid, N);
+    double mz = compute_mean(d_z, g.solid, nx, ny, stride, d_dot_buf, d_count_buf, nblocks1d);
+    subtract_mean_kernel<<<grid2d, block2d>>>(d_z, mz, g.solid, nx, ny, stride);
     cudaMemcpy(d_p, d_z, N * sizeof(double), cudaMemcpyDeviceToDevice);
 
     // rsold = dot(r, z)
@@ -213,12 +214,6 @@ void CudaPCG::solve(CudaGrid& g, double* p, double* rhs, int max_iter, double to
     cudaDeviceSynchronize();
     double rsold = host_reduce(d_dot_buf, nblocks1d);
     if (rsold < 1e-30) { cudaMemset(p, 0, N * sizeof(double)); return; }
-
-    // Diagnostic: verify initial dot matches CPU
-    if (max_iter > 0) {
-        double cpu_rs = cpu_dot_verify(d_r, d_z, g.solid, N);
-        printf("  PCG init: GPU rsold=%.10e  CPU rsold=%.10e  diff=%.2e\n", rsold, cpu_rs, std::abs(rsold-cpu_rs));
-    }
 
     for (int k = 0; k < max_iter; k++) {
         matvec_kernel<<<grid2d, block2d>>>(d_p, d_Ap, g.solid, nx, ny, stride, g.idx2, g.idy2, g.diag);
@@ -237,39 +232,18 @@ void CudaPCG::solve(CudaGrid& g, double* p, double* rhs, int max_iter, double to
         CUDA_CHECK(cudaDeviceSynchronize());
         double rsnew = host_reduce(d_dot_buf, nblocks1d);
 
-        // ── Verify: compare every GPU dot product with CPU reference ──
-        if (k < 3) {
-            double cpu_pAp = cpu_dot_verify(d_p, d_Ap, g.solid, N);
-            double cpu_rr  = cpu_dot_verify(d_r, d_r, g.solid, N);
-            printf("  iter %d: GPU pAp=%.6e CPU=%.6e d=%.2e | GPU |r|^2=%.6e CPU=%.6e d=%.2e | alpha=%.6e\n",
-                   k, pAp, cpu_pAp, std::abs(pAp-cpu_pAp), rsnew, cpu_rr, std::abs(rsnew-cpu_rr), alpha);
-        } else if (k < 5 || k % 10 == 0) {
-            printf("  PCG iter %d: sqrt(r·r)=%.4e  pAp=%.4e  alpha=%.4e  rsold=%.4e\n",
-                   k, std::sqrt(rsnew), pAp, alpha, rsold);
-        }
         if (std::sqrt(rsnew) < tol) break;
 
         precond_->apply(g, d_r, d_z);
 
-        // ── Verify V-cycle output: compare GPU z with CPU UAAMG ──
-        if (k < 2) {
-            // Check if d_z is finite and non-zero
-            cudaMemcpy(h_tmp.data(), d_z, N*sizeof(double), cudaMemcpyDeviceToHost);
-            double zmax=0; for(int i=0;i<N;i++) if(!h_s[i]) zmax=std::max(zmax,std::abs(h_tmp[i]));
-            printf("          after apply: max|d_z|=%e\n", zmax);
-        }
-
-        mz = compute_mean(d_z, g.solid, N, d_dot_buf, d_count_buf, nblocks1d);
-        subtract_mean_kernel<<<(N+255)/256, 256>>>(d_z, mz, g.solid, N);
+        double mz2 = compute_mean(d_z, g.solid, nx, ny, stride, d_dot_buf, d_count_buf, nblocks1d);
+        subtract_mean_kernel<<<grid2d, block2d>>>(d_z, mz2, g.solid, nx, ny, stride);
         CUDA_CHECK(cudaDeviceSynchronize());
 
         dot_partial_kernel<<<nblocks1d, 256>>>(d_r, d_z, g.solid, N, d_dot_buf);
         CUDA_CHECK(cudaDeviceSynchronize());
         double rz = host_reduce(d_dot_buf, nblocks1d);
-        if (k < 3) {
-            double cpu_rz = cpu_dot_verify(d_r, d_z, g.solid, N);
-            printf("          GPU dot(r,z)=%.6e CPU=%.6e d=%.2e\n", rz, cpu_rz, std::abs(rz-cpu_rz));
-        }
+
         double beta = rz / rsold;
         rsold = rz;
 

@@ -1,6 +1,7 @@
 # LFM simulation library
 set(LFM_SOURCES
     core/grid.cpp
+    core/grid_3d.cpp
     config/config.cpp
     advection/advection.cpp
     boundary/boundary.cpp
@@ -10,9 +11,16 @@ set(LFM_SOURCES
     solver/jacobi.cpp
     solver/rbgs.cpp
     solver/pcg.cpp
+    solver/jacobi_3d.cpp
+    solver/rbgs_3d.cpp
+    solver/pcg_3d.cpp
+    solver/factory_3d.cpp
     solver/preconditioner/gmg_preconditioner.cpp
     solver/preconditioner/amg_preconditioner.cpp
     solver/preconditioner/uaamg_preconditioner.cpp
+    solver/preconditioner/gmg_preconditioner_3d.cpp
+    solver/preconditioner/amg_preconditioner_3d.cpp
+    solver/preconditioner/uaamg_preconditioner_3d.cpp
     solver/factory.cpp
 )
 
