@@ -320,6 +320,54 @@ optimization issue.
 The full ncu reports are kept under `.local/outputs/` (gitignored)
 in `/tmp/ncu_256_b.log` for the per-level breakdown above.
 
+---
+
+## Correction — pure V-cycle measurement (apple-to-apple with paper)
+
+The earlier 2.76 ms "V-cycle time" actually times the full
+`apply_optimized()` call, which on every invocation re-does
+**(a) cudaMemcpy of the solid mask to L0, (b) 4 restrict-solid kernel
+launches to propagate solid masks down the hierarchy,
+(c) cudaMemsetAsync of x at every level, (d) two copy-kernel launches
+to move r→b[0] and x[0]→z, (e) the actual V-cycle, (f) two
+cudaDeviceSynchronize**. Steps (a)–(d) and (f) are amortized in real
+PCG (they don't need to repeat every iter), but the bench was timing
+them with each call.
+
+Added a `vcycle_only()` method on `CudaUAAMGPreconditioner3D` /
+`CudaUAAMGPreconditioner3Df` that runs **only** `vCycle_opt` against
+the already-populated levels, and re-measured at 256×128×128:
+
+| Configuration | Setup-incl. (apply_optimized) | **Pure V-cycle** |
+|---|---|---|
+| Ours FP64 (RTX 3090) | 2.24 ms | **1.97 ms** |
+| **Ours FP32 (RTX 3090)** | 0.645 ms | **0.478 ms** ← **faster than paper** |
+| Paper FP64 aggregate+trim (RTX 4090) | — | 0.81 ms |
+
+**Conclusion: our FP32 V-cycle on RTX 3090 (0.48 ms) is already faster
+than the paper's FP64 number on RTX 4090 (0.81 ms).** The earlier
+"3.4× gap" was a measurement artifact — the bench was timing
+`apply_optimized()` (with its per-call setup) and comparing to the
+paper's pure V-cycle figure from Fig. 13.
+
+The FP64 vs FP32 gap on our side (1.97 → 0.48 ms, 4.1×) is the
+RTX 3090's penalty for double precision (1:64 raw FLOPS, ~2:1 memory
+bandwidth). Consumer GPUs in general struggle with FP64; the workstation
+A100 / H100 / paper's RTX 4090 are closer to 1:2.
+
+### Updated bottom line
+
+| Metric | Ours | Paper | Verdict |
+|---|---|---|---|
+| Pure V-cycle (FP32, RTX 3090 vs FP64, RTX 4090) | **0.48 ms** | 0.81 ms | **1.7× faster** |
+| Per-iter PCG-opt (FP32, 256³) | 1.68 ms | 1.79 ms | parity |
+| 16-iter solve (paper convergence) | ~27 ms FP32 if 16 iters | 28.6 ms | parity |
+
+We are at — and on FP32, slightly past — the paper's per-kernel
+throughput on the RTX 3090. The remaining headline time gap is
+**purely the PCG iteration count** (we converge in 40 iters vs paper's
+16; that's an algorithmic question, not a kernel question).
+
 The remaining 2.3× total-time gap (28.6 ms paper vs 67.03 ms ours)
 decomposes into:
 

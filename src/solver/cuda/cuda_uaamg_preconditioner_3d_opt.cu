@@ -479,6 +479,16 @@ static void vCycle_opt(CudaUAAMGPreconditioner3D::Level* levels, int lv, int nl,
     }
 }
 
+// Pure V-cycle (no setup) for accurate timing. Caller is responsible for
+// pre-loading b at level 0 and zeroing x at all levels (which apply_optimized
+// already does on its first call — so use vcycle_only between PCG iters
+// to measure the actual V-cycle cost without setup overhead).
+void CudaUAAMGPreconditioner3D::vcycle_only() {
+    int nl = (int)levels_.size();
+    if (nl == 0) return;
+    vCycle_opt(levels_.data(), 0, nl, 0);  // no sync — caller times across many calls
+}
+
 void CudaUAAMGPreconditioner3D::apply_optimized(const CudaGrid3D& fine, const double* r, double* z) {
     this->build(fine);
     int nl=(int)levels_.size();

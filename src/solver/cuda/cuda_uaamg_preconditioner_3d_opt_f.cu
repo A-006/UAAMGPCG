@@ -484,6 +484,12 @@ void CudaUAAMGPreconditioner3Df::build(const CudaGrid3Df& fine) {
     cached_nx_ = fine.nx; cached_ny_ = fine.ny; cached_nz_ = fine.nz;
 }
 
+void CudaUAAMGPreconditioner3Df::vcycle_only() {
+    int nl = (int)levels_.size();
+    if (nl == 0) return;
+    vCycle_opt_f(levels_.data(), 0, nl, 0);
+}
+
 void CudaUAAMGPreconditioner3Df::apply_optimized(const CudaGrid3Df& fine, const float* r, float* z) {
     this->build(fine);
     int nl=(int)levels_.size();

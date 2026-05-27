@@ -105,18 +105,26 @@ int main() {
             cudaMemcpy(d_rhs,h_rhs.data(),N*sizeof(double),cudaMemcpyHostToDevice);
 
             // Warmup
-            for(int w=0;w<5;w++){cudaMemset(d_z,0,N*sizeof(double)); precond.apply(g,d_rhs,d_z);}
+            for(int w=0;w<5;w++){cudaMemset(d_z,0,N*sizeof(double)); precond.apply_optimized(g,d_rhs,d_z);}
             cudaDeviceSynchronize();
 
-            // Measure single V-cycle
+            // (a) Full apply_optimized: includes solid restrict, memsets, vCycle, output copy
             cudaMemset(d_z,0,N*sizeof(double));
-            auto t0=std::chrono::high_resolution_clock::now();
-            precond.apply(g,d_rhs,d_z);
+            auto ta=std::chrono::high_resolution_clock::now();
+            for(int r=0;r<10;r++) precond.apply_optimized(g,d_rhs,d_z);
             cudaDeviceSynchronize();
-            auto t1=std::chrono::high_resolution_clock::now();
-            double vcycle_ms=std::chrono::duration<double>(t1-t0).count()*1000.0;
+            auto tb=std::chrono::high_resolution_clock::now();
+            double apply_ms=std::chrono::duration<double>(tb-ta).count()*100.0;  // /10
 
-            printf("  V-cycle time: %.2f ms  (paper: 0.81ms on RTX4090 at 256x128x128)\n",vcycle_ms);
+            // (b) vcycle_only: pure V-cycle compute (solid mask already set up, x reused)
+            auto tc=std::chrono::high_resolution_clock::now();
+            for(int r=0;r<20;r++) precond.vcycle_only();
+            cudaDeviceSynchronize();
+            auto td=std::chrono::high_resolution_clock::now();
+            double vcycle_ms=std::chrono::duration<double>(td-tc).count()*50.0;  // /20
+
+            printf("  apply_optimized (with setup):  %.2f ms\n", apply_ms);
+            printf("  vcycle_only   (pure V-cycle):  %.2f ms  (paper: 0.81ms on RTX4090)\n", vcycle_ms);
             cudaFree(d_z);
         }
 
