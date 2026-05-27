@@ -113,7 +113,17 @@ def main():
     xi = np.arange(0, nx_pts, skip)
     yi = np.arange(0, ny_pts, skip)
 
-    cyl_cx, cyl_cy, cyl_R = 1.0, 0.5, 0.1
+    # Recover the cylinder from the VTK solid field so the drawn marker
+    # follows the actual scenario config.
+    solid_field = frames[0]['data'].get('solid')
+    if solid_field is not None and solid_field.max() > 0.5:
+        js, is_ = np.where(solid_field > 0.5)
+        cyl_cx = (is_.mean() + 0.5) * dx
+        cyl_cy = (js.mean() + 0.5) * dy
+        cyl_R  = 0.5 * max((is_.max() - is_.min() + 1) * dx,
+                           (js.max() - js.min() + 1) * dy)
+    else:
+        cyl_cx = cyl_cy = cyl_R = None
 
     def render(idx):
         f = frames[idx]
@@ -131,8 +141,9 @@ def main():
         ax_v.pcolormesh(X, Y, np.clip(vort, -vort_clip, vort_clip),
                         cmap='RdBu_r', vmin=-vort_clip, vmax=vort_clip,
                         shading='auto', rasterized=True)
-        ax_v.add_patch(Circle((cyl_cx, cyl_cy), cyl_R, fill=True,
-                              facecolor='#222', edgecolor='white', linewidth=1.5))
+        if cyl_cx is not None:
+            ax_v.add_patch(Circle((cyl_cx, cyl_cy), cyl_R, fill=True,
+                                  facecolor='#222', edgecolor='white', linewidth=1.5))
         ax_v.set_xlim(0, Lx)
         ax_v.set_ylim(0, Ly)
         ax_v.set_aspect('equal')
@@ -149,8 +160,9 @@ def main():
                         v[np.ix_(yi, xi)] * mask,
                         color='lime', linewidth=0.45, density=2.0,
                         arrowsize=0.5)
-        ax_s.add_patch(Circle((cyl_cx, cyl_cy), cyl_R, fill=True,
-                              facecolor='#222', edgecolor='white', linewidth=1.5))
+        if cyl_cx is not None:
+            ax_s.add_patch(Circle((cyl_cx, cyl_cy), cyl_R, fill=True,
+                                  facecolor='#222', edgecolor='white', linewidth=1.5))
         ax_s.set_xlim(0, Lx)
         ax_s.set_ylim(0, Ly)
         ax_s.set_aspect('equal')

@@ -53,7 +53,18 @@ def main():
     fig, ax = plt.subplots(figsize=(13, 4), facecolor='#0a0a0f')
     fig.subplots_adjust(left=0.04, right=0.97, top=0.88, bottom=0.10)
 
-    cyl_cx, cyl_cy, cyl_R = 1.0, 0.5, 0.1
+    # Recover cylinder centroid + radius from the VTK `solid` field so the
+    # drawn obstacle marker matches the actual simulation, regardless of
+    # where the user placed the cylinder in their scenario config.
+    solid_field = frames[0]['data'].get('solid')
+    if solid_field is not None and solid_field.max() > 0.5:
+        js, is_ = np.where(solid_field > 0.5)
+        cyl_cx = (is_.mean() + 0.5) * dx
+        cyl_cy = (js.mean() + 0.5) * dy
+        cyl_R  = 0.5 * max((is_.max() - is_.min() + 1) * dx,
+                           (js.max() - js.min() + 1) * dy)
+    else:
+        cyl_cx = cyl_cy = cyl_R = None  # no cylinder in this run
     VORT_CLIP = 8.0   # tight clip — highlight wake, suppress BL spike
 
     def render(idx):
@@ -64,8 +75,9 @@ def main():
         ax.pcolormesh(X, Y, np.clip(v, -VORT_CLIP, VORT_CLIP),
                       cmap='RdBu_r', vmin=-VORT_CLIP, vmax=VORT_CLIP,
                       shading='auto', rasterized=True)
-        ax.add_patch(Circle((cyl_cx, cyl_cy), cyl_R, fill=True,
-                            facecolor='#222', edgecolor='white', linewidth=2))
+        if cyl_cx is not None:
+            ax.add_patch(Circle((cyl_cx, cyl_cy), cyl_R, fill=True,
+                                facecolor='#222', edgecolor='white', linewidth=2))
         # Contours of the actual (not clipped) value
         ax.contour(X, Y, v, levels=[3, 6], colors='#ffb86b', linewidths=0.6, alpha=0.7)
         ax.contour(X, Y, v, levels=[-6, -3], colors='#6bdcff',
