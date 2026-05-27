@@ -89,6 +89,70 @@ __global__ __launch_bounds__(512,2) void rbgs_tiled_kernel(
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  Smooth-only RBGS — one red + one black pass, no restriction.
+//  Used by V(2,2) and V(2,1) cycles where we want an extra smoothing
+//  step that is NOT followed by a restriction.
+// ═══════════════════════════════════════════════════════════════
+__global__ __launch_bounds__(512,2) void rbgs_smooth_only_kernel(
+    double * __restrict x, const double * __restrict b, const bool * __restrict solid,
+    int nx, int ny, int nz, int pitch,
+    double idx2, double idy2, double idz2, double diag)
+{
+    __shared__ double sx[TILED_TH][TILED_TH][TILED_TH];
+    __shared__ bool   ss[TILED_TH][TILED_TH][TILED_TH];
+
+    int tx=threadIdx.x, ty=threadIdx.y, tz=threadIdx.z;
+    int gi=blockIdx.x*TILED_T+tx+1, gj=blockIdx.y*TILED_T+ty+1, gk=blockIdx.z*TILED_T+tz+1;
+    int li=tx+1, lj=ty+1, lk=tz+1;
+    bool valid=(gi<=nx&&gj<=ny&&gk<=nz);
+    int gid=valid?opti_idx(gi,gj,gk,pitch,ny):-1;
+
+    if(valid){sx[li][lj][lk]=x[gid];ss[li][lj][lk]=solid[gid];}
+    else{ss[li][lj][lk]=true;sx[li][lj][lk]=0.0;}
+    if(tx==0){int gl=gi-1;if(gl>=1&&gj<=ny&&gk<=nz){int h=opti_idx(gl,gj,gk,pitch,ny);sx[0][lj][lk]=x[h];ss[0][lj][lk]=solid[h];}else{ss[0][lj][lk]=true;sx[0][lj][lk]=0.0;}}
+    if(tx==TILED_T-1){int gr=gi+1;if(gr<=nx&&gj<=ny&&gk<=nz){int h=opti_idx(gr,gj,gk,pitch,ny);sx[TILED_T+1][lj][lk]=x[h];ss[TILED_T+1][lj][lk]=solid[h];}else{ss[TILED_T+1][lj][lk]=true;sx[TILED_T+1][lj][lk]=0.0;}}
+    if(ty==0){int gb=gj-1;if(gi<=nx&&gb>=1&&gk<=nz){int h=opti_idx(gi,gb,gk,pitch,ny);sx[li][0][lk]=x[h];ss[li][0][lk]=solid[h];}else{ss[li][0][lk]=true;sx[li][0][lk]=0.0;}}
+    if(ty==TILED_T-1){int gt=gj+1;if(gi<=nx&&gt<=ny&&gk<=nz){int h=opti_idx(gi,gt,gk,pitch,ny);sx[li][TILED_T+1][lk]=x[h];ss[li][TILED_T+1][lk]=solid[h];}else{ss[li][TILED_T+1][lk]=true;sx[li][TILED_T+1][lk]=0.0;}}
+    if(tz==0){int gf=gk-1;if(gi<=nx&&gj<=ny&&gf>=1){int h=opti_idx(gi,gj,gf,pitch,ny);sx[li][lj][0]=x[h];ss[li][lj][0]=solid[h];}else{ss[li][lj][0]=true;sx[li][lj][0]=0.0;}}
+    if(tz==TILED_T-1){int gk2=gk+1;if(gi<=nx&&gj<=ny&&gk2<=nz){int h=opti_idx(gi,gj,gk2,pitch,ny);sx[li][lj][TILED_T+1]=x[h];ss[li][lj][TILED_T+1]=solid[h];}else{ss[li][lj][TILED_T+1]=true;sx[li][lj][TILED_T+1]=0.0;}}
+    __syncthreads();
+
+    double inv_diag=1.0/diag;
+    // Red
+    if(valid&&!ss[li][lj][lk]&&((gi+gj+gk)&1)){
+        double pC=sx[li][lj][lk];
+        double pL=ss[li-1][lj][lk]?pC:sx[li-1][lj][lk],pR=ss[li+1][lj][lk]?pC:sx[li+1][lj][lk];
+        double pB=ss[li][lj-1][lk]?pC:sx[li][lj-1][lk],pT=ss[li][lj+1][lk]?pC:sx[li][lj+1][lk];
+        double pF=ss[li][lj][lk-1]?pC:sx[li][lj][lk-1],pK=ss[li][lj][lk+1]?pC:sx[li][lj][lk+1];
+        double lap=(pL+pR)*idx2+(pB+pT)*idy2+(pF+pK)*idz2;
+        double ed=diag;
+        if(ss[li-1][lj][lk])ed-=idx2;if(ss[li+1][lj][lk])ed-=idx2;
+        if(ss[li][lj-1][lk])ed-=idy2;if(ss[li][lj+1][lk])ed-=idy2;
+        if(ss[li][lj][lk-1])ed-=idz2;if(ss[li][lj][lk+1])ed-=idz2;
+        double inv=(ed==diag)?inv_diag:((ed<1e-15)?0.0:1.0/ed);
+        sx[li][lj][lk]+=inv*(b[gid]-diag*pC+lap);
+    }
+    __syncthreads();
+    // Black
+    if(valid&&!ss[li][lj][lk]&&!((gi+gj+gk)&1)){
+        double pC=sx[li][lj][lk];
+        double pL=ss[li-1][lj][lk]?pC:sx[li-1][lj][lk],pR=ss[li+1][lj][lk]?pC:sx[li+1][lj][lk];
+        double pB=ss[li][lj-1][lk]?pC:sx[li][lj-1][lk],pT=ss[li][lj+1][lk]?pC:sx[li][lj+1][lk];
+        double pF=ss[li][lj][lk-1]?pC:sx[li][lj][lk-1],pK=ss[li][lj][lk+1]?pC:sx[li][lj][lk+1];
+        double lap=(pL+pR)*idx2+(pB+pT)*idy2+(pF+pK)*idz2;
+        double ed=diag;
+        if(ss[li-1][lj][lk])ed-=idx2;if(ss[li+1][lj][lk])ed-=idx2;
+        if(ss[li][lj-1][lk])ed-=idy2;if(ss[li][lj+1][lk])ed-=idy2;
+        if(ss[li][lj][lk-1])ed-=idz2;if(ss[li][lj][lk+1])ed-=idz2;
+        double inv=(ed==diag)?inv_diag:((ed<1e-15)?0.0:1.0/ed);
+        sx[li][lj][lk]+=inv*(b[gid]-diag*pC+lap);
+    }
+    __syncthreads();
+
+    if(valid&&!ss[li][lj][lk])x[gid]=sx[li][lj][lk];
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  Aggregated RBGS + Restrict (down-sweep: smooth + residual + 8-to-1)
 // ═══════════════════════════════════════════════════════════════
 __global__ __launch_bounds__(512,2) void rbgs_restrict_aggregated_kernel(
@@ -367,12 +431,15 @@ __global__ void restrict_solid_opt_kernel(
 // ═══════════════════════════════════════════════════════════════
 //  Optimized V-Cycle (paper Section 5.3, full aggregation)
 //
-//  V(1,1) cycle: pre-smooth(1) + coarsen + post-smooth(1)
-//    Down:  1 aggregated (smooth + restrict) per level
+//  V(nu, nu) cycle: nu pre-smooth + coarsen + nu post-smooth.
+//    Down:  (nu-1) smooth-only + 1 aggregated (smooth + restrict)
 //    Coarse: 1 kernel (20 sweeps fused)
-//    Up:    1 aggregated (prolong + smooth) per level
-//  Total: 2*level kernel launches + 1 for coarse (vs 5*level+20 original)
+//    Up:    1 aggregated (prolong + smooth) + (nu-1) smooth-only
+//  Setting nu=2 (V(2,2)) typically halves PCG iteration count for Poisson
+//  in exchange for ~1.5–1.7× the per-cycle cost. Default to nu=2.
 // ═══════════════════════════════════════════════════════════════
+static constexpr int VCYCLE_NU = 2;
+
 static void vCycle_opt(CudaUAAMGPreconditioner3D::Level* levels, int lv, int nl, cudaStream_t stream) {
     auto& L = levels[lv];
     int nx=L.g.nx, ny=L.g.ny, nz=L.g.nz;
@@ -388,7 +455,11 @@ static void vCycle_opt(CudaUAAMGPreconditioner3D::Level* levels, int lv, int nl,
     int cnx=coarse.g.nx,cny=coarse.g.ny,cnz=coarse.g.nz;
     int Nc=(cnx+2)*(cny+2)*(cnz+2);
 
-    // Down: zero coarse b via memset (HW-accelerated), then aggregate pre-smooth+restrict
+    // Down: (nu-1) smooth-only passes + 1 fused smooth+restrict
+    for(int s=0;s<VCYCLE_NU-1;s++){
+        rbgs_smooth_only_kernel<<<grid,block,0,stream>>>(
+            L.g.x,L.g.b,L.g.solid,nx,ny,nz,L.g.pitch,L.g.idx2,L.g.idy2,L.g.idz2,L.g.diag);
+    }
     cudaMemsetAsync(coarse.g.b, 0, Nc*sizeof(double), stream);
     rbgs_restrict_aggregated_kernel<<<grid,block,0,stream>>>(
         L.g.x,L.g.b,L.g.solid,coarse.g.b,coarse.g.solid,
@@ -397,11 +468,15 @@ static void vCycle_opt(CudaUAAMGPreconditioner3D::Level* levels, int lv, int nl,
 
     vCycle_opt(levels,lv+1,nl,stream);
 
-    // Up: aggregate prolong+post-smooth
+    // Up: 1 fused prolong+smooth + (nu-1) smooth-only
     prolong_rbgs_aggregated_kernel<<<grid,block,0,stream>>>(
         L.g.x,coarse.g.x,L.g.b,L.g.solid,
         nx,ny,nz,L.g.pitch,L.g.idx2,L.g.idy2,L.g.idz2,L.g.diag,
         cny,coarse.g.pitch);
+    for(int s=0;s<VCYCLE_NU-1;s++){
+        rbgs_smooth_only_kernel<<<grid,block,0,stream>>>(
+            L.g.x,L.g.b,L.g.solid,nx,ny,nz,L.g.pitch,L.g.idx2,L.g.idy2,L.g.idz2,L.g.diag);
+    }
 }
 
 void CudaUAAMGPreconditioner3D::apply_optimized(const CudaGrid3D& fine, const double* r, double* z) {

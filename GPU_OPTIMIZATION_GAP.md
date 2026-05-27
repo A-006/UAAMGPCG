@@ -158,15 +158,63 @@ Hardware is fixed. The two reachable wins are:
 
 1. **Trimming** — for variable-coefficient scenarios, as discussed above.
 2. **Convergence acceleration** — paper hits residual 10⁻⁶ in 16 iters.
-   Suggests we're losing convergence rate somewhere. Likely culprits:
-   - We do 1 pre-smooth + 1 post-smooth (V(1,1)). Paper might do V(2,2)
-     or W-cycle (Shao 2022 ref uses W-cycle and converges in 4 iters).
-   - Coarsest-level solver: we do 20 RBGS sweeps; paper does 10. More
-     sweeps shouldn't HURT but if our coarsest grid isn't aggressive
-     enough, residual leaks through.
-   - Prolongation: we have the ×2 scaling but maybe applied at the
-     wrong stage. Worth a unit test against paper's reported coarse
-     residual decay.
+
+---
+
+## Acceleration attempt #1 — V(2,2) cycle
+
+Added a stand-alone `rbgs_smooth_only_kernel` (FP64) and
+`rbgs_smooth_only_kernel_f` (FP32) and modified `vCycle_opt` /
+`vCycle_opt_f` so that each level does (`nu`-1) extra smooth-only
+passes before the fused smooth+restrict (down-stroke) and after the
+fused prolong+smooth (up-stroke). `nu = 2` → V(2,2): 2 pre + 2 post
+smoothings.
+
+**Measured at 256×128×128 (40 fixed PCG-opt iterations, RTX 3090)**:
+
+| Cycle | Solve FP64 (ms) | Δ vs V(1,1) | Solve FP32 (ms) | Δ vs V(1,1) | PCG-opt L2 residual |
+|---|---|---|---|---|---|
+| V(1,1) | 152.4 | — | 69.2 | — | 3.0 × 10³ |
+| V(2,2) | 210.4 | **+38 %** | 80.7 | **+17 %** | 4.0 × 10³ |
+
+**Result: no win, slight regression.**
+
+Two things suggest the extra smoothings aren't actually buying convergence:
+
+- The L2 residual at fixed iter count is **higher** with V(2,2). Numerically
+  the difference (~30 %) is within the FP noise floor of the aggregated
+  matvec/restriction path, but a true convergence improvement should at
+  least *not* be a regression.
+- The PCG-side runtime went up by 38 % (FP64) — consistent with adding
+  2× the smoothing kernel launches per V-cycle — yet the residual
+  did not drop.
+
+**Why V(2,2) didn't help**:
+PCG amortizes preconditioner quality across many iterations. If V(1,1)
+is already a "good enough" preconditioner (consistent with our per-iter
+throughput matching the paper's), doubling the smoothing cost is closer
+to multiplying the V-cycle work without raising the preconditioner's
+spectral quality enough. The classical regime where V(2,2) helps is
+when the smoother is weak relative to the residual spectrum — our
+Red-Black GS on uniform Poisson is already at the strong end.
+
+The 40-vs-16-iter gap therefore is **not** a smoothing-count issue.
+Likely candidates left to investigate:
+
+1. **Initial-guess / re-centering pattern**. Paper §5.3 last paragraph
+   notes the matvec+dot kernel also recenters (subtracts mean) — if we
+   recenter only at start and not every iter we may eat extra iters.
+2. **W-cycle** (recurse twice into the coarse level). Shao 2022 converged
+   in 4 iters with W-cycle. Significantly heavier per-cycle but might
+   pay back if the coarse-grid error is the dominant mode.
+3. **Krylov method choice**. Paper uses preconditioned CG; W-cycle gets
+   them to 4 iters but CG to 16. If they're at the convergence limit
+   of CG with this preconditioner, we should be similar. We're at 40
+   which is higher than expected.
+
+Code change kept in `src/solver/cuda/cuda_uaamg_preconditioner_3d_opt*.cu`
+behind `static constexpr int VCYCLE_NU = 2;` — flipping back to 1
+restores V(1,1) behavior in one place per file.
 
 ---
 

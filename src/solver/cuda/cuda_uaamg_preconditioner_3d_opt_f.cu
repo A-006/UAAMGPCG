@@ -87,6 +87,66 @@ __global__ __launch_bounds__(512,2) void rbgs_tiled_kernel_f(
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  Smooth-only RBGS (FP32) — for V(2,2) extra smoothing passes.
+// ═══════════════════════════════════════════════════════════════
+__global__ __launch_bounds__(512,2) void rbgs_smooth_only_kernel_f(
+    float * __restrict x, const float * __restrict b, const bool * __restrict solid,
+    int nx, int ny, int nz, int pitch,
+    float idx2, float idy2, float idz2, float diag)
+{
+    __shared__ float sx[TILED_TH][TILED_TH][TILED_TH];
+    __shared__ bool  ss[TILED_TH][TILED_TH][TILED_TH];
+
+    int tx=threadIdx.x, ty=threadIdx.y, tz=threadIdx.z;
+    int gi=blockIdx.x*TILED_T+tx+1, gj=blockIdx.y*TILED_T+ty+1, gk=blockIdx.z*TILED_T+tz+1;
+    int li=tx+1, lj=ty+1, lk=tz+1;
+    bool valid=(gi<=nx&&gj<=ny&&gk<=nz);
+    int gid=valid?opti_idx_f(gi,gj,gk,pitch,ny):-1;
+
+    if(valid){sx[li][lj][lk]=x[gid];ss[li][lj][lk]=solid[gid];}
+    else{ss[li][lj][lk]=true;sx[li][lj][lk]=0.0f;}
+    if(tx==0){int gl=gi-1;if(gl>=1&&gj<=ny&&gk<=nz){int h=opti_idx_f(gl,gj,gk,pitch,ny);sx[0][lj][lk]=x[h];ss[0][lj][lk]=solid[h];}else{ss[0][lj][lk]=true;sx[0][lj][lk]=0.0f;}}
+    if(tx==TILED_T-1){int gr=gi+1;if(gr<=nx&&gj<=ny&&gk<=nz){int h=opti_idx_f(gr,gj,gk,pitch,ny);sx[TILED_T+1][lj][lk]=x[h];ss[TILED_T+1][lj][lk]=solid[h];}else{ss[TILED_T+1][lj][lk]=true;sx[TILED_T+1][lj][lk]=0.0f;}}
+    if(ty==0){int gb=gj-1;if(gi<=nx&&gb>=1&&gk<=nz){int h=opti_idx_f(gi,gb,gk,pitch,ny);sx[li][0][lk]=x[h];ss[li][0][lk]=solid[h];}else{ss[li][0][lk]=true;sx[li][0][lk]=0.0f;}}
+    if(ty==TILED_T-1){int gt=gj+1;if(gi<=nx&&gt<=ny&&gk<=nz){int h=opti_idx_f(gi,gt,gk,pitch,ny);sx[li][TILED_T+1][lk]=x[h];ss[li][TILED_T+1][lk]=solid[h];}else{ss[li][TILED_T+1][lk]=true;sx[li][TILED_T+1][lk]=0.0f;}}
+    if(tz==0){int gf=gk-1;if(gi<=nx&&gj<=ny&&gf>=1){int h=opti_idx_f(gi,gj,gf,pitch,ny);sx[li][lj][0]=x[h];ss[li][lj][0]=solid[h];}else{ss[li][lj][0]=true;sx[li][lj][0]=0.0f;}}
+    if(tz==TILED_T-1){int gk2=gk+1;if(gi<=nx&&gj<=ny&&gk2<=nz){int h=opti_idx_f(gi,gj,gk2,pitch,ny);sx[li][lj][TILED_T+1]=x[h];ss[li][lj][TILED_T+1]=solid[h];}else{ss[li][lj][TILED_T+1]=true;sx[li][lj][TILED_T+1]=0.0f;}}
+    __syncthreads();
+
+    float inv_diag=1.0f/diag;
+    if(valid&&!ss[li][lj][lk]&&((gi+gj+gk)&1)){
+        float pC=sx[li][lj][lk];
+        float pL=ss[li-1][lj][lk]?pC:sx[li-1][lj][lk],pR=ss[li+1][lj][lk]?pC:sx[li+1][lj][lk];
+        float pB=ss[li][lj-1][lk]?pC:sx[li][lj-1][lk],pT=ss[li][lj+1][lk]?pC:sx[li][lj+1][lk];
+        float pF=ss[li][lj][lk-1]?pC:sx[li][lj][lk-1],pK=ss[li][lj][lk+1]?pC:sx[li][lj][lk+1];
+        float lap=(pL+pR)*idx2+(pB+pT)*idy2+(pF+pK)*idz2;
+        float ed=diag;
+        if(ss[li-1][lj][lk])ed-=idx2;if(ss[li+1][lj][lk])ed-=idx2;
+        if(ss[li][lj-1][lk])ed-=idy2;if(ss[li][lj+1][lk])ed-=idy2;
+        if(ss[li][lj][lk-1])ed-=idz2;if(ss[li][lj][lk+1])ed-=idz2;
+        float inv=(ed==diag)?inv_diag:((ed<1e-15f)?0.0f:1.0f/ed);
+        sx[li][lj][lk]+=inv*(b[gid]-diag*pC+lap);
+    }
+    __syncthreads();
+    if(valid&&!ss[li][lj][lk]&&!((gi+gj+gk)&1)){
+        float pC=sx[li][lj][lk];
+        float pL=ss[li-1][lj][lk]?pC:sx[li-1][lj][lk],pR=ss[li+1][lj][lk]?pC:sx[li+1][lj][lk];
+        float pB=ss[li][lj-1][lk]?pC:sx[li][lj-1][lk],pT=ss[li][lj+1][lk]?pC:sx[li][lj+1][lk];
+        float pF=ss[li][lj][lk-1]?pC:sx[li][lj][lk-1],pK=ss[li][lj][lk+1]?pC:sx[li][lj][lk+1];
+        float lap=(pL+pR)*idx2+(pB+pT)*idy2+(pF+pK)*idz2;
+        float ed=diag;
+        if(ss[li-1][lj][lk])ed-=idx2;if(ss[li+1][lj][lk])ed-=idx2;
+        if(ss[li][lj-1][lk])ed-=idy2;if(ss[li][lj+1][lk])ed-=idy2;
+        if(ss[li][lj][lk-1])ed-=idz2;if(ss[li][lj][lk+1])ed-=idz2;
+        float inv=(ed==diag)?inv_diag:((ed<1e-15f)?0.0f:1.0f/ed);
+        sx[li][lj][lk]+=inv*(b[gid]-diag*pC+lap);
+    }
+    __syncthreads();
+
+    if(valid&&!ss[li][lj][lk])x[gid]=sx[li][lj][lk];
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  Aggregated RBGS + Restrict (down-sweep: smooth + residual + 8-to-1)
 // ═══════════════════════════════════════════════════════════════
 __global__ __launch_bounds__(512,2) void rbgs_restrict_aggregated_kernel_f(
@@ -380,6 +440,12 @@ static void vCycle_opt_f(CudaUAAMGPreconditioner3Df::Level* levels, int lv, int 
     int cnx=coarse.g.nx,cny=coarse.g.ny,cnz=coarse.g.nz;
     int Nc=(cnx+2)*(cny+2)*(cnz+2);
 
+    // V(2,2): 1 extra smooth-only + fused smooth+restrict; 1 fused prolong+smooth + 1 extra smooth-only
+    static constexpr int NU = 2;
+    for(int s=0;s<NU-1;s++){
+        rbgs_smooth_only_kernel_f<<<grid,block,0,stream>>>(
+            L.g.x,L.g.b,L.g.solid,nx,ny,nz,L.g.pitch,L.g.idx2,L.g.idy2,L.g.idz2,L.g.diag);
+    }
     cudaMemsetAsync(coarse.g.b, 0, Nc*sizeof(float), stream);
     rbgs_restrict_aggregated_kernel_f<<<grid,block,0,stream>>>(
         L.g.x,L.g.b,L.g.solid,coarse.g.b,coarse.g.solid,
@@ -392,6 +458,10 @@ static void vCycle_opt_f(CudaUAAMGPreconditioner3Df::Level* levels, int lv, int 
         L.g.x,coarse.g.x,L.g.b,L.g.solid,
         nx,ny,nz,L.g.pitch,L.g.idx2,L.g.idy2,L.g.idz2,L.g.diag,
         cny,coarse.g.pitch);
+    for(int s=0;s<NU-1;s++){
+        rbgs_smooth_only_kernel_f<<<grid,block,0,stream>>>(
+            L.g.x,L.g.b,L.g.solid,nx,ny,nz,L.g.pitch,L.g.idx2,L.g.idy2,L.g.idz2,L.g.diag);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
