@@ -2,6 +2,12 @@
 set(LFM_SOURCES
     core/grid.cpp
     core/grid_3d.cpp
+    advection/advection_3d.cpp
+    bc/patches_3d.cpp
+    pressure/pressure_3d.cpp
+    simulator/simulator_3d.cpp
+    io/vtk_writer_3d.cpp
+    scenarios/vortex_ring.cpp
     config/config.cpp
     advection/advection.cpp
     boundary/boundary.cpp
