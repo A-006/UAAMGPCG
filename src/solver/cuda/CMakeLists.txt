@@ -28,6 +28,7 @@ target_include_directories(cuda_uaamg_lib PUBLIC
 add_library(cuda_uaamg_3d_lib STATIC
     cuda_uaamg_preconditioner_3d.cu
     cuda_uaamg_preconditioner_3d_opt.cu
+    cuda_uaamg_preconditioner_3d_opt_f.cu
     cuda_pcg_3d.cu
     cuda_pcg_3d_opt.cu
     cuda_pcg_solver_3d.cu
@@ -90,3 +91,8 @@ add_executable(test_paper_bench test_paper_bench.cu)
 set_target_properties(test_paper_bench PROPERTIES LINKER_LANGUAGE CUDA)
 target_link_libraries(test_paper_bench PRIVATE cuda_uaamg_3d_lib cuda_cg_3d_lib lfm_lib)
 target_include_directories(test_paper_bench PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(test_paper_bench_f test_paper_bench_f.cu)
+set_target_properties(test_paper_bench_f PROPERTIES LINKER_LANGUAGE CUDA)
+target_link_libraries(test_paper_bench_f PRIVATE cuda_uaamg_3d_lib cuda_cg_3d_lib lfm_lib)
+target_include_directories(test_paper_bench_f PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})

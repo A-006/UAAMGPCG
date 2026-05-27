@@ -99,11 +99,26 @@ __global__ void count_interior_kernel_f(const bool *solid,int nx,int ny,int nz,i
     if(tid==0)part[blockIdx.x]=s[0];
 }
 
+// ── GPU-side reduction: sum partials to scalar ──
+__global__ void reduce_final_kernel_f(const float *part, int n, float *result) {
+    __shared__ float s[256];
+    int tid = threadIdx.x; float sum = 0.0f;
+    for (int i = tid; i < n; i += 256) sum += part[i];
+    s[tid] = sum; __syncthreads();
+    for (int st = 128; st > 0; st >>= 1) { if (tid < st) s[tid] += s[tid + st]; __syncthreads(); }
+    if (tid == 0) *result = s[0];
+}
+static float gpu_sum_f(const float *d_part, int n, float *d_result) {
+    reduce_final_kernel_f<<<1, 256>>>(d_part, n, d_result);
+    float val; cudaMemcpy(&val, d_result, sizeof(float), cudaMemcpyDeviceToHost);
+    return val;
+}
+
 static float host_sum_f(const float *d,int n){std::vector<float> h(n);cudaMemcpy(h.data(),d,n*sizeof(float),cudaMemcpyDeviceToHost);float t=0;for(float v:h)t+=v;return t;}
 static int host_sum_int_f(const int *d,int n){std::vector<int> h(n);cudaMemcpy(h.data(),d,n*sizeof(int),cudaMemcpyDeviceToHost);int t=0;for(int v:h)t+=v;return t;}
 static float gpu_mean_f(const float *v,const bool *solid,int nx,int ny,int nz,int pitch,float *part,int *cnt,int nb){
     sum_interior_kernel_f<<<nb,256>>>(v,solid,nx,ny,nz,pitch,part);cudaDeviceSynchronize();
-    float s=host_sum_f(part,nb);count_interior_kernel_f<<<nb,256>>>(solid,nx,ny,nz,pitch,cnt);cudaDeviceSynchronize();
+    float s=gpu_sum_f(part,nb,part);count_interior_kernel_f<<<nb,256>>>(solid,nx,ny,nz,pitch,cnt);cudaDeviceSynchronize();
     int c=host_sum_int_f(cnt,nb);return c>0?s/c:0.0f;
 }
 
@@ -111,17 +126,19 @@ static float gpu_mean_f(const float *v,const bool *solid,int nx,int ny,int nz,in
 struct CudaPCG3Df {
     CudaUAAMGPreconditioner3Df precond_;
     float *d_r=nullptr,*d_z=nullptr,*d_p=nullptr,*d_Ap=nullptr,*d_dot=nullptr;
-    int *d_cnt=nullptr;int dot_buf_sz_=0,N_=0;
+    int *d_cnt=nullptr;float *d_scalar=nullptr;int dot_buf_sz_=0,N_=0;
     void ensure(int N){
         if(N_>=N)return;
         if(d_r)cudaFree(d_r);if(d_z)cudaFree(d_z);if(d_p)cudaFree(d_p);if(d_Ap)cudaFree(d_Ap);
         if(d_dot)cudaFree(d_dot);if(d_cnt)cudaFree(d_cnt);
+		if(d_scalar)cudaFree(d_scalar);
         cudaMalloc(&d_r,N*sizeof(float));cudaMalloc(&d_z,N*sizeof(float));
         cudaMalloc(&d_p,N*sizeof(float));cudaMalloc(&d_Ap,N*sizeof(float));
         int mb=(N+255)/256+1;cudaMalloc(&d_dot,mb*sizeof(float));cudaMalloc(&d_cnt,mb*sizeof(int));
+		cudaMalloc(&d_scalar,sizeof(float));
         dot_buf_sz_=mb;N_=N;
     }
-    ~CudaPCG3Df(){if(d_r)cudaFree(d_r);if(d_z)cudaFree(d_z);if(d_p)cudaFree(d_p);if(d_Ap)cudaFree(d_Ap);if(d_dot)cudaFree(d_dot);if(d_cnt)cudaFree(d_cnt);}
+    ~CudaPCG3Df(){if(d_r)cudaFree(d_r);if(d_z)cudaFree(d_z);if(d_p)cudaFree(d_p);if(d_Ap)cudaFree(d_Ap);if(d_dot)cudaFree(d_dot);if(d_cnt)cudaFree(d_cnt);if(d_scalar)cudaFree(d_scalar);}
     float solve_optimized(CudaGrid3Df& g,float* p,float* rhs,int max_iter,float tol);
 };
 
@@ -139,22 +156,22 @@ float CudaPCG3Df::solve_optimized(CudaGrid3Df& g,float* p,float* rhs,int max_ite
     submean_kernel_f<<<grid3d,block3d>>>(d_z,mz,g.solid,nx,ny,nz,pitch);
     cudaMemcpy(d_p,d_z,N*sizeof(float),cudaMemcpyDeviceToDevice);
     dot_kernel_f<<<nb1d,256>>>(d_r,d_z,g.solid,N,d_dot);cudaDeviceSynchronize();
-    float rsold=host_sum_f(d_dot,nb1d);
+    float rsold=gpu_sum_f(d_dot,nb1d,d_scalar);
     if(rsold<1e-30f){cudaMemset(p,0,N*sizeof(float));return 0;}
     for(int k=0;k<max_iter;k++){
         matvec_tiled_dot_kernel_f<<<grid3d,block3d>>>(d_p,d_Ap,g.solid,nx,ny,nz,pitch,g.idx2,g.idy2,g.idz2,g.diag,d_dot);
-        cudaDeviceSynchronize();float pAp=host_sum_f(d_dot,n3d);
+        cudaDeviceSynchronize();float pAp=gpu_sum_f(d_dot,n3d,d_scalar);
         if(pAp<1e-15f)break;
         float alpha=rsold/pAp;
         axpy_kernel_f<<<grid3d,block3d>>>(p,d_p,alpha,g.solid,nx,ny,nz,pitch);
         axpy_dot_kernel_f<<<grid3d,block3d>>>(d_r,d_Ap,-alpha,g.solid,nx,ny,nz,pitch,d_dot);
-        cudaDeviceSynchronize();float rsnew=host_sum_f(d_dot,n3d);
+        cudaDeviceSynchronize();float rsnew=gpu_sum_f(d_dot,n3d,d_scalar);
         if(sqrtf(rsnew)<tol)break;
         precond_.apply_optimized(g,d_r,d_z);
         mz=gpu_mean_f(d_z,g.solid,nx,ny,nz,pitch,d_dot,d_cnt,nb1d);
         submean_kernel_f<<<grid3d,block3d>>>(d_z,mz,g.solid,nx,ny,nz,pitch);cudaDeviceSynchronize();
         dot_kernel_f<<<nb1d,256>>>(d_r,d_z,g.solid,N,d_dot);cudaDeviceSynchronize();
-        float rz=host_sum_f(d_dot,nb1d),beta=rz/rsold;rsold=rz;
+        float rz=gpu_sum_f(d_dot,nb1d,d_scalar),beta=rz/rsold;rsold=rz;
         cudaMemcpy(d_Ap,d_p,N*sizeof(float),cudaMemcpyDeviceToDevice);
         cudaMemcpy(d_p,d_z,N*sizeof(float),cudaMemcpyDeviceToDevice);
         axpy_kernel_f<<<grid3d,block3d>>>(d_p,d_Ap,beta,g.solid,nx,ny,nz,pitch);cudaDeviceSynchronize();

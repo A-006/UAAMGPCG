@@ -39,7 +39,7 @@ static void test_uaamg_faster_than_cg() {
     // CG with 200 iterations
     Config cfg_cg = cfg; cfg_cg.solve_iters = 200;
     auto cg = Factory::create("cg");
-    LFMSimulator sim_cg(cfg_cg, std::move(cg));
+    ChorinSimulator sim_cg(cfg_cg, std::move(cg));
     auto t0 = std::chrono::high_resolution_clock::now();
     for (int s = 0; s < nsteps; s++) sim_cg.step();
     auto t1 = std::chrono::high_resolution_clock::now();
@@ -53,7 +53,7 @@ static void test_uaamg_faster_than_cg() {
     // UAAMG with 50 iterations
     Config cfg_ua = cfg; cfg_ua.solve_iters = 50;
     auto ua = Factory::create("pcg_uaamg");
-    LFMSimulator sim_ua(cfg_ua, std::move(ua));
+    ChorinSimulator sim_ua(cfg_ua, std::move(ua));
     auto t2 = std::chrono::high_resolution_clock::now();
     for (int s = 0; s < nsteps; s++) sim_ua.step();
     auto t3 = std::chrono::high_resolution_clock::now();
@@ -93,7 +93,7 @@ static void test_karman_uaamg() {
     cfg.out_dir = "/tmp/karman_test";
 
     auto solver = Factory::create("pcg_uaamg");
-    LFMSimulator sim(cfg, std::move(solver));
+    ChorinSimulator sim(cfg, std::move(solver));
     int nsteps = (int)(cfg.t_end / cfg.dt);
 
     for (int s = 0; s < nsteps; s++) sim.step();
@@ -131,7 +131,7 @@ static void test_compare_cg() {
     cfg_cg.solve_iters = 500;
     cfg_cg.solve_tol = 1e-10;
     auto cg_solver = Factory::create("cg");
-    LFMSimulator sim_cg(cfg_cg, std::move(cg_solver));
+    ChorinSimulator sim_cg(cfg_cg, std::move(cg_solver));
     for (int s = 0; s < nsteps; s++) sim_cg.step();
     const Grid& g_cg = sim_cg.grid();
     double max_div_cg = 0;
@@ -145,7 +145,7 @@ static void test_compare_cg() {
     cfg_ua.solve_iters = 50;
     cfg_ua.solve_tol = 1e-10;
     auto ua_solver = Factory::create("pcg_uaamg");
-    LFMSimulator sim_ua(cfg_ua, std::move(ua_solver));
+    ChorinSimulator sim_ua(cfg_ua, std::move(ua_solver));
     for (int s = 0; s < nsteps; s++) sim_ua.step();
     const Grid& g_ua = sim_ua.grid();
     double max_div_ua = 0;

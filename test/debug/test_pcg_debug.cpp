@@ -31,7 +31,7 @@ int main() {
         c.solve_iters = 500;
         c.solver = "cg";
         auto solver = Factory::create(c.solver);
-        LFMSimulator sim(c, std::move(solver));
+        ChorinSimulator sim(c, std::move(solver));
 
         for (int s = 0; s < 2; s++) sim.step();
         const Grid& g = sim.grid();
@@ -51,7 +51,7 @@ int main() {
         c.solve_iters = 2000;
         c.solver = "cg";
         auto solver = Factory::create(c.solver);
-        LFMSimulator sim(c, std::move(solver));
+        ChorinSimulator sim(c, std::move(solver));
         for (int s = 0; s < 2; s++) sim.step();
         const Grid& g = sim.grid();
         double max_div = 0, max_p = 0;
@@ -70,7 +70,7 @@ int main() {
         c.solve_iters = 2000;
         c.solver = "jacobi";
         auto solver = Factory::create(c.solver);
-        LFMSimulator sim(c, std::move(solver));
+        ChorinSimulator sim(c, std::move(solver));
         for (int s = 0; s < 2; s++) sim.step();
         const Grid& g = sim.grid();
         double max_div = 0, max_p = 0;

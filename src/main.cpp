@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    LFMSimulator sim(cfg, Factory::create(solver_arg));
+    ChorinSimulator sim(cfg, Factory::create(solver_arg));
     sim.run();
     return 0;
 }

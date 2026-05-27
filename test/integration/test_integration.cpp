@@ -32,7 +32,7 @@ int main() {
         cfg.solve_iters = (name[0]=='j'||name[0]=='r') ? 500 : 30;
         cfg.solve_tol = 1e-6;
 
-        LFMSimulator sim(cfg, make_solver(name));
+        ChorinSimulator sim(cfg, make_solver(name));
         bool ok = true;
         for (int s = 0; s < 3; s++) {
             sim.step();
@@ -52,7 +52,7 @@ int main() {
         cfg.dt = 0.5 * (cfg.Lx/cfg.NX) / cfg.U_inf;
         cfg.solve_iters = 30; cfg.solve_tol = 1e-6;
 
-        LFMSimulator sim(cfg, make_solver(name));
+        ChorinSimulator sim(cfg, make_solver(name));
         bool ok = true;
         for (int s = 0; s < 5; s++) {
             sim.step();
@@ -76,7 +76,7 @@ int main() {
         cfg.solve_iters = (name[0]=='j'||name[0]=='r') ? 1000 : 20;
         cfg.solve_tol = 1e-6;
 
-        LFMSimulator sim(cfg, make_solver(name));
+        ChorinSimulator sim(cfg, make_solver(name));
         bool ok = true;
         for (int s = 0; s < 10; s++) {
             sim.step();

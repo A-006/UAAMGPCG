@@ -54,6 +54,18 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/test
     )
+
+    # GPU Karman validate (Cd/Cl/St)
+    add_executable(test_karman_validate_gpu test/integration/test_karman_validate_gpu.cu)
+    set_target_properties(test_karman_validate_gpu PROPERTIES
+        LINKER_LANGUAGE CUDA
+        CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
+    )
+    target_link_libraries(test_karman_validate_gpu PRIVATE lfm_lib cuda_uaamg_lib cuda_cg_lib)
+    target_include_directories(test_karman_validate_gpu PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/test
+    )
 else()
     message(STATUS "CUDA not enabled — skipping GPU solver")
     message(STATUS "  To build with CUDA: CUDACXX=/usr/local/cuda/bin/nvcc cmake ..")

@@ -1,0 +1,38 @@
+============================================================
+  UAAMGPCG Paper-Scale Benchmark (Sun et al. SIGGRAPH 2025)
+  Paper: 256x128x128, RTX 4090, V(1,1), 1e-6 rel error
+  Ours:  RTX 3090, V(1,1)
+============================================================
+
+══════ Grid 64x32x32 (0.1M cells) ══════
+  V-cycle time: 0.38 ms  (paper: 0.81ms on RTX4090 at 256x128x128)
+  GPU PCG(20):        11.31 ms  L2|res|=3.7633e+01
+  GPU PCG-opt(20):     7.30 ms  L2|res|=4.2717e+02  speedup=1.55x
+  CPU PCG(20):       253.61 ms  L2|res|=3.7633e+01  speedup=22.4x
+  Opt-vs-Unopt L2 diff: 3.90e+02  CHECK
+
+══════ Grid 128x64x64 (0.5M cells) ══════
+  V-cycle time: 0.73 ms  (paper: 0.81ms on RTX4090 at 256x128x128)
+  GPU PCG(30):        37.88 ms  L2|res|=5.4410e+02
+  GPU PCG-opt(30):    29.59 ms  L2|res|=1.1197e+03  speedup=1.28x
+  CPU PCG(30):      4745.31 ms  L2|res|=5.4410e+02  speedup=125.3x
+  Opt-vs-Unopt L2 diff: 5.76e+02  CHECK
+
+══════ Grid 256x128x128 (4.2M cells) ══════
+  V-cycle time: 3.24 ms  (paper: 0.81ms on RTX4090 at 256x128x128)
+  GPU PCG(40):       258.99 ms  L2|res|=6.3604e+03
+  GPU PCG-opt(40):   222.91 ms  L2|res|=3.0034e+03  speedup=1.16x
+  Opt-vs-Unopt L2 diff: 3.36e+03  CHECK
+
+══════ V-Cycle Cost Analysis (paper Table 5) ══════
+  Paper reports one V-cycle at 0.81ms on 256x128x128 (RTX 4090)
+  Our V(1,1) cycle: 1 pre-smooth + 1 restrict + 1 prolong + 1 post-smooth
+  Smooth = 2 RBGS passes (red + black)
+
+  Total V-cycle:       0.731 ms
+  Per-MCell cost:      1.394 ms/Mcell
+  (Paper: 0.81ms / 4.2M = 0.19 ms/Mcell on RTX 4090)
+
+============================================================
+  Paper-scale benchmark complete.
+============================================================

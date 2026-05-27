@@ -26,3 +26,10 @@ double  Grid::p_at(int i, int j) const { return p[ip(i,j)]; }
 double& Grid::p_at(int i, int j)       { return p[ip(i,j)]; }
 bool    Grid::is_solid(int i, int j) const { return solid[ip(i,j)]; }
 void    Grid::set_solid(int i, int j)       { solid[ip(i,j)] = true; }
+
+void Grid::init_variable_lap() {
+    int np = (nx+2) * (ny+2);
+    lap_diag.assign(np, 0.0);
+    lap_off_x.assign(np, 0.0);
+    lap_off_y.assign(np, 0.0);
+}

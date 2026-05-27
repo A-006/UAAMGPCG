@@ -16,7 +16,7 @@ private:
     std::unique_ptr<CudaUAAMGPreconditioner3D> precond_{
         std::make_unique<CudaUAAMGPreconditioner3D>()};
     double *d_r = nullptr, *d_z = nullptr, *d_p = nullptr, *d_Ap = nullptr;
-    double *d_dot_buf = nullptr;
+    double *d_dot_buf = nullptr, *d_scalar = nullptr;
     int    *d_count_buf = nullptr;
     size_t dot_buf_size_ = 0;
     int N_ = 0;

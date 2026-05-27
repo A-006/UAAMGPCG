@@ -16,4 +16,7 @@ public:
     double solve_tol  = 1e-6;
     std::string out_dir = "output";
     std::string solver = "pcg";
+    std::string time_integrator = "chorin";  // "chorin" or "lfm"
+    int    lfm_cycle_steps = 10;            // steps per LFM reinitialization cycle
+    std::string cylinder_type = "stair";    // "stair" or "smooth"
 };

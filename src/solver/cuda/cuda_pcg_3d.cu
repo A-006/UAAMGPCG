@@ -183,6 +183,7 @@ void CudaPCG3D::ensure_buffers(int N) {
     int max_blocks = (N + 255) / 256 + 1;
     cudaMalloc(&d_dot_buf,   max_blocks * sizeof(double));
     cudaMalloc(&d_count_buf, max_blocks * sizeof(int));
+	cudaMalloc(&d_scalar, sizeof(double));
     dot_buf_size_ = max_blocks;
     N_ = N;
 }
@@ -193,9 +194,10 @@ void CudaPCG3D::free_buffers() {
     if (d_p)  cudaFree(d_p);
     if (d_Ap) cudaFree(d_Ap);
     if (d_dot_buf)   cudaFree(d_dot_buf);
+    if (d_scalar)  cudaFree(d_scalar);
     if (d_count_buf) cudaFree(d_count_buf);
     d_r = d_z = d_p = d_Ap = d_dot_buf = nullptr;
-    d_count_buf = nullptr;
+    d_count_buf = nullptr; d_scalar = nullptr;
     dot_buf_size_ = 0; N_ = 0;
 }
 

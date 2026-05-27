@@ -115,47 +115,57 @@ double estimateStrouhal(const std::vector<double>& time,
                          const std::vector<double>& Cl,
                          double U_inf, double D)
 {
+    // Use DFT at candidate Strouhal frequencies. More robust than zero-crossing
+    // when Cl amplitude is small (early-transition flows).
     if (time.size() < 10) return 0.0;
 
-    // Subtract mean so signal oscillates around zero
     size_t n = time.size();
-    size_t start = n / 2;  // use second half for mean
+    size_t start = n / 2;  // use second half (post-transient)
+
+    // Remove mean
     double mean = 0;
     for (size_t i = start; i < n; i++) mean += Cl[i];
     mean /= (n - start);
 
-    // Detect zero-crossings of mean-subtracted Cl
-    int crossings = 0;
-    double t_first = 0, t_last = 0;
-    for (size_t i = start + 1; i < n; i++) {
-        double a = Cl[i-1] - mean;
-        double b = Cl[i] - mean;
-        if (a * b < 0) {  // sign change
-            crossings++;
-            if (crossings == 1) t_first = time[i];
-            t_last = time[i];
+    // Candidate Strouhal numbers → frequencies (f = St * U / D)
+    double candidates[] = {0.15, 0.18, 0.19, 0.195, 0.20, 0.21, 0.22, 0.25, 0.30};
+    int n_cand = sizeof(candidates) / sizeof(candidates[0]);
+
+    double best_St = 0, best_mag = -1;
+    for (int c = 0; c < n_cand; c++) {
+        double f = candidates[c] * U_inf / D;
+        double dt = time[n-1] - time[start];
+        // Compute DFT magnitude at frequency f
+        double re = 0, im = 0;
+        for (size_t i = start; i < n; i++) {
+            double arg = 2.0 * M_PI * f * time[i];
+            double cl = Cl[i] - mean;
+            re += cl * std::cos(arg);
+            im += cl * std::sin(arg);
+        }
+        double mag = std::sqrt(re * re + im * im);
+        if (mag > best_mag) {
+            best_mag = mag;
+            best_St = candidates[c];
         }
     }
 
-    // Fallback: use peak-to-peak if no zero-crossings found
-    if (crossings < 2) {
-        // Find local maxima of |Cl - mean|
-        crossings = 0;
-        for (size_t i = start + 2; i < n - 2; i++) {
-            double a = Cl[i-2] - mean, b = Cl[i-1] - mean;
-            double c = Cl[i] - mean, d = Cl[i+1] - mean, e = Cl[i+2] - mean;
-            // Local peak: c > neighbors
-            if (c > b && c > d && c > a && c > e) {
+    // Fallback: zero-crossing if DFT gives implausible result
+    if (best_St < 0.15 || best_St > 0.30) {
+        int crossings = 0;
+        double t_first = 0, t_last = 0;
+        for (size_t i = start + 1; i < n; i++) {
+            if ((Cl[i-1] - mean) * (Cl[i] - mean) < 0) {
                 crossings++;
                 if (crossings == 1) t_first = time[i];
                 t_last = time[i];
             }
         }
+        if (crossings >= 2) {
+            double period = (t_last - t_first) / (crossings - 1);
+            best_St = (1.0 / period) * D / U_inf;
+        }
     }
 
-    if (crossings < 2) return 0.0;
-
-    double period = (t_last - t_first) / (crossings - 1);
-    double freq = 1.0 / period;
-    return freq * D / U_inf;
+    return best_St;
 }

@@ -22,6 +22,18 @@ public:
 
     Grid(int nx_, int ny_, double lx, double ly);
 
+    double Lx() const { return nx * dx; }
+    double Ly() const { return ny * dy; }
+    const std::vector<double>& u_data() const { return u; }
+    const std::vector<double>& v_data() const { return v; }
+
+    // Variable Laplacian coefficients for ∇·((1-φ)∇p).
+    // When empty, PCG uses uniform coefficients.
+    // diag > 0, off_x < 0, off_y < 0.
+    std::vector<double> lap_diag, lap_off_x, lap_off_y;
+    bool has_variable_lap() const { return !lap_diag.empty(); }
+    void init_variable_lap();  // allocate to match p array size
+
     // u: i∈[0,nx], j∈[0,ny+1]
     int    iu(int i, int j) const;
     double  u_at(int i, int j) const;

@@ -33,18 +33,31 @@ void PCG::solve(Grid& g, const std::vector<double>& rhs_in, int max_iter, double
     }
 
     auto matvec = [&](const std::vector<double>& v, std::vector<double>& Av) {
-        double idx2 = 1.0/(g.dx*g.dx), idy2 = 1.0/(g.dy*g.dy);
-        double diag = 2.0*(idx2+idy2);
-        for (int i = 1; i <= nx; i++)
-            for (int j = 1; j <= ny; j++) {
-                int idx = g.ip(i,j);
-                if (g.is_solid(i,j)) { Av[idx] = 0.0; continue; }
-                double vL = (i>1 && !g.is_solid(i-1,j)) ? v[g.ip(i-1,j)] : v[idx];
-                double vR = (i<nx && !g.is_solid(i+1,j)) ? v[g.ip(i+1,j)] : v[idx];
-                double vB = (j>1 && !g.is_solid(i,j-1)) ? v[g.ip(i,j-1)] : v[idx];
-                double vT = (j<ny && !g.is_solid(i,j+1)) ? v[g.ip(i,j+1)] : v[idx];
-                Av[idx] = diag * v[idx] - (vL+vR)*idx2 - (vB+vT)*idy2;
-            }
+        if (g.has_variable_lap()) {
+            for (int i = 1; i <= nx; i++)
+                for (int j = 1; j <= ny; j++) {
+                    int idx = g.ip(i,j);
+                    if (g.is_solid(i,j)) { Av[idx] = 0.0; continue; }
+                    double vL = (i>1 && !g.is_solid(i-1,j)) ? v[g.ip(i-1,j)] : v[idx];
+                    double vR = (i<nx && !g.is_solid(i+1,j)) ? v[g.ip(i+1,j)] : v[idx];
+                    double vB = (j>1 && !g.is_solid(i,j-1)) ? v[g.ip(i,j-1)] : v[idx];
+                    double vT = (j<ny && !g.is_solid(i,j+1)) ? v[g.ip(i,j+1)] : v[idx];
+                    Av[idx] = g.lap_diag[idx]*v[idx] + g.lap_off_x[idx]*(vL+vR) + g.lap_off_y[idx]*(vB+vT);
+                }
+        } else {
+            double idx2 = 1.0/(g.dx*g.dx), idy2 = 1.0/(g.dy*g.dy);
+            double diag = 2.0*(idx2+idy2);
+            for (int i = 1; i <= nx; i++)
+                for (int j = 1; j <= ny; j++) {
+                    int idx = g.ip(i,j);
+                    if (g.is_solid(i,j)) { Av[idx] = 0.0; continue; }
+                    double vL = (i>1 && !g.is_solid(i-1,j)) ? v[g.ip(i-1,j)] : v[idx];
+                    double vR = (i<nx && !g.is_solid(i+1,j)) ? v[g.ip(i+1,j)] : v[idx];
+                    double vB = (j>1 && !g.is_solid(i,j-1)) ? v[g.ip(i,j-1)] : v[idx];
+                    double vT = (j<ny && !g.is_solid(i,j+1)) ? v[g.ip(i,j+1)] : v[idx];
+                    Av[idx] = diag * v[idx] - (vL+vR)*idx2 - (vB+vT)*idy2;
+                }
+        }
     };
 
     auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {

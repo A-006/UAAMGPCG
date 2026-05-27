@@ -32,7 +32,7 @@ int main() {
         c.solve_iters = 200;
         c.solver = "cg";
         auto solver = Factory::create(c.solver);
-        LFMSimulator sim(c, std::move(solver));
+        ChorinSimulator sim(c, std::move(solver));
         sim.step();
         const Grid& g = sim.grid();
         double max_div = 0;
@@ -49,7 +49,7 @@ int main() {
         c.solve_iters = 50;
         c.solver = "pcg";
         auto solver = Factory::create(c.solver);
-        LFMSimulator sim(c, std::move(solver));
+        ChorinSimulator sim(c, std::move(solver));
         sim.step();
         const Grid& g = sim.grid();
         double max_div = 0;

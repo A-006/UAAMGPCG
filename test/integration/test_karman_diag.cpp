@@ -19,7 +19,7 @@ int main() {
     std::cout << "dt=" << cfg.dt << " grid=" << cfg.NX << "x" << cfg.NY << "\n";
 
     auto solver = Factory::create(cfg.solver);
-    LFMSimulator sim(cfg, std::move(solver));
+    ChorinSimulator sim(cfg, std::move(solver));
     int nsteps = (int)(cfg.t_end/cfg.dt);
 
     for(int s=0;s<nsteps;s++){

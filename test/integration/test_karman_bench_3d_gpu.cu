@@ -27,7 +27,7 @@ static std::vector<double> run_one(const Config& base_cfg,
     cfg.solver = label;
     cfg.solve_iters = iters;
 
-    LFMSimulator sim(cfg, std::move(solver));
+    ChorinSimulator sim(cfg, std::move(solver));
     int nsteps = (int)(cfg.t_end / cfg.dt);
 
     auto t0 = std::chrono::high_resolution_clock::now();

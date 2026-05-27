@@ -253,6 +253,23 @@ __global__ void axpy_kernel(double *y, const double *x, double a, const bool *so
     if(!solid[id]) y[id]+=a*x[id];
 }
 
+// ── GPU-side reduction: sum partials to scalar ──
+__global__ void reduce_final_kernel(const double *part, int n, double *result) {
+    __shared__ double s[256];
+    int tid = threadIdx.x;
+    double sum = 0.0;
+    for (int i = tid; i < n; i += 256) sum += part[i];
+    s[tid] = sum;
+    __syncthreads();
+    for (int st = 128; st > 0; st >>= 1) { if (tid < st) s[tid] += s[tid + st]; __syncthreads(); }
+    if (tid == 0) *result = s[0];
+}
+static double gpu_sum(const double *d_part, int n, double *d_result) {
+    reduce_final_kernel<<<1, 256>>>(d_part, n, d_result);
+    double val; cudaMemcpy(&val, d_result, sizeof(double), cudaMemcpyDeviceToHost);
+    return val;
+}
+
 // ── Host reduction ──
 static double host_sum(const double *d, int n) {
     std::vector<double> h(n);
@@ -268,7 +285,7 @@ static double gpu_mean(const double *v, const bool *solid,
     int nx, int ny, int nz, int pitch, double *part, int *cnt, int nb)
 {
     sum_interior_kernel<<<nb,256>>>(v,solid,nx,ny,nz,pitch,part); cudaDeviceSynchronize();
-    double s=host_sum(part,nb);
+    double s=gpu_sum(part,nb,part);
     count_interior_kernel<<<nb,256>>>(solid,nx,ny,nz,pitch,cnt); cudaDeviceSynchronize();
     int c=host_sum_int(cnt,nb);
     return c>0?s/c:0.0;
@@ -303,7 +320,7 @@ void CudaPCG3D::solve_optimized(CudaGrid3D& g, double* p, double* rhs, int max_i
     // rsold = dot(r,z)
     dot_kernel_1d<<<nb1d,256>>>(d_r, d_z, g.solid, N, d_dot_buf);
     cudaDeviceSynchronize();
-    double rsold = host_sum(d_dot_buf, nb1d);
+    double rsold = gpu_sum(d_dot_buf, nb1d, d_scalar);
     if (rsold < 1e-30) { cudaMemset(p, 0, N*sizeof(double)); return; }
 
     for (int k = 0; k < max_iter; k++) {
@@ -313,7 +330,7 @@ void CudaPCG3D::solve_optimized(CudaGrid3D& g, double* p, double* rhs, int max_i
             g.idx2, g.idy2, g.idz2, g.diag,
             d_dot_buf);
         cudaDeviceSynchronize();
-        double pAp = host_sum(d_dot_buf, n3d);
+        double pAp = gpu_sum(d_dot_buf, n3d, d_scalar);
         if (pAp < 1e-15) break;
 
         double alpha = rsold / pAp;
@@ -326,7 +343,7 @@ void CudaPCG3D::solve_optimized(CudaGrid3D& g, double* p, double* rhs, int max_i
             d_r, d_Ap, -alpha, g.solid, nx, ny, nz, pitch,
             d_dot_buf);
         cudaDeviceSynchronize();
-        double rsnew = host_sum(d_dot_buf, n3d);
+        double rsnew = gpu_sum(d_dot_buf, n3d, d_scalar);
 
         if (std::sqrt(rsnew) < tol) break;
 
@@ -338,7 +355,7 @@ void CudaPCG3D::solve_optimized(CudaGrid3D& g, double* p, double* rhs, int max_i
 
         dot_kernel_1d<<<nb1d,256>>>(d_r, d_z, g.solid, N, d_dot_buf);
         cudaDeviceSynchronize();
-        double rz = host_sum(d_dot_buf, nb1d);
+        double rz = gpu_sum(d_dot_buf, nb1d, d_scalar);
 
         double beta = rz / rsold;
         rsold = rz;

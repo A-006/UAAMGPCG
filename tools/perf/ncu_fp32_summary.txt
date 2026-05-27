@@ -1,0 +1,421 @@
+[132290] test_paper_bench_f@127.0.0.1
+  axpy_dot_kernel_f(float *, const float *, float, const bool *, int, int, int, int, float *) (8, 4, 4)x(8, 8, 8), Device 0, CC 8.6, Invocations 2
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ------------- -------- -------- --------
+    Metric Name               Metric Unit  Minimum  Maximum  Average
+    ----------------------- ------------- -------- -------- --------
+    DRAM Frequency          cycle/nsecond     8.78     8.98     8.88
+    SM Frequency            cycle/nsecond     1.27     1.30     1.28
+    Elapsed Cycles                  cycle 7,079.00 7,117.00 7,098.00
+    Memory Throughput                   %    24.68    24.81    24.75
+    DRAM Throughput                     %    12.96    13.02    12.99
+    Duration                      usecond     5.47     5.57     5.52
+    L1/TEX Cache Throughput             %    37.89    38.73    38.31
+    L2 Cache Throughput                 %    18.56    18.68    18.62
+    SM Active Cycles                cycle 4,530.21 4,630.57 4,580.39
+    Compute (SM) Throughput             %    24.68    24.81    24.75
+    ----------------------- ------------- -------- -------- --------
+
+    Section: Launch Statistics
+    -------------------------------- --------------- --------- --------- ---------
+    Metric Name                          Metric Unit   Minimum   Maximum   Average
+    -------------------------------- --------------- --------- --------- ---------
+    Block Size                                          512.00    512.00    512.00
+    Grid Size                                           128.00    128.00    128.00
+    Registers Per Thread             register/thread     16.00     16.00     16.00
+    Shared Memory Configuration Size           Kbyte     16.38     16.38     16.38
+    Driver Shared Memory Per Block       Kbyte/block      1.02      1.02      1.02
+    Dynamic Shared Memory Per Block       byte/block      0.00      0.00      0.00
+    Static Shared Memory Per Block       Kbyte/block      2.05      2.05      2.05
+    Threads                                   thread 65,536.00 65,536.00 65,536.00
+    Waves Per SM                                          0.52      0.52      0.52
+    -------------------------------- --------------- --------- --------- ---------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------- ------- -------
+    Metric Name                     Metric Unit Minimum Maximum Average
+    ------------------------------- ----------- ------- ------- -------
+    Block Limit SM                        block   16.00   16.00   16.00
+    Block Limit Registers                 block    8.00    8.00    8.00
+    Block Limit Shared Mem                block    5.00    5.00    5.00
+    Block Limit Warps                     block    3.00    3.00    3.00
+    Theoretical Active Warps per SM        warp   48.00   48.00   48.00
+    Theoretical Occupancy                     %  100.00  100.00  100.00
+    Achieved Occupancy                        %   48.88   50.32   49.60
+    Achieved Active Warps Per SM           warp   23.46   24.15   23.81
+    ------------------------------- ----------- ------- ------- -------
+
+  matvec_tiled_dot_kernel_f(const float *, float *, const bool *, int, int, int, int, float, float, float, float, float *) (8, 4, 4)x(8, 8, 8), Device 0, CC 8.6, Invocations 2
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ------------- -------- -------- --------
+    Metric Name               Metric Unit  Minimum  Maximum  Average
+    ----------------------- ------------- -------- -------- --------
+    DRAM Frequency          cycle/nsecond     9.18     9.18     9.18
+    SM Frequency            cycle/nsecond     1.32     1.32     1.32
+    Elapsed Cycles                  cycle 8,619.00 8,655.00 8,637.00
+    Memory Throughput                   %    40.09    40.28    40.18
+    DRAM Throughput                     %     5.88     5.91     5.89
+    Duration                      usecond     6.53     6.56     6.54
+    L1/TEX Cache Throughput             %    61.44    62.00    61.72
+    L2 Cache Throughput                 %    13.58    13.69    13.63
+    SM Active Cycles                cycle 5,589.57 5,640.27 5,614.92
+    Compute (SM) Throughput             %    40.09    40.28    40.18
+    ----------------------- ------------- -------- -------- --------
+
+    Section: Launch Statistics
+    -------------------------------- --------------- --------- --------- ---------
+    Metric Name                          Metric Unit   Minimum   Maximum   Average
+    -------------------------------- --------------- --------- --------- ---------
+    Block Size                                          512.00    512.00    512.00
+    Grid Size                                           128.00    128.00    128.00
+    Registers Per Thread             register/thread     27.00     27.00     27.00
+    Shared Memory Configuration Size           Kbyte     32.77     32.77     32.77
+    Driver Shared Memory Per Block       Kbyte/block      1.02      1.02      1.02
+    Dynamic Shared Memory Per Block       byte/block      0.00      0.00      0.00
+    Static Shared Memory Per Block       Kbyte/block      7.05      7.05      7.05
+    Threads                                   thread 65,536.00 65,536.00 65,536.00
+    Waves Per SM                                          0.52      0.52      0.52
+    -------------------------------- --------------- --------- --------- ---------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------- ------- -------
+    Metric Name                     Metric Unit Minimum Maximum Average
+    ------------------------------- ----------- ------- ------- -------
+    Block Limit SM                        block   16.00   16.00   16.00
+    Block Limit Registers                 block    4.00    4.00    4.00
+    Block Limit Shared Mem                block    4.00    4.00    4.00
+    Block Limit Warps                     block    3.00    3.00    3.00
+    Theoretical Active Warps per SM        warp   48.00   48.00   48.00
+    Theoretical Occupancy                     %  100.00  100.00  100.00
+    Achieved Occupancy                        %   50.73   51.20   50.97
+    Achieved Active Warps Per SM           warp   24.35   24.58   24.46
+    ------------------------------- ----------- ------- ------- -------
+
+  prolong_rbgs_aggregated_kernel_f(float *, const float *, const float *, const bool *, int, int, int, int, float, float, float, float, int, int) (2, 1, 1)x(8, 8, 8), Device 0, CC 8.6, Invocations 2
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ------------- -------- -------- --------
+    Metric Name               Metric Unit  Minimum  Maximum  Average
+    ----------------------- ------------- -------- -------- --------
+    DRAM Frequency          cycle/nsecond     9.03     9.03     9.03
+    SM Frequency            cycle/nsecond     1.33     1.33     1.33
+    Elapsed Cycles                  cycle 7,388.00 7,391.00 7,389.50
+    Memory Throughput                   %     0.91     0.91     0.91
+    DRAM Throughput                     %     0.25     0.25     0.25
+    Duration                      usecond     5.57     5.57     5.57
+    L1/TEX Cache Throughput             %    36.48    36.51    36.49
+    L2 Cache Throughput                 %     0.91     0.91     0.91
+    SM Active Cycles                cycle   133.61   133.73   133.67
+    Compute (SM) Throughput             %     0.66     0.66     0.66
+    ----------------------- ------------- -------- -------- --------
+
+    Section: Launch Statistics
+    -------------------------------- --------------- -------- -------- --------
+    Metric Name                          Metric Unit  Minimum  Maximum  Average
+    -------------------------------- --------------- -------- -------- --------
+    Block Size                                         512.00   512.00   512.00
+    Grid Size                                            2.00     2.00     2.00
+    Registers Per Thread             register/thread    34.00    34.00    34.00
+    Shared Memory Configuration Size           Kbyte    32.77    32.77    32.77
+    Driver Shared Memory Per Block       Kbyte/block     1.02     1.02     1.02
+    Dynamic Shared Memory Per Block       byte/block     0.00     0.00     0.00
+    Static Shared Memory Per Block       Kbyte/block     5.00     5.00     5.00
+    Threads                                   thread 1,024.00 1,024.00 1,024.00
+    Waves Per SM                                         0.01     0.01     0.01
+    -------------------------------- --------------- -------- -------- --------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------- ------- -------
+    Metric Name                     Metric Unit Minimum Maximum Average
+    ------------------------------- ----------- ------- ------- -------
+    Block Limit SM                        block   16.00   16.00   16.00
+    Block Limit Registers                 block    3.00    3.00    3.00
+    Block Limit Shared Mem                block    5.00    5.00    5.00
+    Block Limit Warps                     block    3.00    3.00    3.00
+    Theoretical Active Warps per SM        warp   48.00   48.00   48.00
+    Theoretical Occupancy                     %  100.00  100.00  100.00
+    Achieved Occupancy                        %   32.82   33.81   33.32
+    Achieved Active Warps Per SM           warp   15.76   16.23   15.99
+    ------------------------------- ----------- ------- ------- -------
+
+  prolong_rbgs_aggregated_kernel_f(float *, const float *, const float *, const bool *, int, int, int, int, float, float, float, float, int, int) (4, 2, 2)x(8, 8, 8), Device 0, CC 8.6, Invocations 2
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ------------- -------- -------- --------
+    Metric Name               Metric Unit  Minimum  Maximum  Average
+    ----------------------- ------------- -------- -------- --------
+    DRAM Frequency          cycle/nsecond     9.01     9.13     9.07
+    SM Frequency            cycle/nsecond     1.32     1.34     1.33
+    Elapsed Cycles                  cycle 7,951.00 8,062.00 8,006.50
+    Memory Throughput                   %     5.04     5.11     5.08
+    DRAM Throughput                     %     1.61     1.63     1.62
+    Duration                      usecond     6.02     6.02     6.02
+    L1/TEX Cache Throughput             %    35.52    35.53    35.53
+    L2 Cache Throughput                 %     2.75     2.78     2.76
+    SM Active Cycles                cycle 1,142.21 1,142.50 1,142.35
+    Compute (SM) Throughput             %     5.04     5.11     5.08
+    ----------------------- ------------- -------- -------- --------
+
+    Section: Launch Statistics
+    -------------------------------- --------------- -------- -------- --------
+    Metric Name                          Metric Unit  Minimum  Maximum  Average
+    -------------------------------- --------------- -------- -------- --------
+    Block Size                                         512.00   512.00   512.00
+    Grid Size                                           16.00    16.00    16.00
+    Registers Per Thread             register/thread    34.00    34.00    34.00
+    Shared Memory Configuration Size           Kbyte    32.77    32.77    32.77
+    Driver Shared Memory Per Block       Kbyte/block     1.02     1.02     1.02
+    Dynamic Shared Memory Per Block       byte/block     0.00     0.00     0.00
+    Static Shared Memory Per Block       Kbyte/block     5.00     5.00     5.00
+    Threads                                   thread 8,192.00 8,192.00 8,192.00
+    Waves Per SM                                         0.07     0.07     0.07
+    -------------------------------- --------------- -------- -------- --------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------- ------- -------
+    Metric Name                     Metric Unit Minimum Maximum Average
+    ------------------------------- ----------- ------- ------- -------
+    Block Limit SM                        block   16.00   16.00   16.00
+    Block Limit Registers                 block    3.00    3.00    3.00
+    Block Limit Shared Mem                block    5.00    5.00    5.00
+    Block Limit Warps                     block    3.00    3.00    3.00
+    Theoretical Active Warps per SM        warp   48.00   48.00   48.00
+    Theoretical Occupancy                     %  100.00  100.00  100.00
+    Achieved Occupancy                        %   32.88   32.93   32.91
+    Achieved Active Warps Per SM           warp   15.78   15.80   15.79
+    ------------------------------- ----------- ------- ------- -------
+
+  prolong_rbgs_aggregated_kernel_f(float *, const float *, const float *, const bool *, int, int, int, int, float, float, float, float, int, int) (8, 4, 4)x(8, 8, 8), Device 0, CC 8.6, Invocations 2
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ------------- -------- -------- --------
+    Metric Name               Metric Unit  Minimum  Maximum  Average
+    ----------------------- ------------- -------- -------- --------
+    DRAM Frequency          cycle/nsecond     9.06     9.14     9.10
+    SM Frequency            cycle/nsecond     1.30     1.31     1.30
+    Elapsed Cycles                  cycle 9,693.00 9,810.00 9,751.50
+    Memory Throughput                   %    33.81    34.26    34.03
+    DRAM Throughput                     %     9.91    10.02     9.97
+    Duration                      usecond     7.42     7.49     7.46
+    L1/TEX Cache Throughput             %    48.73    48.85    48.79
+    L2 Cache Throughput                 %    16.11    16.37    16.24
+    SM Active Cycles                cycle 6,774.26 6,791.37 6,782.81
+    Compute (SM) Throughput             %    33.81    34.26    34.03
+    ----------------------- ------------- -------- -------- --------
+
+    Section: Launch Statistics
+    -------------------------------- --------------- --------- --------- ---------
+    Metric Name                          Metric Unit   Minimum   Maximum   Average
+    -------------------------------- --------------- --------- --------- ---------
+    Block Size                                          512.00    512.00    512.00
+    Grid Size                                           128.00    128.00    128.00
+    Registers Per Thread             register/thread     34.00     34.00     34.00
+    Shared Memory Configuration Size           Kbyte     32.77     32.77     32.77
+    Driver Shared Memory Per Block       Kbyte/block      1.02      1.02      1.02
+    Dynamic Shared Memory Per Block       byte/block      0.00      0.00      0.00
+    Static Shared Memory Per Block       Kbyte/block      5.00      5.00      5.00
+    Threads                                   thread 65,536.00 65,536.00 65,536.00
+    Waves Per SM                                          0.52      0.52      0.52
+    -------------------------------- --------------- --------- --------- ---------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------- ------- -------
+    Metric Name                     Metric Unit Minimum Maximum Average
+    ------------------------------- ----------- ------- ------- -------
+    Block Limit SM                        block   16.00   16.00   16.00
+    Block Limit Registers                 block    3.00    3.00    3.00
+    Block Limit Shared Mem                block    5.00    5.00    5.00
+    Block Limit Warps                     block    3.00    3.00    3.00
+    Theoretical Active Warps per SM        warp   48.00   48.00   48.00
+    Theoretical Occupancy                     %  100.00  100.00  100.00
+    Achieved Occupancy                        %   49.73   50.20   49.96
+    Achieved Active Warps Per SM           warp   23.87   24.10   23.98
+    ------------------------------- ----------- ------- ------- -------
+
+  rbgs_coarsest_kernel_f(float *, const float *, const bool *, int, int, int, int, float, float, float, float) (1, 1, 1)x(8, 8, 8), Device 0, CC 8.6, Invocations 2
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ------------- --------- --------- ---------
+    Metric Name               Metric Unit   Minimum   Maximum   Average
+    ----------------------- ------------- --------- --------- ---------
+    DRAM Frequency          cycle/nsecond      9.27      9.31      9.29
+    SM Frequency            cycle/nsecond      1.36      1.37      1.37
+    Elapsed Cycles                  cycle 22,715.00 22,753.00 22,734.00
+    Memory Throughput                   %      0.30      0.30      0.30
+    DRAM Throughput                     %      0.01      0.01      0.01
+    Duration                      usecond     16.61     16.67     16.64
+    L1/TEX Cache Throughput             %     26.77     26.79     26.78
+    L2 Cache Throughput                 %      0.23      0.23      0.23
+    SM Active Cycles                cycle    255.28    255.51    255.40
+    Compute (SM) Throughput             %      0.30      0.30      0.30
+    ----------------------- ------------- --------- --------- ---------
+
+    Section: Launch Statistics
+    -------------------------------- --------------- ------- ------- -------
+    Metric Name                          Metric Unit Minimum Maximum Average
+    -------------------------------- --------------- ------- ------- -------
+    Block Size                                        512.00  512.00  512.00
+    Grid Size                                           1.00    1.00    1.00
+    Registers Per Thread             register/thread   32.00   32.00   32.00
+    Shared Memory Configuration Size           Kbyte   32.77   32.77   32.77
+    Driver Shared Memory Per Block       Kbyte/block    1.02    1.02    1.02
+    Dynamic Shared Memory Per Block       byte/block    0.00    0.00    0.00
+    Static Shared Memory Per Block       Kbyte/block    5.00    5.00    5.00
+    Threads                                   thread  512.00  512.00  512.00
+    Waves Per SM                                        0.00    0.00    0.00
+    -------------------------------- --------------- ------- ------- -------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------- ------- -------
+    Metric Name                     Metric Unit Minimum Maximum Average
+    ------------------------------- ----------- ------- ------- -------
+    Block Limit SM                        block   16.00   16.00   16.00
+    Block Limit Registers                 block    4.00    4.00    4.00
+    Block Limit Shared Mem                block    5.00    5.00    5.00
+    Block Limit Warps                     block    3.00    3.00    3.00
+    Theoretical Active Warps per SM        warp   48.00   48.00   48.00
+    Theoretical Occupancy                     %  100.00  100.00  100.00
+    Achieved Occupancy                        %   33.19   33.21   33.20
+    Achieved Active Warps Per SM           warp   15.93   15.94   15.94
+    ------------------------------- ----------- ------- ------- -------
+
+  rbgs_restrict_aggregated_kernel_f(float *, const float *, const bool *, float *, const bool *, int, int, int, int, float, float, float, float, int, int, int) (2, 1, 1)x(8, 8, 8), Device 0, CC 8.6, Invocations 2
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ------------- -------- -------- --------
+    Metric Name               Metric Unit  Minimum  Maximum  Average
+    ----------------------- ------------- -------- -------- --------
+    DRAM Frequency          cycle/nsecond     9.10     9.13     9.12
+    SM Frequency            cycle/nsecond     1.34     1.34     1.34
+    Elapsed Cycles                  cycle 7,597.00 7,672.00 7,634.50
+    Memory Throughput                   %     0.90     0.91     0.91
+    DRAM Throughput                     %     0.24     0.33     0.29
+    Duration                      usecond     5.66     5.73     5.70
+    L1/TEX Cache Throughput             %    41.41    41.65    41.53
+    L2 Cache Throughput                 %     0.90     0.91     0.91
+    SM Active Cycles                cycle   137.73   138.52   138.13
+    Compute (SM) Throughput             %     0.75     0.76     0.75
+    ----------------------- ------------- -------- -------- --------
+
+    Section: Launch Statistics
+    -------------------------------- --------------- -------- -------- --------
+    Metric Name                          Metric Unit  Minimum  Maximum  Average
+    -------------------------------- --------------- -------- -------- --------
+    Block Size                                         512.00   512.00   512.00
+    Grid Size                                            2.00     2.00     2.00
+    Registers Per Thread             register/thread    33.00    33.00    33.00
+    Shared Memory Configuration Size           Kbyte    32.77    32.77    32.77
+    Driver Shared Memory Per Block       Kbyte/block     1.02     1.02     1.02
+    Dynamic Shared Memory Per Block       byte/block     0.00     0.00     0.00
+    Static Shared Memory Per Block       Kbyte/block     5.00     5.00     5.00
+    Threads                                   thread 1,024.00 1,024.00 1,024.00
+    Waves Per SM                                         0.01     0.01     0.01
+    -------------------------------- --------------- -------- -------- --------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------- ------- -------
+    Metric Name                     Metric Unit Minimum Maximum Average
+    ------------------------------- ----------- ------- ------- -------
+    Block Limit SM                        block   16.00   16.00   16.00
+    Block Limit Registers                 block    3.00    3.00    3.00
+    Block Limit Shared Mem                block    5.00    5.00    5.00
+    Block Limit Warps                     block    3.00    3.00    3.00
+    Theoretical Active Warps per SM        warp   48.00   48.00   48.00
+    Theoretical Occupancy                     %  100.00  100.00  100.00
+    Achieved Occupancy                        %   32.45   32.85   32.65
+    Achieved Active Warps Per SM           warp   15.58   15.77   15.67
+    ------------------------------- ----------- ------- ------- -------
+
+  rbgs_restrict_aggregated_kernel_f(float *, const float *, const bool *, float *, const bool *, int, int, int, int, float, float, float, float, int, int, int) (4, 2, 2)x(8, 8, 8), Device 0, CC 8.6, Invocations 3
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ------------- -------- -------- --------
+    Metric Name               Metric Unit  Minimum  Maximum  Average
+    ----------------------- ------------- -------- -------- --------
+    DRAM Frequency          cycle/nsecond     8.94     9.14     9.03
+    SM Frequency            cycle/nsecond     1.31     1.34     1.32
+    Elapsed Cycles                  cycle 8,249.00 8,323.00 8,296.67
+    Memory Throughput                   %     5.71     5.76     5.73
+    DRAM Throughput                     %     1.58     1.60     1.59
+    Duration                      usecond     6.21     6.30     6.26
+    L1/TEX Cache Throughput             %    39.95    40.01    39.98
+    L2 Cache Throughput                 %     3.39     3.43     3.41
+    SM Active Cycles                cycle 1,186.16 1,187.72 1,186.89
+    Compute (SM) Throughput             %     5.71     5.76     5.73
+    ----------------------- ------------- -------- -------- --------
+
+    Section: Launch Statistics
+    -------------------------------- --------------- -------- -------- --------
+    Metric Name                          Metric Unit  Minimum  Maximum  Average
+    -------------------------------- --------------- -------- -------- --------
+    Block Size                                         512.00   512.00   512.00
+    Grid Size                                           16.00    16.00    16.00
+    Registers Per Thread             register/thread    33.00    33.00    33.00
+    Shared Memory Configuration Size           Kbyte    32.77    32.77    32.77
+    Driver Shared Memory Per Block       Kbyte/block     1.02     1.02     1.02
+    Dynamic Shared Memory Per Block       byte/block     0.00     0.00     0.00
+    Static Shared Memory Per Block       Kbyte/block     5.00     5.00     5.00
+    Threads                                   thread 8,192.00 8,192.00 8,192.00
+    Waves Per SM                                         0.07     0.07     0.07
+    -------------------------------- --------------- -------- -------- --------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------- ------- -------
+    Metric Name                     Metric Unit Minimum Maximum Average
+    ------------------------------- ----------- ------- ------- -------
+    Block Limit SM                        block   16.00   16.00   16.00
+    Block Limit Registers                 block    3.00    3.00    3.00
+    Block Limit Shared Mem                block    5.00    5.00    5.00
+    Block Limit Warps                     block    3.00    3.00    3.00
+    Theoretical Active Warps per SM        warp   48.00   48.00   48.00
+    Theoretical Occupancy                     %  100.00  100.00  100.00
+    Achieved Occupancy                        %   32.08   32.64   32.35
+    Achieved Active Warps Per SM           warp   15.40   15.67   15.53
+    ------------------------------- ----------- ------- ------- -------
+
+  rbgs_restrict_aggregated_kernel_f(float *, const float *, const bool *, float *, const bool *, int, int, int, int, float, float, float, float, int, int, int) (8, 4, 4)x(8, 8, 8), Device 0, CC 8.6, Invocations 3
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ------------- --------- --------- ---------
+    Metric Name               Metric Unit   Minimum   Maximum   Average
+    ----------------------- ------------- --------- --------- ---------
+    DRAM Frequency          cycle/nsecond      9.08      9.43      9.25
+    SM Frequency            cycle/nsecond      1.30      1.35      1.33
+    Elapsed Cycles                  cycle 11,182.00 11,298.00 11,241.00
+    Memory Throughput                   %     34.23     34.57     34.39
+    DRAM Throughput                     %      8.67      8.77      8.72
+    Duration                      usecond      8.35      8.58      8.47
+    L1/TEX Cache Throughput             %     48.89     49.84     49.26
+    L2 Cache Throughput                 %     18.57     18.73     18.65
+    SM Active Cycles                cycle  7,742.33  7,892.82  7,833.94
+    Compute (SM) Throughput             %     34.23     34.57     34.39
+    ----------------------- ------------- --------- --------- ---------
+
+    Section: Launch Statistics
+    -------------------------------- --------------- --------- --------- ---------
+    Metric Name                          Metric Unit   Minimum   Maximum   Average
+    -------------------------------- --------------- --------- --------- ---------
+    Block Size                                          512.00    512.00    512.00
+    Grid Size                                           128.00    128.00    128.00
+    Registers Per Thread             register/thread     33.00     33.00     33.00
+    Shared Memory Configuration Size           Kbyte     32.77     32.77     32.77
+    Driver Shared Memory Per Block       Kbyte/block      1.02      1.02      1.02
+    Dynamic Shared Memory Per Block       byte/block      0.00      0.00      0.00
+    Static Shared Memory Per Block       Kbyte/block      5.00      5.00      5.00
+    Threads                                   thread 65,536.00 65,536.00 65,536.00
+    Waves Per SM                                          0.52      0.52      0.52
+    -------------------------------- --------------- --------- --------- ---------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------- ------- -------
+    Metric Name                     Metric Unit Minimum Maximum Average
+    ------------------------------- ----------- ------- ------- -------
+    Block Limit SM                        block   16.00   16.00   16.00
+    Block Limit Registers                 block    3.00    3.00    3.00
+    Block Limit Shared Mem                block    5.00    5.00    5.00
+    Block Limit Warps                     block    3.00    3.00    3.00
+    Theoretical Active Warps per SM        warp   48.00   48.00   48.00
+    Theoretical Occupancy                     %  100.00  100.00  100.00
+    Achieved Occupancy                        %   46.64   48.32   47.31
+    Achieved Active Warps Per SM           warp   22.39   23.19   22.71
+    ------------------------------- ----------- ------- ------- -------
+
+  Note: The shown averages are calculated as the arithmetic mean of the metric values after the evaluation of the    
+  metrics for each individual kernel launch.                                                                         
+  If aggregating across varying launch configurations (like shared memory, cache config settings), the arithmetic    
+  mean can be misleading and looking at the individual results is recommended instead.                               
+  This output mode is backwards compatible to the per-kernel summary output of nvprof                                
+

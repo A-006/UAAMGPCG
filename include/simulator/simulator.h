@@ -2,20 +2,20 @@
 #include "config/config.h"
 #include "core/grid.h"
 #include "solver/solver.h"
+#include "simulator/simulator_base.h"
 #include <memory>
 
-// Top-level fluid simulator orchestrating the time-stepping loop.
-// Corresponds to OpenFOAM's applications/solvers (e.g., icoFoam).
-class LFMSimulator {
+/// Standard velocity-based simulator: advect → diffuse → project (Chorin).
+class ChorinSimulator : public Simulator {
 public:
-    LFMSimulator(const Config& cfg, std::unique_ptr<Solver> solver);
+    ChorinSimulator(const Config& cfg, std::unique_ptr<Solver> solver);
 
-    void step();
+    void step() override;
     void run();
 
-    const Grid& grid() const { return grid_; }
-    double time() const { return t_; }
-    int  step_count() const { return step_; }
+    const Grid& grid() const override { return grid_; }
+    double time() const override { return t_; }
+    int  step_count() const override { return step_; }
 
 private:
     Config cfg_;

@@ -23,6 +23,8 @@ set(LFM_SOURCES
     solver/preconditioner/amg_preconditioner_3d.cpp
     solver/preconditioner/uaamg_preconditioner_3d.cpp
     solver/factory.cpp
+    lfm/flow_map_2d.cpp
+    lfm/lfm_simulator.cpp
 )
 
 add_library(lfm_lib ${LFM_SOURCES})
