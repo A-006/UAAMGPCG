@@ -20,11 +20,17 @@ Makefile
 *.ptx
 *.cubin
 
-# Karman tool outputs (generated)
+# Anything user-local (outputs, animations, papers, scratch). Drop them in .local/.
+.local/
+
+# Simulation output dirs (anywhere they may appear)
+output_karman/
+output_karman_*/
+diagnostic_output/
+diagnostic_output_*/
+
+# Karman tool outputs
 tools/karman_vortex_street/inputs/
 tools/karman_vortex_street/output/
 tools/karman_vortex_street/figures/
 tools/karman/*
-diagnostic_output/*
-diagnostic_output_256/*
-output_karman_backup/*
