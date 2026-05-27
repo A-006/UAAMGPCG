@@ -1,4 +1,5 @@
 #include "pressure/pressure.h"
+#include "ops/operators.h"
 #include <algorithm>
 
 void PressureProjection::project(Grid& g, double dt, Solver& solver,
@@ -10,7 +11,7 @@ void PressureProjection::project(Grid& g, double dt, Solver& solver,
     for (int i = 1; i <= nx; i++)
         for (int j = 1; j <= ny; j++)
             if (!g.is_solid(i,j))
-                rhs[g.ip(i,j)] = g.divergence(i, j) / dt;
+                rhs[g.ip(i,j)] = fvc::divergence(g, i, j) / dt;
 
     // 2. Solve ∇²p = rhs
     std::fill(g.p.begin(), g.p.end(), 0.0);
