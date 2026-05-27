@@ -7,7 +7,12 @@ set(LFM_SOURCES
     pressure/pressure_3d.cpp
     simulator/simulator_3d.cpp
     io/vtk_writer_3d.cpp
+    scalar/scalar_field_3d.cpp
     scenarios/vortex_ring.cpp
+    scenarios/trefoil_knot.cpp
+    scenarios/delta_wing.cpp
+    scenarios/fire_ball.cpp
+    scenarios/wind_turbine.cpp
     config/config.cpp
     advection/advection.cpp
     boundary/boundary.cpp

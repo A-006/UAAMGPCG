@@ -59,8 +59,16 @@ target_link_libraries(run_karman_long PRIVATE lfm_lib)
 add_executable(run_karman_chorin ../tools/run_karman_chorin.cpp)
 target_link_libraries(run_karman_chorin PRIVATE lfm_lib)
 
-# 3D vortex-ring head-on collision (paper Fig. 3)
-add_executable(run_vortex_ring_collision ../tools/run_vortex_ring_collision.cpp)
-target_link_libraries(run_vortex_ring_collision PRIVATE lfm_lib)
+# ── 3D paper scenarios ────────────────────────────────────────────
+add_executable(run_vortex_ring_collision   ../tools/run_vortex_ring_collision.cpp)
+add_executable(run_vortex_ring_connection  ../tools/run_vortex_ring_connection.cpp)
+add_executable(run_trefoil_knot            ../tools/run_trefoil_knot.cpp)
+add_executable(run_delta_wing              ../tools/run_delta_wing.cpp)
+add_executable(run_fire_ball               ../tools/run_fire_ball.cpp)
+add_executable(run_wind_turbine            ../tools/run_wind_turbine.cpp)
+foreach(_t run_vortex_ring_collision run_vortex_ring_connection
+           run_trefoil_knot run_delta_wing run_fire_ball run_wind_turbine)
+    target_link_libraries(${_t} PRIVATE lfm_lib)
+endforeach()
 
 # GPU Karman benchmark is defined in top-level CMakeLists.txt (after CUDA setup)
