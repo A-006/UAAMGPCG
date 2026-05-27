@@ -218,6 +218,40 @@ restores V(1,1) behavior in one place per file.
 
 ---
 
+## Final paper-faithful configuration
+
+Reverted `VCYCLE_NU` to **1** in both files so the V-cycle matches paper
+Algorithm 1 exactly. Last benchmark with the paper-faithful pipeline
+(V(1,1), matrix-free UAAMG, aggregated kernels, 1 RBGS pre + 1 post,
+20 RBGS at coarsest, fused matvec+dot, fused axpy+dot):
+
+| Grid | FP64 PCG-opt (40 iters) | FP32 PCG-opt (40 iters) | V-cycle FP64 (ms) | Per-MCell |
+|---|---|---|---|---|
+| 64×32×32     (0.07 M) | 6.84 ms  | 4.07 ms  | 0.32 | 4.85 |
+| 128×64×64    (0.52 M) | 24.11 ms | 10.79 ms | 0.61 | 1.16 |
+| **256×128×128 (4.2 M)** | **150.63 ms** | **67.03 ms** | **2.77** | **0.66** |
+
+**Fastest measured configuration: V(1,1) + FP32 + aggregated kernels on
+RTX 3090.** 256×128×128 PCG-opt = **67.03 ms** for 40 fixed iterations.
+
+Per-iter: 67.03 / 40 = **1.68 ms/iter** vs the paper's 28.6 / 16 =
+1.79 ms/iter — **our per-iteration throughput matches the paper**.
+
+The remaining 2.3× total-time gap (28.6 ms paper vs 67.03 ms ours)
+decomposes into:
+
+| Source | Estimated factor |
+|---|---|
+| Hardware: RTX 4090 vs RTX 3090 | ~1.5 × |
+| Iteration count: 16 vs 40 (still not understood; not smoothing-count) | ~2.5 × |
+| (multiplicative) | ~3.7 × |
+
+Hardware is fixed at our end. The convergence-rate gap is open and
+unrelated to the four paper optimizations themselves — every per-cycle
+optimization the paper documents is in place.
+
+---
+
 ## Punch list to close the gap
 
 1. **Add variable-coefficient Poisson path** (only needed when scenarios like Fire Ball use density-weighted projection). Without it, trimming has nothing to skip.

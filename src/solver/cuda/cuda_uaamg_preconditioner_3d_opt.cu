@@ -438,7 +438,7 @@ __global__ void restrict_solid_opt_kernel(
 //  Setting nu=2 (V(2,2)) typically halves PCG iteration count for Poisson
 //  in exchange for ~1.5–1.7× the per-cycle cost. Default to nu=2.
 // ═══════════════════════════════════════════════════════════════
-static constexpr int VCYCLE_NU = 2;
+static constexpr int VCYCLE_NU = 1;  // V(1,1) — matches paper Algorithm 1
 
 static void vCycle_opt(CudaUAAMGPreconditioner3D::Level* levels, int lv, int nl, cudaStream_t stream) {
     auto& L = levels[lv];

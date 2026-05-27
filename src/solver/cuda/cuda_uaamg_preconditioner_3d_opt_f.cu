@@ -441,7 +441,7 @@ static void vCycle_opt_f(CudaUAAMGPreconditioner3Df::Level* levels, int lv, int 
     int Nc=(cnx+2)*(cny+2)*(cnz+2);
 
     // V(2,2): 1 extra smooth-only + fused smooth+restrict; 1 fused prolong+smooth + 1 extra smooth-only
-    static constexpr int NU = 2;
+    static constexpr int NU = 1;  // V(1,1) — matches paper Algorithm 1
     for(int s=0;s<NU-1;s++){
         rbgs_smooth_only_kernel_f<<<grid,block,0,stream>>>(
             L.g.x,L.g.b,L.g.solid,nx,ny,nz,L.g.pitch,L.g.idx2,L.g.idy2,L.g.idz2,L.g.diag);
