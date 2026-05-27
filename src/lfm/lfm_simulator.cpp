@@ -80,7 +80,6 @@ void LFMSimulator::run_cycle(int n_steps) {
     }
 
     // ── Steps 6-10: Second midpoint u_{3/2} ──
-    Grid u_prev = u_half;
     if (n_steps >= 2) {
         if (mu > 0) {
             std::vector<double> vu, vv;
@@ -105,19 +104,27 @@ void LFMSimulator::run_cycle(int n_steps) {
             compute_viscous(u_3half, vu, vv);
             accumulate_path_integral(u0_grid, vu, vv, dt/rho);
         }
-        u_prev = u_3half;
     }
 
-    // ── Steps 11-17: Main loop i=2..n-1 ──
+    // ── Steps 11-17: Main loop i=2..n-1 (leapfrog) ──
+    // Source for advection AND viscosity is u_{i-3/2}; advection velocity is u_{i-1/2}.
+    // Use vel_buffer_ entries (original, unmodified midpoint velocities).
+    Grid u_im32 = grid_;  // template (keeps solid mask)
+    Grid u_im12 = grid_;
+    u_im32.u = vel_buffer_[0].u; u_im32.v = vel_buffer_[0].v;  // u_{1/2}
+    if (n_steps >= 2) {
+        u_im12.u = vel_buffer_[1].u; u_im12.v = vel_buffer_[1].v;  // u_{3/2}
+    }
     for (int i_step = 2; i_step < n_steps; i_step++) {
         if (mu > 0) {
             std::vector<double> vu, vv;
-            compute_viscous(u_prev, vu, vv);
-            accumulate_to_u0(u_prev, vu, vv, 2.0*dt/rho);  // u_{i-3/2}^† (Step 12)
+            compute_viscous(u_im32, vu, vv);
+            accumulate_to_u0(u_im32, vu, vv, 2.0*dt/rho);  // u_{i-3/2}^† (Step 12)
         }
         Grid u_next(nx, ny, grid_.Lx(), grid_.Ly());
-        u_next = u_prev;
-        rk2_advect(u_next, u_prev, vel_buffer_[i_step-1].u, vel_buffer_[i_step-1].v, 2.0*dt);
+        u_next = u_im32;
+        // Leapfrog: advect u_{i-3/2}^† with velocity field u_{i-1/2} for 2Δt
+        rk2_advect(u_next, u_im32, vel_buffer_[i_step-1].u, vel_buffer_[i_step-1].v, 2.0*dt);
         BoundaryConditions::applyKarman(u_next, cfg_.U_inf);
         BoundaryConditions::applySolid(u_next);
         project(u_next);
@@ -133,7 +140,9 @@ void LFMSimulator::run_cycle(int n_steps) {
             compute_viscous(u_next, vu, vv);
             accumulate_path_integral(u0_grid, vu, vv, dt/rho);
         }
-        u_prev = u_next;
+        // Slide window: u_{i-3/2} ← u_{i-1/2}, u_{i-1/2} ← u_{i+1/2}
+        u_im32 = u_im12;
+        u_im12 = u_next;
     }
 
     // ── Steps 18-21: Backward march ──
@@ -179,8 +188,9 @@ void LFMSimulator::run_cycle(int n_steps) {
         size_t kB=flow_map_.idx(i,j), kT=flow_map_.idx(i,j+1);
         grid_.v_at(i,j)=0.5*(m_y_[kB]+m_y_[kT]);
     }
-    PressureProjection::project(grid_, 1.0, *solver_, cfg_.solve_iters*2, cfg_.solve_tol);
-    // Convert gauge variable to physical pressure: p = ξ + ½|u|²
+    double cycle_dt = n_steps * dt;
+    PressureProjection::project(grid_, cycle_dt, *solver_, cfg_.solve_iters*2, cfg_.solve_tol);
+    // p_at now holds ξ in physical units. Add Bernoulli to recover physical pressure.
     for (int j=1;j<=ny;j++) for (int i=1;i<=nx;i++) {
         if (grid_.is_solid(i,j)) continue;
         double uc = 0.5*(grid_.u_at(i,j)+grid_.u_at(i-1,j));
@@ -218,40 +228,45 @@ void LFMSimulator::compute_midpoints() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// Add scalar*(viscous force) to u_0 at cell centers (no F^T pullback)
+// u_0 += coeff * (cell-centered viscous force averaged to faces).
+// Adds to face values directly so the MAC layout is preserved.
 // ═══════════════════════════════════════════════════════════
 void LFMSimulator::accumulate_to_u0(Grid& u0, const std::vector<double>& vu,
     const std::vector<double>& vv, double coeff) {
     int nx=flow_map_.nx, ny=flow_map_.ny;
-    for (int j=1;j<=ny;j++) for (int i=1;i<=nx;i++) {
-        size_t k = flow_map_.idx(i,j);
-        if (grid_.is_solid(i,j)) continue;
-        double uc=0.5*(u0.u_at(i,j)+u0.u_at(i-1,j));
-        double vc=0.5*(u0.v_at(i,j)+u0.v_at(i,j-1));
-        uc += coeff * vu[k]; vc += coeff * vv[k];
-        if (i>0 && i<nx) u0.u_at(i,j)=uc;
-        if (j>0 && j<ny) u0.v_at(i,j)=vc;
+    for (int j=1;j<=ny;j++) for (int i=1;i<nx;i++) {
+        if (grid_.is_solid(i,j)||grid_.is_solid(i+1,j)) continue;
+        u0.u_at(i,j) += coeff * 0.5 * (vu[flow_map_.idx(i,j)] + vu[flow_map_.idx(i+1,j)]);
+    }
+    for (int i=1;i<=nx;i++) for (int j=1;j<ny;j++) {
+        if (grid_.is_solid(i,j)||grid_.is_solid(i,j+1)) continue;
+        u0.v_at(i,j) += coeff * 0.5 * (vv[flow_map_.idx(i,j)] + vv[flow_map_.idx(i,j+1)]);
     }
 }
 
 // ═══════════════════════════════════════════════════════════
-// Path integral: u_0 += (Δt/ρ) * F_mid^T · visc(Φ_mid)
+// Path integral: u_0 += coeff * F_mid^T · visc(Φ_mid).
+// Computes cell-centered contribution first, then averages to faces.
 // ═══════════════════════════════════════════════════════════
 void LFMSimulator::accumulate_path_integral(Grid& u0,
     const std::vector<double>& visc_u, const std::vector<double>& visc_v, double coeff) {
     int nx=flow_map_.nx, ny=flow_map_.ny;
+    std::vector<double> cx(nx*ny, 0.0), cy(nx*ny, 0.0);
     for (int j=1;j<=ny;j++) for (int i=1;i<=nx;i++) {
-        size_t k = flow_map_.idx(i,j);
         if (grid_.is_solid(i,j)) continue;
+        size_t k = flow_map_.idx(i,j);
         double vx, vy;
         sample_cell_centered(visc_u, visc_v, phi_mid_x_[k], phi_mid_y_[k], vx, vy);
-        double fx = F_mid_00_[k]*vx + F_mid_10_[k]*vy;
-        double fy = F_mid_01_[k]*vx + F_mid_11_[k]*vy;
-        double uc=0.5*(u0.u_at(i,j)+u0.u_at(i-1,j));
-        double vc=0.5*(u0.v_at(i,j)+u0.v_at(i,j-1));
-        uc += coeff*fx; vc += coeff*fy;
-        if (i>0 && i<nx) u0.u_at(i,j)=uc;
-        if (j>0 && j<ny) u0.v_at(i,j)=vc;
+        cx[k] = F_mid_00_[k]*vx + F_mid_10_[k]*vy;
+        cy[k] = F_mid_01_[k]*vx + F_mid_11_[k]*vy;
+    }
+    for (int j=1;j<=ny;j++) for (int i=1;i<nx;i++) {
+        if (grid_.is_solid(i,j)||grid_.is_solid(i+1,j)) continue;
+        u0.u_at(i,j) += coeff * 0.5 * (cx[flow_map_.idx(i,j)] + cx[flow_map_.idx(i+1,j)]);
+    }
+    for (int i=1;i<=nx;i++) for (int j=1;j<ny;j++) {
+        if (grid_.is_solid(i,j)||grid_.is_solid(i,j+1)) continue;
+        u0.v_at(i,j) += coeff * 0.5 * (cy[flow_map_.idx(i,j)] + cy[flow_map_.idx(i,j+1)]);
     }
 }
 
@@ -379,21 +394,70 @@ void LFMSimulator::rk4_march_backward(const std::vector<double>& u,
 }
 
 // ═══════════════════════════════════════════════════════════
-// Velocity interpolation (bilinear, MAC-grid aware)
+// Quadratic B-spline weights (paper §4.1): three-point kernel.
+// r ∈ [-0.5, 0.5] is the offset from the nearest grid point.
+// w[0] for (nearest-1), w[1] for nearest, w[2] for (nearest+1).
+// Sum is 1 by construction. C¹ smooth → much less spurious dissipation
+// than bilinear for long-range flow-map sampling.
+// ═══════════════════════════════════════════════════════════
+static inline void bspline_weights(double r, double w[3]) {
+    double a = 0.5 - r;
+    double b = 0.5 + r;
+    w[0] = 0.5 * a * a;
+    w[1] = 0.75 - r * r;
+    w[2] = 0.5 * b * b;
+}
+
+// ═══════════════════════════════════════════════════════════
+// Velocity interpolation (quadratic B-spline, MAC-grid aware)
 // ═══════════════════════════════════════════════════════════
 void LFMSimulator::sample_velocity(double x, double y,
     const std::vector<double>& u_vec, const std::vector<double>& v_vec,
     double& vu, double& vv) const {
-    x=std::max(0.0,std::min(grid_.Lx(),x)); y=std::max(0.0,std::min(grid_.Ly(),y));
-    double dx=grid_.dx, dy=grid_.dy; int nx=grid_.nx, ny=grid_.ny;
-    {double ux=x/dx, uy=(y+0.5*dy)/dy; int i0=std::max(0,std::min(nx-1,(int)ux)), j0=std::max(1,std::min(ny,(int)uy));
-     double fx=ux-i0, fy=uy-j0; int i1=std::min(i0+1,nx-1), j1=std::min(j0+1,ny);
-     auto iu=[&](int ii,int jj){return ii+jj*(nx+1);};
-     vu=(1-fx)*(1-fy)*u_vec[iu(i0,j0)]+fx*(1-fy)*u_vec[iu(i1,j0)]+(1-fx)*fy*u_vec[iu(i0,j1)]+fx*fy*u_vec[iu(i1,j1)];}
-    {double vx=(x+0.5*dx)/dx, vy=y/dy; int i0=std::max(1,std::min(nx,(int)vx)), j0=std::max(0,std::min(ny-1,(int)vy));
-     double fx=vx-i0, fy=vy-j0; int i1=std::min(i0+1,nx), j1=std::min(j0+1,ny-1);
-     auto iv=[&](int ii,int jj){return ii+jj*(nx+2);};
-     vv=(1-fx)*(1-fy)*v_vec[iv(i0,j0)]+fx*(1-fy)*v_vec[iv(i1,j0)]+(1-fx)*fy*v_vec[iv(i0,j1)]+fx*fy*v_vec[iv(i1,j1)];}
+    x = std::max(0.0, std::min(grid_.Lx(), x));
+    y = std::max(0.0, std::min(grid_.Ly(), y));
+    double dx = grid_.dx, dy = grid_.dy;
+    int nx = grid_.nx, ny = grid_.ny;
+
+    // ── u-face value: u_vec[iu(i,j)] sits at (i·dx, (j-0.5)·dy) ──
+    {
+        double ux = x / dx;            // ∈ [0, nx]
+        double uy = y / dy + 0.5;      // ∈ [0.5, ny+0.5]
+        int ic = (int)std::floor(ux + 0.5);
+        int jc = (int)std::floor(uy + 0.5);
+        double wx[3], wy[3];
+        bspline_weights(ux - ic, wx);
+        bspline_weights(uy - jc, wy);
+        auto u_at = [&](int ii, int jj) -> double {
+            ii = std::max(0, std::min(nx, ii));
+            jj = std::max(1, std::min(ny, jj));
+            return u_vec[ii + jj * (nx + 1)];
+        };
+        vu = 0.0;
+        for (int dj = -1; dj <= 1; dj++)
+            for (int di = -1; di <= 1; di++)
+                vu += wx[di + 1] * wy[dj + 1] * u_at(ic + di, jc + dj);
+    }
+
+    // ── v-face value: v_vec[iv(i,j)] sits at ((i-0.5)·dx, j·dy) ──
+    {
+        double vx = x / dx + 0.5;      // ∈ [0.5, nx+0.5]
+        double vy = y / dy;             // ∈ [0, ny]
+        int ic = (int)std::floor(vx + 0.5);
+        int jc = (int)std::floor(vy + 0.5);
+        double wx[3], wy[3];
+        bspline_weights(vx - ic, wx);
+        bspline_weights(vy - jc, wy);
+        auto v_at = [&](int ii, int jj) -> double {
+            ii = std::max(1, std::min(nx, ii));
+            jj = std::max(0, std::min(ny, jj));
+            return v_vec[ii + jj * (nx + 2)];
+        };
+        vv = 0.0;
+        for (int dj = -1; dj <= 1; dj++)
+            for (int di = -1; di <= 1; di++)
+                vv += wx[di + 1] * wy[dj + 1] * v_at(ic + di, jc + dj);
+    }
 }
 
 double LFMSimulator::sample_u(double x,double y,const std::vector<double>& u,const std::vector<double>& v) const
@@ -401,17 +465,31 @@ double LFMSimulator::sample_u(double x,double y,const std::vector<double>& u,con
 double LFMSimulator::sample_v(double x,double y,const std::vector<double>& u,const std::vector<double>& v) const
 {double vu,vv;sample_velocity(x,y,u,v,vu,vv);return vv;}
 
+// Quadratic B-spline at cell centers ((i-0.5)·dx, (j-0.5)·dy), i,j ∈ [1, nx]×[1, ny].
 void LFMSimulator::sample_cell_centered(const std::vector<double>& sx,
     const std::vector<double>& sy, double x, double y, double& vx, double& vy) const {
-    x=std::max(0.0,std::min(grid_.Lx(),x)); y=std::max(0.0,std::min(grid_.Ly(),y));
-    double dx=grid_.dx, dy=grid_.dy; int nx=grid_.nx, ny=grid_.ny;
-    double cix=x/dx+0.5, ciy=y/dy+0.5;
-    int i0=std::max(1,std::min(nx,(int)cix)), j0=std::max(1,std::min(ny,(int)ciy));
-    double fx=cix-i0, fy=ciy-j0;
-    int i1=std::min(i0+1,nx), j1=std::min(j0+1,ny);
-    size_t k00=flow_map_.idx(i0,j0),k10=flow_map_.idx(i1,j0),k01=flow_map_.idx(i0,j1),k11=flow_map_.idx(i1,j1);
-    vx=(1-fx)*(1-fy)*sx[k00]+fx*(1-fy)*sx[k10]+(1-fx)*fy*sx[k01]+fx*fy*sx[k11];
-    vy=(1-fx)*(1-fy)*sy[k00]+fx*(1-fy)*sy[k10]+(1-fx)*fy*sy[k01]+fx*fy*sy[k11];
+    x = std::max(0.0, std::min(grid_.Lx(), x));
+    y = std::max(0.0, std::min(grid_.Ly(), y));
+    double dx = grid_.dx, dy = grid_.dy;
+    int nx = grid_.nx, ny = grid_.ny;
+    double cix = x / dx + 0.5;       // ∈ [0.5, nx+0.5]
+    double ciy = y / dy + 0.5;
+    int ic = (int)std::floor(cix + 0.5);
+    int jc = (int)std::floor(ciy + 0.5);
+    double wx[3], wy[3];
+    bspline_weights(cix - ic, wx);
+    bspline_weights(ciy - jc, wy);
+    vx = 0.0; vy = 0.0;
+    for (int dj = -1; dj <= 1; dj++) {
+        int jj = std::max(1, std::min(ny, jc + dj));
+        for (int di = -1; di <= 1; di++) {
+            int ii = std::max(1, std::min(nx, ic + di));
+            double w = wx[di + 1] * wy[dj + 1];
+            size_t k = flow_map_.idx(ii, jj);
+            vx += w * sx[k];
+            vy += w * sy[k];
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -426,9 +504,11 @@ void LFMSimulator::velocity_gradient_at(double x, double y,
 }
 
 // ═══════════════════════════════════════════════════════════
-// Velocity gradient at cell center — central differences.
-// Returns 0 if either neighbor in a direction is solid (stair-step
-// protection — the gradient normal to a stair-step wall is unreliable).
+// Velocity gradient at cell center.
+// Diagonals du_dx, dv_dy use cell's OWN two faces (no neighbor needed,
+// no-slip face value is a legitimate boundary value → keep the shear).
+// Off-diagonals du_dy, dv_dx need central differences across neighbors;
+// zero them when either neighbor is solid (stair-step protection).
 // ═══════════════════════════════════════════════════════════
 void LFMSimulator::velocity_gradient(int i,int j,const std::vector<double>& ug,const std::vector<double>& vg,
     double& du_dx,double& du_dy,double& dv_dx,double& dv_dy) const {
@@ -439,13 +519,13 @@ void LFMSimulator::velocity_gradient(int i,int j,const std::vector<double>& ug,c
     auto iu=[&](int ii,int jj){return ii+jj*(nx+1);};
     auto iv=[&](int ii,int jj){return ii+jj*(nx+2);};
 
-    bool solid_L=grid_.is_solid(i-1,j), solid_R=grid_.is_solid(i+1,j);
     bool solid_B=grid_.is_solid(i,j-1), solid_T=grid_.is_solid(i,j+1);
+    bool solid_L=grid_.is_solid(i-1,j), solid_R=grid_.is_solid(i+1,j);
 
-    du_dx = (solid_L||solid_R) ? 0.0 : (ug[iu(i,j)]-ug[iu(i-1,j)])/dx;
+    du_dx = (ug[iu(i,j)] - ug[iu(i-1,j)]) / dx;
+    dv_dy = (vg[iv(i,j)] - vg[iv(i,j-1)]) / dy;
     du_dy = (solid_B||solid_T) ? 0.0 : (ug[iu(i,jp1)]-ug[iu(i,jm1)])/(2*dy);
     dv_dx = (solid_L||solid_R) ? 0.0 : (vg[iv(ip1,j)]-vg[iv(im1,j)])/(2*dx);
-    dv_dy = (solid_B||solid_T) ? 0.0 : (vg[iv(i,j)]-vg[iv(i,j-1)])/dy;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -487,22 +567,17 @@ void LFMSimulator::pullback_impulse(const Grid& u0_grid){
 }
 
 // ═══════════════════════════════════════════════════════════
-// Forward pullback: û_0 = F^T · m(Φ)
+// Forward pullback: û_0 = F^T · m(Φ)   — uses B-spline via sample_cell_centered.
 // ═══════════════════════════════════════════════════════════
-void LFMSimulator::forward_pullback(const std::vector<double>& mx,const std::vector<double>& my,
-    std::vector<double>& ux,std::vector<double>& uy){
-    int nx=flow_map_.nx, ny=flow_map_.ny; double dx=flow_map_.dx, dy=flow_map_.dy;
-    for (int j=1;j<=ny;j++) for (int i=1;i<=nx;i++) {
-        size_t k=flow_map_.idx(i,j);
-        double Xf=flow_map_.phi_x[k], Yf=flow_map_.phi_y[k];
-        double mix=Xf/dx-0.5, miy=Yf/dy-0.5;
-        int i0=std::max(0,std::min(nx-1,(int)mix)), j0=std::max(0,std::min(ny-1,(int)miy));
-        double fx=mix-i0, fy=miy-j0; int i1=std::min(i0+1,nx-1), j1=std::min(j0+1,ny-1);
-        size_t k00=flow_map_.idx(i0+1,j0+1),k10=flow_map_.idx(i1+1,j0+1),k01=flow_map_.idx(i0+1,j1+1),k11=flow_map_.idx(i1+1,j1+1);
-        double msx=(1-fx)*(1-fy)*mx[k00]+fx*(1-fy)*mx[k10]+(1-fx)*fy*mx[k01]+fx*fy*mx[k11];
-        double msy=(1-fx)*(1-fy)*my[k00]+fx*(1-fy)*my[k10]+(1-fx)*fy*my[k01]+fx*fy*my[k11];
-        ux[k]=flow_map_.F00[k]*msx+flow_map_.F10[k]*msy;
-        uy[k]=flow_map_.F01[k]*msx+flow_map_.F11[k]*msy;
+void LFMSimulator::forward_pullback(const std::vector<double>& mx, const std::vector<double>& my,
+    std::vector<double>& ux, std::vector<double>& uy) {
+    int nx = flow_map_.nx, ny = flow_map_.ny;
+    for (int j = 1; j <= ny; j++) for (int i = 1; i <= nx; i++) {
+        size_t k = flow_map_.idx(i, j);
+        double msx, msy;
+        sample_cell_centered(mx, my, flow_map_.phi_x[k], flow_map_.phi_y[k], msx, msy);
+        ux[k] = flow_map_.F00[k] * msx + flow_map_.F10[k] * msy;
+        uy[k] = flow_map_.F01[k] * msx + flow_map_.F11[k] * msy;
     }
 }
 
