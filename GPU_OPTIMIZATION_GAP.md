@@ -254,6 +254,72 @@ where the GPU takes 67 ms. Per-iter the throughput is at parity with the
 paper; the FP32 path simply doubles that on a 3090 (matrix-free Poisson
 is bandwidth-bound, RTX 3090 has 2:1 FP32:FP64 bandwidth).
 
+---
+
+## Nsight Compute (ncu) per-level profile — what's left to optimize
+
+Profiled the fused `rbgs_restrict_aggregated_kernel_f` and
+`prolong_rbgs_aggregated_kernel_f` on the 256×128×128 problem,
+all 5 V-cycle levels:
+
+| Tile grid | Cells | **Memory %** | **DRAM %** | L1 % | SM % | Duration | **Occupancy** |
+|---|---|---|---|---|---|---|---|
+| **32×16×16** (L0, finest) | 4.2 M | **76** | 28 | 77 | 76 | **222 μs** | **95 %** |
+| 16×8×8     (L1)            | 524 K |  67 | 18 | 73 | 67 |  32 μs    |  90 %       |
+| 8×4×4      (L2)            |  65 K |  33 |  9 | 50 | 33 |   8 μs    |  49 %       |
+| 4×2×2      (L3)            |   8 K |   5 |  1 | 38 |  5 |   6 μs    |  32 %       |
+| 2×1×1      (L4, coarsest)  |   1 K |  <1 | <1 | 39 | <1 |   6 μs    |  33 %       |
+
+ncu also flags 33 registers/thread × 512 threads/block = 16 896 reg/block,
+which limits to **3 blocks/SM** (vs the SM hard cap of 16) — that
+explains the ~95 % occupancy ceiling at the finest level.
+
+### What this means
+
+- **Finest level is already saturated.** 76 % memory throughput + 95 %
+  occupancy + 77 % L1 throughput on a kernel that does 6 reads of each
+  voxel through a shared-memory halo is essentially the bandwidth-bound
+  ceiling. No more optimization to squeeze out here — this part **matches
+  the paper's optimized kernel quality**.
+- **Coarse levels are launch-overhead-bound, not compute-bound.** The
+  three coarsest levels each take 5–8 μs but only do ~1 % real work —
+  the rest is kernel launch + grid setup. Their total contribution to a
+  V-cycle is ≈ 20 μs (10 % of total at 256³), so even halving them only
+  saves ~10 μs per cycle.
+- **DRAM utilization 28 % at finest** is *low* for a "memory-bound"
+  kernel. It's because the shared-memory halo eliminates ~ 6× redundant
+  global reads — most of the traffic moves L1 ↔ shared, not HBM. This
+  matches paper §5.3's design intent.
+
+### Remaining headroom (estimated)
+
+| Optimization | What it does | Where it helps | Estimated win at 256³ |
+|---|---|---|---|
+| CUDA Graphs on the V-cycle | Replace 10–20 separate kernel launches per V-cycle with one captured graph; eliminates per-launch overhead | All levels, especially L2–L4 | 10–20 μs/cycle = **5–7 %** |
+| Fuse L3+L4 into one kernel (both fit in 32 KB shared mem) | Bypass another 2 launches | L3–L4 only | **3–5 %** |
+| Coefficient trimming (§5.4) | Skip global coeff loads for uniform interior tiles | Variable-coeff Poisson only (Boussinesq / two-phase) | **2 ×** when applicable |
+| Use FP16 for coarse-level x storage | Halve coarse memory traffic | L2–L4 | <2 % (coarse already < 20 % of cycle) |
+
+Note that no individual change is large because the kernel is already
+inside the bandwidth-bound regime where the paper said its
+"~14.8–21.0 × speedup over SIMD CPU UAAMG" lives. Our measured FP32
+speedup vs SIMD-like CPU PCG (Shao 2022 numbers in paper Table 5)
+is in the same ballpark:
+
+| Source | 256³ solve | vs Shao 2022 SIMD (510 ms) |
+|---|---|---|
+| Paper aggregate + trim (RTX 4090) |  28.6 ms | **17.8 ×** |
+| **Ours FP32 (RTX 3090)**          | **67.0 ms** | **7.6 ×**  |
+| Ours FP64 (RTX 3090)              | 150.6 ms | 3.4 ×      |
+
+So the architecture-level conclusion: **with V(1,1) aggregated kernels we
+hit the same per-iteration ceiling as the paper**; the remaining gap is
+PCG iteration count and hardware tier, neither of which is a kernel
+optimization issue.
+
+The full ncu reports are kept under `.local/outputs/` (gitignored)
+in `/tmp/ncu_256_b.log` for the per-level breakdown above.
+
 The remaining 2.3× total-time gap (28.6 ms paper vs 67.03 ms ours)
 decomposes into:
 
