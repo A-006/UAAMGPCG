@@ -33,8 +33,8 @@ int main(int argc, char** argv) {
     Config cfg;
     cfg.scenario = "karman";
     cfg.NX       = NX;
-    cfg.Lx       = 4.0; cfg.Ly = 1.0; cfg.U_inf = 1.0;
-    cfg.Re = 200; cfg.cyl_cx = 1.0; cfg.cyl_cy = 0.5; cfg.cyl_R = 0.1;
+    cfg.Lx       = 8.0; cfg.Ly = 2.0; cfg.U_inf = 1.0;        // larger domain (blockage 10%)
+    cfg.Re = 200; cfg.cyl_cx = 2.0; cfg.cyl_cy = 1.0; cfg.cyl_R = 0.1;
     cfg.t_end = TEND; cfg.dt = 0.0;
     cfg.solve_iters = 100; cfg.solve_tol = 1e-8;
     cfg.frame_skip = (cfg.time_integrator == "lfm") ? 1 : 10; cfg.out_dir = "/tmp/karman_lfm_vtk";
@@ -79,6 +79,20 @@ int main(int argc, char** argv) {
     else
         sim = std::make_unique<ChorinSimulator>(cfg, std::move(solver));
 
+    // ── Small initial v-perturbation to break y-symmetry (kick into shedding mode) ──
+    {
+        Grid& g = const_cast<Grid&>(sim->grid());
+        double eps = 0.01 * cfg.U_inf;
+        for (int j = 1; j <= cfg.NY; j++) {
+            for (int i = 1; i <= cfg.NX; i++) {
+                double x = (i - 0.5) * g.dx;
+                double y = (j - 0.5) * g.dy;
+                if (x > cfg.cyl_cx + cfg.cyl_R && x < cfg.cyl_cx + 5.0 * cfg.cyl_R)
+                    g.v_at(i, j-1) += eps * std::sin(M_PI * (y - cfg.cyl_cy) / cfg.cyl_R);
+            }
+        }
+    }
+
     std::vector<double> time_hist, Cd_hist, Cl_hist;
     double t_transient = 2.0;
     bool collecting = false;
@@ -110,9 +124,9 @@ int main(int argc, char** argv) {
             std::cout << "  [" << (100*s/nsteps) << "%] t=" << t
                       << " max_div=" << std::scientific << std::setprecision(2) << max_div << "\n";
         }
-        // Write VTK every 20 steps for LFM visualization
-        if (cfg.time_integrator == "lfm" && s % 20 == 0) {
-            VtkWriter::write(const_cast<Grid&>(sim->grid()), s/20, cfg);
+        // Write VTK every 4 steps for LFM visualization (avoid temporal aliasing)
+        if (cfg.time_integrator == "lfm" && s % 4 == 0) {
+            VtkWriter::write(const_cast<Grid&>(sim->grid()), s/4, cfg);
         }
     }
 

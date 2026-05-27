@@ -45,6 +45,9 @@ target_link_libraries(test_solver_perf_3d PRIVATE lfm_lib)
 add_executable(test_lfm_instability integration/test_lfm_instability.cpp)
 target_link_libraries(test_lfm_instability PRIVATE lfm_lib)
 
+add_executable(test_lfm_perturbed_cylinder integration/test_lfm_perturbed_cylinder.cpp)
+target_link_libraries(test_lfm_perturbed_cylinder PRIVATE lfm_lib)
+
 # ── Debug tests ──
 add_executable(test_pcg_debug debug/test_pcg_debug.cpp)
 target_link_libraries(test_pcg_debug PRIVATE lfm_lib)
@@ -52,5 +55,8 @@ target_link_libraries(test_pcg_debug PRIVATE lfm_lib)
 # Long Karman simulation runner (for animation generation)
 add_executable(run_karman_long ../tools/run_karman_long.cpp)
 target_link_libraries(run_karman_long PRIVATE lfm_lib)
+
+add_executable(run_karman_chorin ../tools/run_karman_chorin.cpp)
+target_link_libraries(run_karman_chorin PRIVATE lfm_lib)
 
 # GPU Karman benchmark is defined in top-level CMakeLists.txt (after CUDA setup)
