@@ -355,18 +355,62 @@ RTX 3090's penalty for double precision (1:64 raw FLOPS, ~2:1 memory
 bandwidth). Consumer GPUs in general struggle with FP64; the workstation
 A100 / H100 / paper's RTX 4090 are closer to 1:2.
 
-### Updated bottom line
+### Second correction — same-problem-size measurement
 
-| Metric | Ours | Paper | Verdict |
+The previous comparison still wasn't apples-to-apples: paper Fig 13's
+"0.81 ms V-cycle" is at **256 × 256 × 256 (16.8 M cells)**, while our
+"paper scale" bench was actually **256 × 128 × 128 (4.2 M cells)** —
+4× fewer cells. Re-ran a standalone V-cycle test at the real 256³ size:
+
+| Grid | Cells | Pure V-cycle (FP32, RTX 3090) | Per MCell |
 |---|---|---|---|
-| Pure V-cycle (FP32, RTX 3090 vs FP64, RTX 4090) | **0.48 ms** | 0.81 ms | **1.7× faster** |
-| Per-iter PCG-opt (FP32, 256³) | 1.68 ms | 1.79 ms | parity |
-| 16-iter solve (paper convergence) | ~27 ms FP32 if 16 iters | 28.6 ms | parity |
+| 128 × 128 × 128 |  2.10 M |   0.27 ms | 0.127 ms/M |
+| 256 × 128 × 128 |  4.19 M |   0.48 ms | 0.114 ms/M |
+| **256 × 256 × 256** | **16.78 M** | **1.75 ms** | **0.104 ms/M** |
 
-We are at — and on FP32, slightly past — the paper's per-kernel
-throughput on the RTX 3090. The remaining headline time gap is
-**purely the PCG iteration count** (we converge in 40 iters vs paper's
-16; that's an algorithmic question, not a kernel question).
+Paper Fig 13 (256³, FP64, aggregate+trim, RTX 4090): **0.81 ms = 0.048 ms/M**
+
+Apples-to-apples (256³):
+- Our **FP32** on RTX 3090: 0.104 ms/MCell
+- Paper **FP64** on RTX 4090: 0.048 ms/MCell
+
+**We are ~2.2× slower per cell than the paper, on FP32 vs the paper's
+FP64.** Hardware accounts for at most ~1.3× of that (3090's 936 GB/s vs
+4090's 1008 GB/s for memory-bound workloads). The remaining ~1.7× is
+algorithmic / implementation:
+
+- **Coefficient trimming (§5.4)** still doesn't apply to us (uniform
+  Poisson stores no per-cell coefficients), so it isn't the cause here.
+- **Solid-mask traffic**: we always carry an `is_solid` bool per voxel
+  even when no obstacle exists. Paper appears to specialize the "all
+  fluid, no obstacle" case in their Fig 13 test and skips the mask
+  read entirely. At ~1 byte/cell of mask out of ~5 bytes/cell total
+  traffic that's ~20 % saving — order of magnitude consistent.
+- **Kernel launch overhead at coarse levels**: ~10 kernel launches per
+  V-cycle on our side. Paper §5.3 notes per-block dot products live in
+  the previous kernel; we still launch separate dot/reduction kernels
+  for PCG body work.
+
+### Updated bottom line (apples-to-apples)
+
+| Metric | Ours (RTX 3090) | Paper (RTX 4090) |
+|---|---|---|
+| V-cycle FP32 @ 256³ |       1.75 ms     |     —          |
+| V-cycle FP64 @ 256³ | ~7-8 ms (estimate)|   **0.81 ms**  |
+| Convergence iters @ 256³ |  40 (bench fixed-iter)  |   **15**       |
+
+So the remaining gap to the paper's headline number is two things, not
+one:
+
+1. **Per-V-cycle: ~2.2× slower** (FP32-vs-FP64 disadvantage + solid-mask
+   traffic + kernel-launch overhead).
+2. **Per-solve: ~2.7× more iterations** (40 vs 15) — separate
+   algorithmic issue, possibly initial guess / recentering pattern.
+
+Closing point 1 is mostly hardware + a fast-path for the "no obstacle"
+case. Closing point 2 is unrelated to the §5 GPU optimizations — it's
+a Krylov / preconditioner-quality question that the paper doesn't
+break down further.
 
 The remaining 2.3× total-time gap (28.6 ms paper vs 67.03 ms ours)
 decomposes into:
