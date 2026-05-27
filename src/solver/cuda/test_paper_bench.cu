@@ -145,7 +145,7 @@ int main() {
         }
 
         // ── CPU UAAMGPCG for comparison ──
-        if(ncells<=2000000){ // skip largest for CPU (too slow)
+        if(ncells<=5000000){ // include 256x128x128 for CPU vs GPU speedup
             Grid3D cg(nx,ny,nz,1.0,1.0,1.0);
             auto solver=std::make_unique<PCG3D>(std::make_unique<UAAMGPreconditioner3D>());
             std::fill(cg.p.begin(),cg.p.end(),0.0);

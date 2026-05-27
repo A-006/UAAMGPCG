@@ -237,6 +237,23 @@ RTX 3090.** 256×128×128 PCG-opt = **67.03 ms** for 40 fixed iterations.
 Per-iter: 67.03 / 40 = **1.68 ms/iter** vs the paper's 28.6 / 16 =
 1.79 ms/iter — **our per-iteration throughput matches the paper**.
 
+### GPU vs CPU speedup (same algorithm, same iteration count)
+
+CPU baseline is the same `PCG3D + UAAMGPreconditioner3D` algorithm
+running single-thread on a 13th-gen Intel host (the box's CPU).
+
+| Grid | CPU PCG (ms) | GPU FP64 PCG-opt (ms) | GPU FP32 PCG-opt (ms) | **FP64 speedup** | **FP32 speedup** |
+|---|---|---|---|---|---|
+| 64×32×32   (0.07 M) |     163.9 |    6.72 |   4.07 |   24× |    40× |
+| 128×64×64  (0.52 M) |   3 613.1 |   23.69 |  10.79 |  153× |   335× |
+| **256×128×128 (4.2 M)** | **57 502** | **160.33** | **67.03** | **358×** | **858×** |
+
+At paper scale (4.2 M cells), the optimized GPU FP32 path is **≈ 860 ×
+faster than the matched-algorithm CPU baseline** — CPU takes 57.5 seconds
+where the GPU takes 67 ms. Per-iter the throughput is at parity with the
+paper; the FP32 path simply doubles that on a 3090 (matrix-free Poisson
+is bandwidth-bound, RTX 3090 has 2:1 FP32:FP64 bandwidth).
+
 The remaining 2.3× total-time gap (28.6 ms paper vs 67.03 ms ours)
 decomposes into:
 
