@@ -2,6 +2,7 @@
 #include "config/config.h"
 #include "core/grid_3d.h"
 #include "solver/solver_3d.h"
+#include "bc/patches_3d.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -32,6 +33,10 @@ public:
 
     Grid3D& mutable_grid() { return grid_; }  // for scenario setup
 
+    // Replace the default BC stack (free-slip + immersed solid) with a
+    // scenario-specific one (inflow/outflow, periodic, ...).
+    void set_boundary_manager(bc::BoundaryManager3D mgr) { bcs_ = std::move(mgr); }
+
 private:
     Config  cfg_;
     Grid3D  grid_;
@@ -39,6 +44,7 @@ private:
     double  t_ = 0;
     int     step_ = 0;
     std::unique_ptr<Solver3D> solver_;
+    bc::BoundaryManager3D bcs_;
 
     void apply_bc();
     void advect();

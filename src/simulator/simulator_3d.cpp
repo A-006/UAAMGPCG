@@ -7,18 +7,21 @@ ChorinSimulator3D::ChorinSimulator3D(const Config& cfg, std::unique_ptr<Solver3D
     : cfg_(cfg),
       grid_(cfg.NX, cfg.NY, cfg.NZ, cfg.Lx, cfg.Ly, cfg.Lz),
       prev_(cfg.NX, cfg.NY, cfg.NZ, cfg.Lx, cfg.Ly, cfg.Lz),
-      solver_(std::move(solver))
+      solver_(std::move(solver)),
+      bcs_(bc::free_slip_box())   // default BC stack
 {
     apply_bc();
     prev_ = grid_;
 }
 
 void ChorinSimulator3D::apply_bc() {
-    // Default: free-slip box + immersed solid. Scenarios needing periodic
-    // BCs (e.g., decaying isotropic turbulence) can replace by constructing
-    // a BoundaryManager3D externally and applying it instead.
-    bc::FreeSlipAllFaces3D walls;          walls.apply(grid_);
-    bc::NoSlipImmersedSolid3D solid;       solid.apply(grid_);
+    if (bcs_.empty()) {
+        // Fallback for callers that explicitly cleared the manager.
+        bc::FreeSlipAllFaces3D walls;     walls.apply(grid_);
+        bc::NoSlipImmersedSolid3D solid;  solid.apply(grid_);
+        return;
+    }
+    bcs_.apply(grid_);
 }
 
 void ChorinSimulator3D::advect() {
