@@ -9,6 +9,7 @@ set(LFM_SOURCES
     io/vtk_writer.cpp
     pressure/pressure.cpp
     simulator/simulator.cpp
+    simulator/factory.cpp
     solver/jacobi.cpp
     solver/rbgs.cpp
     solver/pcg.cpp
