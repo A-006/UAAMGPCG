@@ -8,6 +8,7 @@ set(LFM_SOURCES
     simulator/simulator_3d.cpp
     io/vtk_writer_3d.cpp
     scalar/scalar_field_3d.cpp
+    scenarios/karman.cpp
     scenarios/vortex_ring.cpp
     scenarios/trefoil_knot.cpp
     scenarios/delta_wing.cpp

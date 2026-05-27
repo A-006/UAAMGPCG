@@ -2,6 +2,7 @@
 #include "advection/advection.h"
 #include "boundary/boundary.h"
 #include "pressure/pressure.h"
+#include "scenarios/karman.h"
 #include "io/vtk_writer.h"
 #include "solver/factory.h"
 #include <iostream>
@@ -15,11 +16,9 @@ ChorinSimulator::ChorinSimulator(const Config& cfg, std::unique_ptr<Solver> solv
       prev_(cfg.NX, cfg.NY, cfg.Lx, cfg.Ly), solver_(std::move(solver))
 {
     if (cfg_.scenario == "karman") {
-        if (cfg_.cyl_R > 0)
-            BoundaryConditions::setupCylinder(grid_, cfg_.cyl_cx, cfg_.cyl_cy, cfg_.cyl_R);
-        for (int i = 0; i <= cfg_.NX; i++)
-            for (int j = 1; j <= cfg_.NY; j++)
-                grid_.u_at(i,j) = cfg_.U_inf;
+        scenarios::Karman k{ cfg_.cyl_cx, cfg_.cyl_cy, cfg_.cyl_R, cfg_.U_inf };
+        if (k.cyl_R > 0) scenarios::setup_karman_cylinder(grid_, k);
+        scenarios::set_uniform_inflow(grid_, k.U_inf);
     }
     apply_bc();
     prev_ = grid_;

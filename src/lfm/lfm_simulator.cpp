@@ -1,6 +1,7 @@
 #include "lfm/lfm_simulator.h"
 #include "pressure/pressure.h"
 #include "boundary/boundary.h"
+#include "scenarios/karman.h"
 #include "io/vtk_writer.h"
 #include <cmath>
 #include <iostream>
@@ -22,11 +23,9 @@ LFMSimulator::LFMSimulator(const Config& cfg, std::unique_ptr<Solver> solver)
     F_mid_11_.resize(N, 0.0);
 
     if (cfg_.scenario == "karman") {
-        if (cfg_.cyl_R > 0)
-            BoundaryConditions::setupCylinder(grid_, cfg_.cyl_cx, cfg_.cyl_cy, cfg_.cyl_R);
-        for (int i = 0; i <= cfg_.NX; i++)
-            for (int j = 1; j <= cfg_.NY; j++)
-                grid_.u_at(i,j) = cfg_.U_inf;
+        scenarios::Karman k{ cfg_.cyl_cx, cfg_.cyl_cy, cfg_.cyl_R, cfg_.U_inf };
+        if (k.cyl_R > 0) scenarios::setup_karman_cylinder(grid_, k);
+        scenarios::set_uniform_inflow(grid_, k.U_inf);
     }
     BoundaryConditions::applyKarman(grid_, cfg_.U_inf);
     BoundaryConditions::applySolid(grid_);

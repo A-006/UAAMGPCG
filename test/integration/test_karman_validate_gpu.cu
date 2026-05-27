@@ -14,6 +14,7 @@
 #include "solver/cuda_pcg_solver.h"
 #include "force/force.h"
 #include "io/vtk_writer.h"
+#include "scenarios/karman.h"
 #include "../test_utils.h"
 #include <iostream>
 #include <chrono>
@@ -79,18 +80,11 @@ int main(int argc, char** argv) {
     else
         sim = std::make_unique<ChorinSimulator>(cfg, std::move(solver));
 
-    // ── Small initial v-perturbation to break y-symmetry (kick into shedding mode) ──
+    // ── Karman scenario setup (cylinder + warm inflow + perturbation) ──
     {
+        scenarios::Karman k{ cfg.cyl_cx, cfg.cyl_cy, cfg.cyl_R, cfg.U_inf };
         Grid& g = const_cast<Grid&>(sim->grid());
-        double eps = 0.01 * cfg.U_inf;
-        for (int j = 1; j <= cfg.NY; j++) {
-            for (int i = 1; i <= cfg.NX; i++) {
-                double x = (i - 0.5) * g.dx;
-                double y = (j - 0.5) * g.dy;
-                if (x > cfg.cyl_cx + cfg.cyl_R && x < cfg.cyl_cx + 5.0 * cfg.cyl_R)
-                    g.v_at(i, j-1) += eps * std::sin(M_PI * (y - cfg.cyl_cy) / cfg.cyl_R);
-            }
-        }
+        scenarios::seed_wake_perturbation(g, k);
     }
 
     std::vector<double> time_hist, Cd_hist, Cl_hist;
