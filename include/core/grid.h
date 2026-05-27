@@ -1,64 +1,48 @@
 #pragma once
+#include "core/mesh.h"
 #include <vector>
-#include <algorithm>
 
-// MAC staggered grid (2D)
+// ──────────────────────────────────────────────────────────────────
+// 2D MAC grid — legacy facade.
 //
-// NX×NY cells. Physical coordinates:
-//   Cell (i,j): [(i-1)dx, i·dx] × [(j-1)dy, j·dy],  i∈[1,NX], j∈[1,NY]
-//   u(i,j): x-velocity, on right face,  at (i·dx,  (j-0.5)dy), i∈[0,NX],   j∈[1,NY]
-//   v(i,j): y-velocity, on top face,    at ((i-0.5)dx, j·dy),  i∈[1,NX],   j∈[0,NY]
-//   p(i,j): pressure,    at cell center,                        i∈[1,NX],   j∈[1,NY]
+// Grid IS A Mesh2D (inherits nx/ny/dx/dy + index helpers) plus the field
+// data (u, v, p, solid). New code that only needs topology should take
+// `const Mesh2D&`; new code that needs typed fields should use
+// `fields::FaceXField` / `fields::CellField`.
 //
-// All arrays include one layer of ghost cells (0 and N+1).
-// Storage: 1D flattened, column-major (i stride = 1).
-
-class Grid {
+// Grid's data members remain `std::vector<double>` so the legacy
+// `grid.u[ip]` access pattern keeps working throughout the codebase.
+// ──────────────────────────────────────────────────────────────────
+class Grid : public Mesh2D {
 public:
-    int nx, ny;
-    double dx, dy;
     std::vector<double> u, v, p;
     std::vector<bool>   solid;
 
+    // Variable Laplacian coefficients for ∇·((1-φ)∇p).
+    // When empty, PCG uses uniform coefficients.
+    std::vector<double> lap_diag, lap_off_x, lap_off_y;
+
     Grid(int nx_, int ny_, double lx, double ly);
 
-    double Lx() const { return nx * dx; }
-    double Ly() const { return ny * dy; }
     const std::vector<double>& u_data() const { return u; }
     const std::vector<double>& v_data() const { return v; }
 
-    // Variable Laplacian coefficients for ∇·((1-φ)∇p).
-    // When empty, PCG uses uniform coefficients.
-    // diag > 0, off_x < 0, off_y < 0.
-    std::vector<double> lap_diag, lap_off_x, lap_off_y;
     bool has_variable_lap() const { return !lap_diag.empty(); }
-    void init_variable_lap();  // allocate to match p array size
+    void init_variable_lap();
 
-    // u: i∈[0,nx], j∈[0,ny+1]
-    int    iu(int i, int j) const;
-    double  u_at(int i, int j) const;
-    double& u_at(int i, int j);
+    double  u_at(int i, int j) const { return u[iu(i, j)]; }
+    double& u_at(int i, int j)       { return u[iu(i, j)]; }
+    double  v_at(int i, int j) const { return v[iv(i, j)]; }
+    double& v_at(int i, int j)       { return v[iv(i, j)]; }
+    double  p_at(int i, int j) const { return p[ip(i, j)]; }
+    double& p_at(int i, int j)       { return p[ip(i, j)]; }
 
-    // v: i∈[0,nx+1], j∈[0,ny]
-    int    iv(int i, int j) const;
-    double  v_at(int i, int j) const;
-    double& v_at(int i, int j);
+    bool is_solid(int i, int j) const { return solid[ip(i, j)]; }
+    void set_solid(int i, int j)       { solid[ip(i, j)] = true; }
 
-    // p/solid: i∈[0,nx+1], j∈[0,ny+1]
-    int    ip(int i, int j) const;
-    double  p_at(int i, int j) const;
-    double& p_at(int i, int j);
-    bool    is_solid(int i, int j) const;
-    void    set_solid(int i, int j);
-
-    // Divergence at cell (i,j): du/dx + dv/dy
+    // Divergence — kept for back-compat; new code should use fvc::divergence.
     double divergence(int i, int j) const {
-        return (u_at(i,j) - u_at(i-1,j)) / dx
-             + (v_at(i,j) - v_at(i,j-1)) / dy;
-    }
-
-    // Clamp value to [lo, hi]
-    static double clamp(double v, double lo, double hi) {
-        return v < lo ? lo : (v > hi ? hi : v);
+        return (u_at(i, j) - u_at(i - 1, j)) / dx
+             + (v_at(i, j) - v_at(i, j - 1)) / dy;
     }
 };
