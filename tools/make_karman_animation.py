@@ -16,6 +16,13 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter, FFMpegWriter
 from matplotlib.patches import Circle
 
+# Use the ffmpeg bundled with imageio-ffmpeg (no system install needed).
+try:
+    import imageio_ffmpeg
+    matplotlib.rcParams['animation.ffmpeg_path'] = imageio_ffmpeg.get_ffmpeg_exe()
+except Exception:
+    pass
+
 
 def read_vtk(path):
     """Parse the structured-points VTK files written by VtkWriter."""
@@ -157,18 +164,23 @@ def main():
 
     ani = FuncAnimation(fig, render, frames=len(frames), interval=80, blit=False)
 
+    # MP4 (H.264 + yuv420p) — phone-friendly, plays inline in WeChat.
+    try:
+        mp4_path = os.path.join(out_dir, 'karman_lfm.mp4')
+        print(f"Writing {mp4_path} ...")
+        writer = FFMpegWriter(fps=20, bitrate=4000,
+                              codec='libx264',
+                              extra_args=['-pix_fmt', 'yuv420p'])
+        ani.save(mp4_path, writer=writer, dpi=110)
+        print(f"  size: {os.path.getsize(mp4_path)/1024/1024:.2f} MB")
+    except Exception as e:
+        print(f"  mp4 skipped: {e}")
+
+    # GIF — fallback / preview.
     gif_path = os.path.join(out_dir, 'karman_lfm.gif')
     print(f"Writing {gif_path} ...")
     ani.save(gif_path, writer=PillowWriter(fps=12), dpi=80)
     print(f"  size: {os.path.getsize(gif_path)/1024/1024:.2f} MB")
-
-    try:
-        mp4_path = os.path.join(out_dir, 'karman_lfm.mp4')
-        print(f"Writing {mp4_path} ...")
-        ani.save(mp4_path, writer=FFMpegWriter(fps=20, bitrate=4000), dpi=110)
-        print(f"  size: {os.path.getsize(mp4_path)/1024/1024:.2f} MB")
-    except Exception as e:
-        print(f"  mp4 skipped: {e}")
 
     plt.close(fig)
     return 0

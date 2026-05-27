@@ -1,15 +1,26 @@
 #!/usr/bin/env python3
 """
-Wake-focused Karman animation: clip vorticity tight to highlight downstream shedding,
-mask the boundary-layer spike near the cylinder.
+Wake-focused Karman animation: clip vorticity tight to highlight downstream
+shedding, mask the boundary-layer spike near the cylinder.
+
+Writes MP4 by default (H.264 — works in WeChat / iOS / Android inline players)
+and falls back to GIF only if no ffmpeg is available.
 """
 import os, sys, glob, re
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation, PillowWriter
+from matplotlib.animation import FuncAnimation, PillowWriter, FFMpegWriter
 from matplotlib.patches import Circle
+
+# Point matplotlib at the bundled ffmpeg from imageio-ffmpeg so we don't
+# need a system install.
+try:
+    import imageio_ffmpeg
+    matplotlib.rcParams['animation.ffmpeg_path'] = imageio_ffmpeg.get_ffmpeg_exe()
+except Exception:
+    pass
 
 sys.path.insert(0, os.path.dirname(__file__))
 from make_karman_animation import read_vtk
@@ -67,8 +78,21 @@ def main():
         ax.tick_params(colors='#aaa', labelsize=8)
 
     ani = FuncAnimation(fig, render, frames=len(frames), interval=120, blit=False)
-    gif_path = os.path.join(out_dir, 'karman_wake.gif')
-    ani.save(gif_path, writer=PillowWriter(fps=8), dpi=90)
+
+    base = os.path.join(out_dir, 'karman_wake')
+    # MP4 first — phone-WeChat-friendly; H.264 + yuv420p is the safe combo.
+    try:
+        mp4_path = base + '.mp4'
+        writer = FFMpegWriter(fps=12, bitrate=3500,
+                              codec='libx264',
+                              extra_args=['-pix_fmt', 'yuv420p'])
+        ani.save(mp4_path, writer=writer, dpi=110)
+        print(f"Wrote {mp4_path} ({os.path.getsize(mp4_path)/1024/1024:.2f} MB)")
+    except Exception as e:
+        print(f"  mp4 skipped: {e}")
+    # GIF fallback / preview for places that don't support video.
+    gif_path = base + '.gif'
+    ani.save(gif_path, writer=PillowWriter(fps=8), dpi=80)
     print(f"Wrote {gif_path} ({os.path.getsize(gif_path)/1024/1024:.2f} MB)")
 
 
