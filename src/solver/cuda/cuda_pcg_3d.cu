@@ -199,6 +199,7 @@ void CudaPCG3D::free_buffers() {
     d_r = d_z = d_p = d_Ap = d_dot_buf = nullptr;
     d_count_buf = nullptr; d_scalar = nullptr;
     dot_buf_size_ = 0; N_ = 0;
+    if (gf_N_ > 0) { gf_.free(); if(d_rf)cudaFree(d_rf); if(d_zf)cudaFree(d_zf); d_rf=d_zf=nullptr; gf_N_=0; }
 }
 
 void CudaPCG3D::solve(CudaGrid3D& g, double* p, double* rhs, int max_iter, double tol) {
@@ -209,7 +210,7 @@ void CudaPCG3D::solve(CudaGrid3D& g, double* p, double* rhs, int max_iter, doubl
     dim3 grid3d((nx + 7)/8, (ny + 7)/8, (nz + 7)/8);
     int nblocks1d = dot_buf_size_;
 
-    precond_->build(g);
+    precond_->setupLevels(g);   // solid + Galerkin coeffs + §5.4 trimming — once per solve
 
     // r = rhs, p = 0
     cudaMemcpy(d_r, rhs, N * sizeof(double), cudaMemcpyDeviceToDevice);
@@ -221,7 +222,7 @@ void CudaPCG3D::solve(CudaGrid3D& g, double* p, double* rhs, int max_iter, doubl
     negate_kernel_3d<<<grid3d, block3d>>>(d_r, g.solid, nx, ny, nz, pitch);
 
     // z = M^{-1} * r
-    precond_->apply(g, d_r, d_z);
+    precond_->vcycle_apply(g, d_r, d_z);
 
     // Subtract mean from z, copy to p
     double mz = compute_mean_3d(d_z, g.solid, nx, ny, nz, pitch, d_dot_buf, d_count_buf, nblocks1d);
@@ -256,7 +257,7 @@ void CudaPCG3D::solve(CudaGrid3D& g, double* p, double* rhs, int max_iter, doubl
 
         if (std::sqrt(rsnew) < tol) break;
 
-        precond_->apply(g, d_r, d_z);
+        precond_->vcycle_apply(g, d_r, d_z);
 
         double mz2 = compute_mean_3d(d_z, g.solid, nx, ny, nz, pitch, d_dot_buf, d_count_buf, nblocks1d);
         subtract_mean_kernel_3d<<<grid3d, block3d>>>(d_z, mz2, g.solid, nx, ny, nz, pitch);

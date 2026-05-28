@@ -291,6 +291,44 @@ static double gpu_mean(const double *v, const bool *solid,
     return c>0?s/c:0.0;
 }
 
+// ── Device-resident scalar ops (no host sync; for solve_device) ──
+__global__ void axpy_dev_k(double *y, const double *x, const double *a, const bool *s,
+    int nx,int ny,int nz,int pitch){
+    int i=blockIdx.x*blockDim.x+threadIdx.x+1,j=blockIdx.y*blockDim.y+threadIdx.y+1,k=blockIdx.z*blockDim.z+threadIdx.z+1;
+    if(i>nx||j>ny||k>nz)return; int id=opti_idx(i,j,k,pitch,ny); if(!s[id]) y[id]+=(*a)*x[id];
+}
+__global__ void submean_dev_k(double *v, const double *m, const bool *s,
+    int nx,int ny,int nz,int pitch){
+    int i=blockIdx.x*blockDim.x+threadIdx.x+1,j=blockIdx.y*blockDim.y+threadIdx.y+1,k=blockIdx.z*blockDim.z+threadIdx.z+1;
+    if(i>nx||j>ny||k>nz)return; int id=opti_idx(i,j,k,pitch,ny); if(!s[id]) v[id]-=(*m);
+}
+__global__ void pupd_dev_k(double *p, const double *z, const double *b, const bool *s,
+    int nx,int ny,int nz,int pitch){    // p = z + beta*p  (search-direction update)
+    int i=blockIdx.x*blockDim.x+threadIdx.x+1,j=blockIdx.y*blockDim.y+threadIdx.y+1,k=blockIdx.z*blockDim.z+threadIdx.z+1;
+    if(i>nx||j>ny||k>nz)return; int id=opti_idx(i,j,k,pitch,ny); if(!s[id]) p[id]=z[id]+(*b)*p[id];
+}
+__global__ void sc_div_k   (double*o,const double*n,const double*d){ *o = *n / *d; }
+__global__ void sc_negdiv_k(double*o,const double*n,const double*d){ *o = -(*n) / *d; }
+__global__ void sc_meandiv_k(double*o,const double*s,double cnt){ *o = (cnt>0)? *s/cnt : 0.0; }
+__global__ void sc_copy_k  (double*o,const double*i){ *o = *i; }
+
+// ── Mixed precision: FP64↔FP32 casts + FP32 preconditioner apply ──
+__global__ void cast_d2f_k(const double* d, float* f, int N){ int i=blockIdx.x*256+threadIdx.x; if(i<N) f[i]=(float)d[i]; }
+__global__ void cast_f2d_k(const float* f, double* d, int N){ int i=blockIdx.x*256+threadIdx.x; if(i<N) d[i]=(double)f[i]; }
+
+void CudaPCG3D::mixed_apply(int N, const double* dr, double* dz) {
+    int nb=(N+255)/256;
+    cast_d2f_k<<<nb,256>>>(dr, d_rf, N);          // r (FP64) → r (FP32)
+    precond_f_->vcycle_apply(gf_, d_rf, d_zf);    // FP32 Galerkin V-cycle
+    cast_f2d_k<<<nb,256>>>(d_zf, dz, N);          // z (FP32) → z (FP64)
+}
+
+void CudaPCG3D::solve_mixed(CudaGrid3D& g, double* p, double* rhs, int max_iter, double tol) {
+    mixed_ = true;
+    solve_optimized(g, p, rhs, max_iter, tol);
+    mixed_ = false;
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  Optimized CudaPCG3D::solve_optimized
 // ═══════════════════════════════════════════════════════════════
@@ -301,7 +339,18 @@ void CudaPCG3D::solve_optimized(CudaGrid3D& g, double* p, double* rhs, int max_i
     int n3d = grid3d.x * grid3d.y * grid3d.z; // blocks for fused kernels
     int nb1d = dot_buf_size_;
 
-    precond_->build(g);
+    if (mixed_) {               // FP32 preconditioner: float grid + setup once
+        if (gf_N_ < N) {
+            if (gf_N_ > 0) { gf_.free(); if(d_rf)cudaFree(d_rf); if(d_zf)cudaFree(d_zf); }
+            gf_.allocate(nx,ny,nz,(float)g.dx,(float)g.dy,(float)g.dz);
+            cudaMalloc(&d_rf, N*sizeof(float)); cudaMalloc(&d_zf, N*sizeof(float));
+            gf_N_ = N;
+        }
+        cudaMemcpy(gf_.solid, g.solid, N*sizeof(bool), cudaMemcpyDeviceToDevice);
+        precond_f_->setupLevels(gf_);
+    } else {
+        precond_->setupLevels(g);   // solid + Galerkin coeffs + §5.4 trimming — once per solve
+    }
 
     // Init
     cudaMemcpy(d_r, rhs, N*sizeof(double), cudaMemcpyDeviceToDevice);
@@ -311,7 +360,8 @@ void CudaPCG3D::solve_optimized(CudaGrid3D& g, double* p, double* rhs, int max_i
     submean_kernel<<<grid3d,block3d>>>(d_r, mr, g.solid, nx, ny, nz, pitch);
     negate_kernel<<<grid3d,block3d>>>(d_r, g.solid, nx, ny, nz, pitch);
 
-    precond_->apply_optimized(g, d_r, d_z);
+    // Preconditioner z = M⁻¹ r (FP32 in mixed mode, FP64 otherwise).
+    if (mixed_) mixed_apply(N, d_r, d_z); else precond_->vcycle_apply(g, d_r, d_z);
 
     double mz = gpu_mean(d_z, g.solid, nx, ny, nz, pitch, d_dot_buf, d_count_buf, nb1d);
     submean_kernel<<<grid3d,block3d>>>(d_z, mz, g.solid, nx, ny, nz, pitch);
@@ -323,6 +373,16 @@ void CudaPCG3D::solve_optimized(CudaGrid3D& g, double* p, double* rhs, int max_i
     double rsold = gpu_sum(d_dot_buf, nb1d, d_scalar);
     if (rsold < 1e-30) { cudaMemset(p, 0, N*sizeof(double)); return; }
 
+    // Compute initial absolute L2(r) for relative-residual stopping (||r||/||r0|| < tol).
+    dot_kernel_1d<<<nb1d,256>>>(d_r, d_r, g.solid, N, d_dot_buf);
+    cudaDeviceSynchronize();
+    double r0_sq = gpu_sum(d_dot_buf, nb1d, d_scalar);
+    double tol_abs_sq = (r0_sq > 0) ? r0_sq * tol * tol : tol * tol;
+
+    last_iters = max_iter;
+    last_rel_res = 1.0;
+    static bool dbg = std::getenv("PCG_DBG") != nullptr;
+    if (dbg) std::printf("[PCG] r0_sq=%.3e tol_abs_sq=%.3e\n", r0_sq, tol_abs_sq);
     for (int k = 0; k < max_iter; k++) {
         // ── FUSED: matvec(tiled) + dot(p,Ap) ──
         matvec_tiled_dot_kernel<<<grid3d,block3d>>>(
@@ -345,9 +405,15 @@ void CudaPCG3D::solve_optimized(CudaGrid3D& g, double* p, double* rhs, int max_i
         cudaDeviceSynchronize();
         double rsnew = gpu_sum(d_dot_buf, n3d, d_scalar);
 
-        if (std::sqrt(rsnew) < tol) break;
+        // Relative residual: ||r||/||r0|| < tol  ⇔  rsnew < tol² * r0_sq
+        if (dbg && (k<5 || k%5==0)) std::printf("[PCG]  k=%3d rsnew=%.3e rel=%.3e\n", k, rsnew, std::sqrt(rsnew/std::max(r0_sq,1e-30)));
+        if (rsnew < tol_abs_sq) {
+            last_iters = k + 1;
+            last_rel_res = std::sqrt(rsnew / (r0_sq > 0 ? r0_sq : 1.0));
+            break;
+        }
 
-        precond_->apply_optimized(g, d_r, d_z);
+        if (mixed_) mixed_apply(N, d_r, d_z); else precond_->vcycle_apply(g, d_r, d_z);
 
         double mz2 = gpu_mean(d_z, g.solid, nx, ny, nz, pitch, d_dot_buf, d_count_buf, nb1d);
         submean_kernel<<<grid3d,block3d>>>(d_z, mz2, g.solid, nx, ny, nz, pitch);
@@ -365,4 +431,62 @@ void CudaPCG3D::solve_optimized(CudaGrid3D& g, double* p, double* rhs, int max_i
         axpy_kernel<<<grid3d,block3d>>>(d_p, d_Ap, beta, g.solid, nx, ny, nz, pitch);
         cudaDeviceSynchronize();
     }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Fully device-resident PCG (no per-iteration host sync / cudaMemcpy).
+//  All scalars (rsold, pAp, rsnew, rz, alpha, beta, mean) live on device;
+//  alpha/beta and the mean-projection are computed by 1-thread kernels; the
+//  search-direction update is in place. Fixed iteration count (the paper does
+//  the same to avoid interrupting the stream for residual checks). Returns the
+//  final ||r||² in last_rel_res-friendly form via one end-of-solve copy.
+// ═══════════════════════════════════════════════════════════════
+void CudaPCG3D::solve_device(CudaGrid3D& g, double* p, double* rhs, int iters, double /*tol*/) {
+    int nx=g.nx, ny=g.ny, nz=g.nz, pitch=g.pitch, N=(nx+2)*(ny+2)*(nz+2);
+    ensure_buffers(N);
+    dim3 blk(T,T,T), grd((nx+T-1)/T,(ny+T-1)/T,(nz+T-1)/T);
+    int n3d = grd.x*grd.y*grd.z, nb1d = dot_buf_size_;
+
+    precond_->setupLevels(g);
+
+    double* d; cudaMalloc(&d, 8*sizeof(double));   // 0 rsold,1 pAp,2 rsnew,3 rz,4 alpha,5 negalpha,6 beta,7 mean
+    // fluid-cell count once (constant during the solve)
+    count_interior_kernel<<<nb1d,256>>>(g.solid,nx,ny,nz,pitch,d_count_buf);
+    cudaDeviceSynchronize();
+    double dcnt = (double)host_sum_int(d_count_buf, nb1d);
+
+    auto dmean = [&](double* v){    // *d[7] = mean(v over fluid); v -= mean   (all device)
+        sum_interior_kernel<<<nb1d,256>>>(v,g.solid,nx,ny,nz,pitch,d_dot_buf);
+        reduce_final_kernel<<<1,256>>>(d_dot_buf,nb1d,d+7);
+        sc_meandiv_k<<<1,1>>>(d+7,d+7,dcnt);
+        submean_dev_k<<<grd,blk>>>(v,d+7,g.solid,nx,ny,nz,pitch);
+    };
+
+    cudaMemcpy(d_r, rhs, N*sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemset(p, 0, N*sizeof(double));
+    dmean(d_r); negate_kernel<<<grd,blk>>>(d_r,g.solid,nx,ny,nz,pitch);  // r = -(rhs-mean)
+    precond_->vcycle_apply(g, d_r, d_z); dmean(d_z);
+    cudaMemcpy(d_p, d_z, N*sizeof(double), cudaMemcpyDeviceToDevice);
+    dot_kernel_1d<<<nb1d,256>>>(d_r,d_z,g.solid,N,d_dot_buf);
+    reduce_final_kernel<<<1,256>>>(d_dot_buf,nb1d,d+0);                  // rsold = (r,z)
+
+    for (int k=0;k<iters;k++){
+        matvec_tiled_dot_kernel<<<grd,blk>>>(d_p,d_Ap,g.solid,nx,ny,nz,pitch,g.idx2,g.idy2,g.idz2,g.diag,d_dot_buf);
+        reduce_final_kernel<<<1,256>>>(d_dot_buf,n3d,d+1);               // pAp
+        sc_div_k   <<<1,1>>>(d+4,d+0,d+1);                              // alpha = rsold/pAp
+        sc_negdiv_k<<<1,1>>>(d+5,d+0,d+1);                              // -alpha
+        axpy_dev_k<<<grd,blk>>>(p,   d_p, d+4, g.solid,nx,ny,nz,pitch); // x += alpha p
+        axpy_dev_k<<<grd,blk>>>(d_r, d_Ap,d+5, g.solid,nx,ny,nz,pitch); // r -= alpha Ap
+        precond_->vcycle_apply(g, d_r, d_z); dmean(d_z);
+        dot_kernel_1d<<<nb1d,256>>>(d_r,d_z,g.solid,N,d_dot_buf);
+        reduce_final_kernel<<<1,256>>>(d_dot_buf,nb1d,d+3);             // rz
+        sc_div_k <<<1,1>>>(d+6,d+3,d+0);                               // beta = rz/rsold
+        sc_copy_k<<<1,1>>>(d+0,d+3);                                   // rsold = rz
+        pupd_dev_k<<<grd,blk>>>(d_p,d_z,d+6,g.solid,nx,ny,nz,pitch);    // p = z + beta p
+    }
+    // one host sync at the very end (final residual for reporting)
+    dot_kernel_1d<<<nb1d,256>>>(d_r,d_r,g.solid,N,d_dot_buf);
+    double rsn = gpu_sum(d_dot_buf,nb1d,d_scalar);
+    last_iters = iters; last_rel_res = std::sqrt(rsn);
+    cudaFree(d);
 }

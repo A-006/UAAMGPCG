@@ -43,6 +43,14 @@ set(LFM_SOURCES
 
 add_library(lfm_lib ${LFM_SOURCES})
 
+# OpenMP: the LFM flow-map marching / advection are per-cell independent loops
+# and were single-threaded — the main CPU bottleneck. Multi-thread them.
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(lfm_lib PUBLIC OpenMP::OpenMP_CXX)
+    message(STATUS "OpenMP enabled for lfm_lib")
+endif()
+
 # Main executable
 add_executable(lfm_2d main.cpp)
 target_link_libraries(lfm_2d PRIVATE lfm_lib)

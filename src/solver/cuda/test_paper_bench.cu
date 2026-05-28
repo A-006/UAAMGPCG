@@ -68,9 +68,10 @@ int main() {
         int pcg_iters;
     };
     std::vector<Bench> grids = {
-        {64, 32, 32, 20},     // 65K cells
-        {128,64, 64, 30},     // 524K cells
-        {256,128,128, 40},    // 4.2M cells — paper scale
+        {64, 32, 32, 200},    // 65K cells; max_iter raised to allow convergence
+        {128,64, 64, 200},    // 524K cells
+        {256,128,128, 200},   // 4.2M cells
+        {256,256,256, 200},   // 16.8M cells — TRUE paper Fig 13 scale
     };
 
     for(auto& B:grids){
@@ -96,35 +97,25 @@ int main() {
         cudaMalloc(&d_rhs,N*sizeof(double));
         cudaMemcpy(d_rhs,h_rhs.data(),N*sizeof(double),cudaMemcpyHostToDevice);
 
-        // ── V-Cycle Timing (single V-cycle) ──
+        // ── V-Cycle Timing: pure separate-kernel Galerkin V-cycle (the production
+        //    path). setupLevels (solid+coeffs+trimming) runs ONCE; then we time
+        //    only vcycle_apply, which is what the PCG pays per iteration. Run with
+        //    UAAMG_NOTRIM=1 to A/B the §5.4 trimming speedup. ──
         {
             CudaUAAMGPreconditioner3D precond;
-            precond.build(g);
             double *d_z;
             cudaMalloc(&d_z,N*sizeof(double));
             cudaMemcpy(d_rhs,h_rhs.data(),N*sizeof(double),cudaMemcpyHostToDevice);
 
-            // Warmup
-            for(int w=0;w<5;w++){cudaMemset(d_z,0,N*sizeof(double)); precond.apply_optimized(g,d_rhs,d_z);}
+            precond.setupLevels(g);   // once per solve (coeffs + trimming)
+            for(int w=0;w<5;w++) precond.vcycle_apply(g,d_rhs,d_z);
             cudaDeviceSynchronize();
-
-            // (a) Full apply_optimized: includes solid restrict, memsets, vCycle, output copy
-            cudaMemset(d_z,0,N*sizeof(double));
             auto ta=std::chrono::high_resolution_clock::now();
-            for(int r=0;r<10;r++) precond.apply_optimized(g,d_rhs,d_z);
+            for(int r=0;r<20;r++) precond.vcycle_apply(g,d_rhs,d_z);
             cudaDeviceSynchronize();
             auto tb=std::chrono::high_resolution_clock::now();
-            double apply_ms=std::chrono::duration<double>(tb-ta).count()*100.0;  // /10
-
-            // (b) vcycle_only: pure V-cycle compute (solid mask already set up, x reused)
-            auto tc=std::chrono::high_resolution_clock::now();
-            for(int r=0;r<20;r++) precond.vcycle_only();
-            cudaDeviceSynchronize();
-            auto td=std::chrono::high_resolution_clock::now();
-            double vcycle_ms=std::chrono::duration<double>(td-tc).count()*50.0;  // /20
-
-            printf("  apply_optimized (with setup):  %.2f ms\n", apply_ms);
-            printf("  vcycle_only   (pure V-cycle):  %.2f ms  (paper: 0.81ms on RTX4090)\n", vcycle_ms);
+            double vcyc_ms=std::chrono::duration<double>(tb-ta).count()*1000.0/20.0;
+            printf("  V-cycle (separate, Galerkin+trim):  %.3f ms  (paper: 0.81ms RTX4090 FP32)\n", vcyc_ms);
             cudaFree(d_z);
         }
 
@@ -189,6 +180,8 @@ int main() {
 
         // ── GPU PCG Optimized (fused dot + tiled matvec) ──
         double gpu_opt_ms=0, gpu_opt_l2=0;
+        int    pcg_opt_iters=0;
+        double pcg_opt_rel=1.0;
         {
             cudaMemset(d_p,0,N*sizeof(double));
             cudaMemcpy(d_rhs,h_rhs.data(),N*sizeof(double),cudaMemcpyHostToDevice);
@@ -203,6 +196,8 @@ int main() {
             cudaDeviceSynchronize();
             auto t1=std::chrono::high_resolution_clock::now();
             gpu_opt_ms=std::chrono::duration<double>(t1-t0).count()*1000.0;
+            pcg_opt_iters = pcg_opt.last_iters;
+            pcg_opt_rel   = pcg_opt.last_rel_res;
 
             std::vector<double> gp(N); cudaMemcpy(gp.data(),d_p,N*sizeof(double),cudaMemcpyDeviceToHost);
             std::vector<double> gr(N); cudaMemcpy(gr.data(),d_rhs,N*sizeof(double),cudaMemcpyDeviceToHost);
@@ -210,15 +205,38 @@ int main() {
             gpu_opt_l2=residual_l2(gp.data(),gr.data(),(bool*)gs.data(),nx,ny,nz,1.0/nx,1.0/ny,1.0/nz);
         }
 
+        // ── Mixed precision: FP64 CG + FP32 preconditioner ──
+        double gpu_mix_ms=0; int mix_iters=0; double mix_rel=1.0;
+        {
+            cudaMemcpy(d_rhs,h_rhs.data(),N*sizeof(double),cudaMemcpyHostToDevice);
+            CudaPCG3D pcg_mix;
+            for(int w=0;w<2;w++){cudaMemset(d_p,0,N*sizeof(double)); pcg_mix.solve_mixed(g,d_p,d_rhs,5,1e-6);}
+            cudaDeviceSynchronize();
+            cudaMemset(d_p,0,N*sizeof(double));
+            cudaMemcpy(d_rhs,h_rhs.data(),N*sizeof(double),cudaMemcpyHostToDevice);
+            auto t0=std::chrono::high_resolution_clock::now();
+            pcg_mix.solve_mixed(g,d_p,d_rhs,B.pcg_iters,1e-6);
+            cudaDeviceSynchronize();
+            auto t1=std::chrono::high_resolution_clock::now();
+            gpu_mix_ms=std::chrono::duration<double>(t1-t0).count()*1000.0;
+            mix_iters=pcg_mix.last_iters; mix_rel=pcg_mix.last_rel_res;
+        }
+
         // ── Report ──
         printf("  GPU PCG(%d):     %8.2f ms  L2|res|=%.4e\n", B.pcg_iters, gpu_ms, gpu_l2);
-        printf("  GPU PCG-opt(%d): %8.2f ms  L2|res|=%.4e  speedup=%.2fx\n",
-            B.pcg_iters, gpu_opt_ms, gpu_opt_l2, gpu_ms/gpu_opt_ms);
+        printf("  GPU PCG-opt:    %8.2f ms  iters=%d  rel_res=%.2e  L2|res|=%.4e\n",
+            gpu_opt_ms, pcg_opt_iters, pcg_opt_rel, gpu_opt_l2);
+        printf("  GPU PCG-mixed:  %8.2f ms  iters=%d  rel_res=%.2e   (FP64 CG + FP32 precond, %.2fx vs opt)\n",
+            gpu_mix_ms, mix_iters, mix_rel, gpu_opt_ms>0?gpu_opt_ms/gpu_mix_ms:0.0);
         if(cpu_ms>0) printf("  CPU PCG(%d):     %8.2f ms  L2|res|=%.4e  speedup=%.1fx\n",
             B.pcg_iters, cpu_ms, cpu_l2, gpu_ms>0?cpu_ms/gpu_ms:0);
-        // Verify results match
-        double opt_diff = std::abs(gpu_l2 - gpu_opt_l2);
-        printf("  Opt-vs-Unopt L2 diff: %.2e  %s\n", opt_diff, opt_diff<1e-8?"PASS":"CHECK");
+        // The optimized PCG stops early on the relative residual (||r||/||r0|| < 1e-6),
+        // so it ends at a higher absolute residual than the fixed-iteration unopt run —
+        // an absolute L2 match is no longer the right check. Instead verify the
+        // optimized solver actually converged (reached the relative tolerance early).
+        bool opt_conv = (pcg_opt_iters < B.pcg_iters) && (pcg_opt_rel < 1.0e-6);
+        printf("  PCG-opt converged in %d iters (rel_res=%.2e): %s\n",
+            pcg_opt_iters, pcg_opt_rel, opt_conv ? "PASS" : "FAIL");
 
         cudaFree(d_p); cudaFree(d_rhs); g.free();
         printf("\n");

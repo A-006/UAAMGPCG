@@ -8,7 +8,7 @@ Reads vorticity and velocity, renders side-by-side panels:
 
 Outputs: output_karman/karman_lfm.mp4 (if ffmpeg) and karman_lfm.gif (always).
 """
-import os, sys, glob, re
+import os, sys, glob, re, shutil
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -101,8 +101,12 @@ def main():
     speed_max = max(np.sqrt(f['data']['velocity'][..., 0] ** 2
                             + f['data']['velocity'][..., 1] ** 2).max()
                     for f in frames)
-    vort_clip = max(min(vort_max * 0.4, 30.0), 5.0)
-    print(f"vorticity peak={vort_max:.2f}, clipped to +-{vort_clip:.1f}")
+    # Clip to the WAKE vorticity scale (a percentile), not the boundary-layer
+    # peak: the shed street is only ~±4 while the thin BL spike is ~100, so
+    # scaling to the peak washes the street out. p97 of |vort| tracks the street.
+    all_absvort = np.concatenate([np.abs(f['data']['vorticity']).ravel() for f in frames])
+    vort_clip = max(float(np.percentile(all_absvort, 97)), 2.0)
+    print(f"vorticity peak={vort_max:.2f}, clipped to +-{vort_clip:.2f} (wake p97)")
     print(f"speed max={speed_max:.2f}")
 
     plt.style.use('dark_background')
@@ -176,19 +180,26 @@ def main():
 
     ani = FuncAnimation(fig, render, frames=len(frames), interval=80, blit=False)
 
-    # MP4 (H.264 + yuv420p) — phone-friendly, plays inline in WeChat.
-    try:
-        mp4_path = os.path.join(out_dir, 'karman_lfm.mp4')
-        print(f"Writing {mp4_path} ...")
-        writer = FFMpegWriter(fps=20, bitrate=4000,
-                              codec='libx264',
-                              extra_args=['-pix_fmt', 'yuv420p'])
-        ani.save(mp4_path, writer=writer, dpi=110)
-        print(f"  size: {os.path.getsize(mp4_path)/1024/1024:.2f} MB")
-    except Exception as e:
-        print(f"  mp4 skipped: {e}")
+    # Both MP4 and GIF are always produced. Resolve an ffmpeg binary even when
+    # the system PATH has none, by falling back to the imageio-ffmpeg bundle —
+    # so the mp4 never silently gets skipped.
+    if shutil.which('ffmpeg') is None:
+        try:
+            import imageio_ffmpeg
+            matplotlib.rcParams['animation.ffmpeg_path'] = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception as e:
+            print(f"  WARNING: no system ffmpeg and imageio-ffmpeg unavailable ({e}).")
+            print("           Install it with:  pip install imageio-ffmpeg")
 
-    # GIF — fallback / preview.
+    # MP4 (H.264 + yuv420p) — phone-friendly, plays inline in WeChat.
+    mp4_path = os.path.join(out_dir, 'karman_lfm.mp4')
+    print(f"Writing {mp4_path} (ffmpeg={matplotlib.rcParams['animation.ffmpeg_path']}) ...")
+    writer = FFMpegWriter(fps=20, bitrate=4000, codec='libx264',
+                          extra_args=['-pix_fmt', 'yuv420p'])
+    ani.save(mp4_path, writer=writer, dpi=110)
+    print(f"  size: {os.path.getsize(mp4_path)/1024/1024:.2f} MB")
+
+    # GIF — always written too.
     gif_path = os.path.join(out_dir, 'karman_lfm.gif')
     print(f"Writing {gif_path} ...")
     ani.save(gif_path, writer=PillowWriter(fps=12), dpi=80)

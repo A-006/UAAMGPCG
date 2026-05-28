@@ -1,37 +1,42 @@
 /**
- * @file run_karman_long.cpp
- * @brief Long Karman vortex street simulation using LFM (paper's Algorithm 1).
+ * @file run_karman_long_gpu.cu
+ * @brief Same as run_karman_long.cpp but the pressure projection uses the
+ *        GPU UAAMG-PCG solver (CudaPCGSolver). The rest of the LFM cycle
+ *        (flow-map marching, advection, pullback) still runs on the CPU —
+ *        only the Poisson solve is offloaded. Used to benchmark GPU vs CPU.
  *
- * Usage: run_karman_long [t_end] [frame_skip] [NX]
- *   defaults: t_end=40, frame_skip=10, NX=256
+ * Usage: run_karman_long_gpu [t_end] [frame_skip] [NX]
  */
 #include "config/config.h"
 #include "core/grid.h"
 #include "simulator/factory.h"
+#include "solver/cuda_pcg_solver.h"
 #include "io/vtk_writer.h"
 #include "force/force.h"
 #include <iostream>
 #include <iomanip>
 #include <chrono>
 #include <cmath>
+#include <memory>
+#include <string>
 #include <sys/stat.h>
 
 int main(int argc, char** argv) {
     Config cfg;
     cfg.scenario = "karman";
     cfg.NX       = 384;
-    cfg.Lx       = 6.0;       // 30 D streamwise (7.5 D inlet + 22.5 D wake)
-    cfg.Ly       = 2.0;       // 10 D tall → blockage D/Ly = 10 % (was 20 %)
+    cfg.Lx       = 6.0;
+    cfg.Ly       = 2.0;
     cfg.U_inf    = 1.0;
     cfg.Re       = 200;
     cfg.cyl_cx   = 1.5;
-    cfg.cyl_cy   = 1.0;       // centred in the taller domain
+    cfg.cyl_cy   = 1.0;
     cfg.cyl_R    = 0.1;
     cfg.t_end    = 40.0;
     cfg.solve_iters = 200;
-    cfg.solve_tol   = 1e-10;
+    cfg.solve_tol   = 1e-6;   // paper's relative error; ~halves solver iters vs 1e-10
     cfg.frame_skip  = 10;
-    cfg.out_dir     = "output_karman";
+    cfg.out_dir     = "output_karman_gpu";
     cfg.solver      = "pcg_uaamg";
     cfg.time_integrator = "lfm";
     cfg.lfm_cycle_steps = 2;
@@ -39,6 +44,8 @@ int main(int argc, char** argv) {
     if (argc > 1) cfg.t_end     = std::atof(argv[1]);
     if (argc > 2) cfg.frame_skip = std::atoi(argv[2]);
     if (argc > 3) cfg.NX        = std::atoi(argv[3]);
+    if (argc > 4) { cfg.Re = std::atof(argv[4]);
+                    cfg.out_dir = "output_karman_gpu_re" + std::to_string((int)cfg.Re); }
 
     cfg.NY = std::max(16, (int)std::lround(cfg.NX * cfg.Ly / cfg.Lx));  // square cells
     cfg.dt = 0.25 * (cfg.Lx / cfg.NX) / cfg.U_inf;
@@ -49,7 +56,7 @@ int main(int argc, char** argv) {
     int nframes = nsteps / cfg.frame_skip + 1;
 
     std::cout << "===================================================\n";
-    std::cout << "  LFM Karman Vortex Street (Algorithm 1)\n";
+    std::cout << "  LFM Karman Vortex Street (Algorithm 1) — GPU solver\n";
     std::cout << "---------------------------------------------------\n";
     std::cout << "  Grid: " << cfg.NX << "x" << cfg.NY
               << "   dx=" << dx << "   D/dx=" << (D/dx) << "\n";
@@ -57,16 +64,15 @@ int main(int argc, char** argv) {
               << "   cycle_dt=" << (cfg.dt*cfg.lfm_cycle_steps) << "\n";
     std::cout << "  t_end=" << cfg.t_end << "   cycles=" << nsteps
               << "   frames~" << nframes << "\n";
-    std::cout << "  Re=" << cfg.Re << "   output=" << cfg.out_dir << "/\n";
+    std::cout << "  Re=" << cfg.Re << "   solver=GPU(UAAMG)   output=" << cfg.out_dir << "/\n";
     std::cout << "===================================================\n\n";
 
     mkdir(cfg.out_dir.c_str(), 0755);
 
-    auto pressure_solver = SimulatorFactory::make_pressure_solver(cfg);
+    std::unique_ptr<Solver> pressure_solver = std::make_unique<CudaPCGSolver>(true);
     auto sim_ptr = SimulatorFactory::create(cfg, std::move(pressure_solver));
     Simulator& sim = *sim_ptr;
 
-    // Initial frame
     VtkWriter::write(sim.grid(), 0, cfg);
 
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -106,7 +112,5 @@ int main(int argc, char** argv) {
     double elapsed = std::chrono::duration<double>(t1 - t0).count();
     std::cout << "\n  Done: " << nsteps << " cycles, " << (frame-1) << " frames in "
               << std::fixed << std::setprecision(1) << elapsed << " s\n";
-    std::cout << "  Output: " << cfg.out_dir << "/frame_*.vtk\n";
-
     return 0;
 }

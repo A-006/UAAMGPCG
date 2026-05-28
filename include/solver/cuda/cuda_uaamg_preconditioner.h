@@ -23,6 +23,8 @@ public:
     struct Level {
         CudaGrid g;
         int stride = 0;
+        // Matrix-free Galerkin stencil coefficients (cx=+x coupling, diag=row sum).
+        double *diag = nullptr, *cx = nullptr, *cy = nullptr;
     };
 
 private:

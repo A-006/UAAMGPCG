@@ -26,6 +26,9 @@ LFMSimulator::LFMSimulator(const Config& cfg, std::unique_ptr<Solver> solver)
         scenarios::Karman k{ cfg_.cyl_cx, cfg_.cyl_cy, cfg_.cyl_R, cfg_.U_inf };
         if (k.cyl_R > 0) scenarios::setup_karman_cylinder(grid_, k);
         scenarios::set_uniform_inflow(grid_, k.U_inf);
+        // Break the y-symmetry — without this seed a perfectly symmetric setup
+        // produces a standing symmetric vortex pair, never the alternating street.
+        scenarios::seed_wake_perturbation(grid_, k);
     }
     BoundaryConditions::applyKarman(grid_, cfg_.U_inf);
     BoundaryConditions::applySolid(grid_);
@@ -189,13 +192,11 @@ void LFMSimulator::run_cycle(int n_steps) {
     }
     double cycle_dt = n_steps * dt;
     PressureProjection::project(grid_, cycle_dt, *solver_, cfg_.solve_iters*2, cfg_.solve_tol);
-    // p_at now holds ξ in physical units. Add Bernoulli to recover physical pressure.
-    for (int j=1;j<=ny;j++) for (int i=1;i<=nx;i++) {
-        if (grid_.is_solid(i,j)) continue;
-        double uc = 0.5*(grid_.u_at(i,j)+grid_.u_at(i-1,j));
-        double vc = 0.5*(grid_.v_at(i,j)+grid_.v_at(i,j-1));
-        grid_.p_at(i,j) += 0.5*(uc*uc + vc*vc);
-    }
+    // The projection's scalar field is the gauge potential, NOT the static
+    // pressure. Recover the true static pressure from the divergence-free
+    // velocity via the pressure Poisson equation, so force diagnostics (Cd/Cl)
+    // integrate the correct surface pressure.
+    PressureProjection::recoverStaticPressure(grid_, *solver_, cfg_.solve_iters*2, cfg_.solve_tol);
     BoundaryConditions::applyKarman(grid_, cfg_.U_inf);
     BoundaryConditions::applySolid(grid_);
 
@@ -275,6 +276,7 @@ void LFMSimulator::accumulate_path_integral(Grid& u0,
 void LFMSimulator::rk2_advect(Grid& dst, const Grid& src,
     const std::vector<double>& vel_u, const std::vector<double>& vel_v, double dt_step) {
     int nx=grid_.nx, ny=grid_.ny; double dx=grid_.dx, dy=grid_.dy;
+    #pragma omp parallel for collapse(2) schedule(static)
     for (int i=1;i<nx;i++) for (int j=1;j<=ny;j++) {
         if (grid_.is_solid(i,j)||grid_.is_solid(i+1,j)) { dst.u_at(i,j)=0; continue; }
         double xu=i*dx, yu=(j-0.5)*dy;
@@ -283,6 +285,7 @@ void LFMSimulator::rk2_advect(Grid& dst, const Grid& src,
         double um=sample_u(xm,ym,vel_u,vel_v), vm=sample_v(xm,ym,vel_u,vel_v);
         dst.u_at(i,j)=sample_u(xu-dt_step*um, yu-dt_step*vm, src.u, src.v);
     }
+    #pragma omp parallel for collapse(2) schedule(static)
     for (int i=1;i<=nx;i++) for (int j=1;j<ny;j++) {
         if (grid_.is_solid(i,j)||grid_.is_solid(i,j+1)) { dst.v_at(i,j)=0; continue; }
         double xv=(i-0.5)*dx, yv=j*dy;
@@ -305,6 +308,7 @@ void LFMSimulator::project(Grid& g) {
 void LFMSimulator::rk4_march_forward(const std::vector<double>& u,
     const std::vector<double>& v, double dt_march) {
     int nx=flow_map_.nx, ny=flow_map_.ny;
+    #pragma omp parallel for collapse(2) schedule(static)
     for (int j=1;j<=ny;j++) for (int i=1;i<=nx;i++) {
         size_t k=flow_map_.idx(i,j);
         double x0=flow_map_.phi_x[k], y0=flow_map_.phi_y[k];
@@ -353,6 +357,7 @@ void LFMSimulator::rk4_march_forward(const std::vector<double>& u,
 void LFMSimulator::rk4_march_backward(const std::vector<double>& u,
     const std::vector<double>& v, double dt_march) {
     int nx=flow_map_.nx, ny=flow_map_.ny;
+    #pragma omp parallel for collapse(2) schedule(static)
     for (int j=1;j<=ny;j++) for (int i=1;i<=nx;i++) {
         size_t k=flow_map_.idx(i,j);
         double x0=flow_map_.psi_x[k], y0=flow_map_.psi_y[k];
@@ -534,6 +539,7 @@ void LFMSimulator::compute_viscous(const Grid& g, std::vector<double>& vu, std::
     int nx=g.nx, ny=g.ny; double mu=(cfg_.Re>0)?cfg_.U_inf*2*cfg_.cyl_R/cfg_.Re:0;
     double idx2=1.0/(g.dx*g.dx), idy2=1.0/(g.dy*g.dy);
     size_t N=flow_map_.nx*flow_map_.ny; vu.assign(N,0); vv.assign(N,0);
+    #pragma omp parallel for collapse(2) schedule(static)
     for (int j=1;j<=ny;j++) for (int i=1;i<=nx;i++) {
         size_t k=flow_map_.idx(i,j); if(g.is_solid(i,j))continue;
         double uc=0.5*(g.u_at(i,j)+g.u_at(i-1,j));
@@ -556,6 +562,7 @@ void LFMSimulator::compute_viscous(const Grid& g, std::vector<double>& vu, std::
 // ═══════════════════════════════════════════════════════════
 void LFMSimulator::pullback_impulse(const Grid& u0_grid){
     int nx=flow_map_.nx, ny=flow_map_.ny;
+    #pragma omp parallel for collapse(2) schedule(static)
     for (int j=1;j<=ny;j++) for (int i=1;i<=nx;i++) {
         size_t k=flow_map_.idx(i,j);
         double X=flow_map_.psi_x[k], Y=flow_map_.psi_y[k], uX,uY;
@@ -571,6 +578,7 @@ void LFMSimulator::pullback_impulse(const Grid& u0_grid){
 void LFMSimulator::forward_pullback(const std::vector<double>& mx, const std::vector<double>& my,
     std::vector<double>& ux, std::vector<double>& uy) {
     int nx = flow_map_.nx, ny = flow_map_.ny;
+    #pragma omp parallel for collapse(2) schedule(static)
     for (int j = 1; j <= ny; j++) for (int i = 1; i <= nx; i++) {
         size_t k = flow_map_.idx(i, j);
         double msx, msy;

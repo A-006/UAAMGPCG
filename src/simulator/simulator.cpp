@@ -19,6 +19,9 @@ ChorinSimulator::ChorinSimulator(const Config& cfg, std::unique_ptr<Solver> solv
         scenarios::Karman k{ cfg_.cyl_cx, cfg_.cyl_cy, cfg_.cyl_R, cfg_.U_inf };
         if (k.cyl_R > 0) scenarios::setup_karman_cylinder(grid_, k);
         scenarios::set_uniform_inflow(grid_, k.U_inf);
+        // Break the y-symmetry — without this seed a perfectly symmetric setup
+        // produces a standing symmetric vortex pair, never the alternating street.
+        scenarios::seed_wake_perturbation(grid_, k);
     }
     apply_bc();
     prev_ = grid_;

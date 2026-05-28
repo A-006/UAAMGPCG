@@ -55,6 +55,15 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
         ${CMAKE_SOURCE_DIR}/test
     )
 
+    # GPU-solver LFM Karman runner (CPU sim loop, GPU Poisson solve)
+    add_executable(run_karman_long_gpu tools/run_karman_long_gpu.cu)
+    set_target_properties(run_karman_long_gpu PROPERTIES
+        LINKER_LANGUAGE CUDA
+        CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
+    )
+    target_link_libraries(run_karman_long_gpu PRIVATE lfm_lib cuda_uaamg_lib cuda_cg_lib)
+    target_include_directories(run_karman_long_gpu PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
     # GPU Karman validate (Cd/Cl/St)
     add_executable(test_karman_validate_gpu test/integration/test_karman_validate_gpu.cu)
     set_target_properties(test_karman_validate_gpu PROPERTIES

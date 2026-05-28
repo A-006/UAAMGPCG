@@ -11,8 +11,20 @@
 /**
  * @brief 3D UAAMG V-cycle preconditioner (Algorithm 3 from Sun et al. SIGGRAPH 2025).
  *
- * 1 pre + 1 post RBGS, scale-2 trilinear prolongation,
- * 8-to-1 averaging restriction, column-major indexing.
+ * Paper-faithful matrix-free UAAMG:
+ *  - Constant prolongation P (injection) with ×2 correction scaling (Eq. 11);
+ *  - 8-to-1 restriction R = Pᵀ (sum over 2×2×2 children);
+ *  - Galerkin coarse operator A_{l+1} = R_l A_l P_l (Eq. 12), which for the
+ *    Poisson stencil stays matrix-free: the coarse +x coupling is the sum of
+ *    the four fine +x couplings across the shared face, and the coarse diagonal
+ *    is the sum of the six coarse couplings (Neumann zero-row-sum preserved).
+ *  - RBGS smoother, V(1,1).
+ *
+ * Each level stores its stencil as four coefficient channels (diag, cx, cy, cz)
+ * — cx[c] is the coupling between cell c and its +x neighbour, A[c,c+ex]=-cx[c];
+ * the −x coupling of c is cx[c-ex]. This makes the operator fully matrix-free
+ * and lets the Galerkin coarsening produce correct variable coefficients near
+ * solids/boundaries.
  *
  * The hierarchy is cached and rebuilt only when grid dimensions change.
  */
@@ -29,6 +41,9 @@ private:
         double dx, dy, dz;
         std::vector<double> p, b;
         std::vector<bool> solid;
+        // Matrix-free stencil coefficients (per cell, sized (nx+2)(ny+2)(nz+2)):
+        //   cx[c] = coupling to +x neighbour, cy/cz analogous; diag[c] = row sum.
+        std::vector<double> diag, cx, cy, cz;
     };
 
     std::vector<Level> levels_;
@@ -38,7 +53,9 @@ private:
     void vCycle(int level, int nlevels);
 
     static void restrictSolid    (const Level& fine, Level& coarse);
-    static void smooth           (Level& L, int sweeps);
-    static void restrictResidual (const Level& fine, Level& coarse);
-    static void prolongateAdd    (const Level& coarse, Level& fine);
+    static void setupFineCoeffs  (Level& L);                       // finest stencil from solid mask
+    static void galerkinCoarsen  (const Level& fine, Level& coarse); // A_c = Rᵀ A P
+    static void smooth           (Level& L, int sweeps, bool reverse=false); // RBGS (stored coeffs)
+    static void restrictResidual (const Level& fine, Level& coarse); // R = Pᵀ (sum)
+    static void prolongateAdd    (const Level& coarse, Level& fine); // x += 2 P x_c
 };

@@ -27,12 +27,13 @@ target_include_directories(cuda_uaamg_lib PUBLIC
 
 add_library(cuda_uaamg_3d_lib STATIC
     cuda_uaamg_preconditioner_3d.cu
-    cuda_uaamg_preconditioner_3d_opt.cu
     cuda_uaamg_preconditioner_3d_opt_f.cu
     cuda_pcg_3d.cu
     cuda_pcg_3d_opt.cu
     cuda_pcg_solver_3d.cu
 )
+# cuda_uaamg_preconditioner_3d_opt.cu (double aggregated V-cycle) dropped:
+# break-even in FP64 + nx≥256 bug; production uses the templated separate path.
 set_target_properties(cuda_uaamg_3d_lib PROPERTIES LINKER_LANGUAGE CUDA)
 target_include_directories(cuda_uaamg_3d_lib PUBLIC
     ${CMAKE_SOURCE_DIR}/include
@@ -96,3 +97,22 @@ add_executable(test_paper_bench_f test_paper_bench_f.cu)
 set_target_properties(test_paper_bench_f PROPERTIES LINKER_LANGUAGE CUDA)
 target_link_libraries(test_paper_bench_f PRIVATE cuda_uaamg_3d_lib cuda_cg_3d_lib lfm_lib)
 target_include_directories(test_paper_bench_f PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(test_fp32_vcycle test_fp32_vcycle.cu)
+set_target_properties(test_fp32_vcycle PROPERTIES LINKER_LANGUAGE CUDA)
+target_link_libraries(test_fp32_vcycle PRIVATE cuda_uaamg_3d_lib)
+target_include_directories(test_fp32_vcycle PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(test_tiled_soa test_tiled_soa.cu)
+set_target_properties(test_tiled_soa PROPERTIES LINKER_LANGUAGE CUDA)
+target_include_directories(test_tiled_soa PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(prof_vcycle prof_vcycle.cu)
+set_target_properties(prof_vcycle PROPERTIES LINKER_LANGUAGE CUDA)
+target_link_libraries(prof_vcycle PRIVATE cuda_uaamg_3d_lib)
+target_include_directories(prof_vcycle PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(test_mixed_solve test_mixed_solve.cu)
+set_target_properties(test_mixed_solve PROPERTIES LINKER_LANGUAGE CUDA)
+target_link_libraries(test_mixed_solve PRIVATE cuda_uaamg_3d_lib cuda_cg_3d_lib lfm_lib)
+target_include_directories(test_mixed_solve PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})

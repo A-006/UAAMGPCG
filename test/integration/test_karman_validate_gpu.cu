@@ -80,12 +80,8 @@ int main(int argc, char** argv) {
     else
         sim = std::make_unique<ChorinSimulator>(cfg, std::move(solver));
 
-    // ── Karman scenario setup (cylinder + warm inflow + perturbation) ──
-    {
-        scenarios::Karman k{ cfg.cyl_cx, cfg.cyl_cy, cfg.cyl_R, cfg.U_inf };
-        Grid& g = const_cast<Grid&>(sim->grid());
-        scenarios::seed_wake_perturbation(g, k);
-    }
+    // Karman scenario setup (cylinder + warm inflow + wake perturbation) is
+    // now done inside the simulator constructor, so nothing to do here.
 
     std::vector<double> time_hist, Cd_hist, Cl_hist;
     double t_transient = 2.0;
