@@ -1,5 +1,5 @@
-#include "simulator/scenarios/wind_turbine.h"
-#include "simulator/scenarios/delta_wing.h" // reuses InflowXMin3D, OutflowXMax3D, FreeSlipYZ3D
+#include "simulator/scenarios/3d/wind_turbine.h"
+#include "simulator/scenarios/3d/delta_wing.h" // reuses InflowXMin3D, OutflowXMax3D, FreeSlipYZ3D
 #include <cmath>
 
 namespace scenarios {

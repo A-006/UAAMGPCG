@@ -1,5 +1,5 @@
 #pragma once
-#include "solver/preconditioner/preconditioner.h"
+#include "solver/preconditioner/2d/preconditioner.h"
 #include <vector>
 
 class UAAMGPreconditioner : public Preconditioner {

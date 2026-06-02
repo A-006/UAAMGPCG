@@ -1,6 +1,6 @@
 #include "simulator/scenarios/scenario_registry.h"
-#include "simulator/scenarios/karman_scenario.h"
-#include "simulator/scenarios/smoke_scenario.h"
+#include "simulator/scenarios/2d/karman_scenario.h"
+#include "simulator/scenarios/2d/smoke_scenario.h"
 
 namespace scenarios {
 

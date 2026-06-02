@@ -8,16 +8,16 @@ set(LFM_SOURCES
     simulator/simulator_3d.cpp
     io/vtk_writer_3d.cpp
     core/scalar_field_3d.cpp
-    simulator/scenarios/karman.cpp
+    simulator/scenarios/2d/karman.cpp
     simulator/scenarios/scenario_registry.cpp
-    simulator/scenarios/karman_scenario.cpp
-    simulator/scenarios/smoke_scenario.cpp
+    simulator/scenarios/2d/karman_scenario.cpp
+    simulator/scenarios/2d/smoke_scenario.cpp
     simulator/scenarios/scenario_3d_registry.cpp
-    simulator/scenarios/vortex_ring.cpp
-    simulator/scenarios/trefoil_knot.cpp
-    simulator/scenarios/delta_wing.cpp
-    simulator/scenarios/fire_ball.cpp
-    simulator/scenarios/wind_turbine.cpp
+    simulator/scenarios/3d/vortex_ring.cpp
+    simulator/scenarios/3d/trefoil_knot.cpp
+    simulator/scenarios/3d/delta_wing.cpp
+    simulator/scenarios/3d/fire_ball.cpp
+    simulator/scenarios/3d/wind_turbine.cpp
     config/config.cpp
     config/cli.cpp
     numerics/advection/advection.cpp
@@ -35,12 +35,12 @@ set(LFM_SOURCES
     solver/rbgs_3d.cpp
     solver/pcg_3d.cpp
     solver/factory_3d.cpp
-    solver/preconditioner/gmg_preconditioner.cpp
-    solver/preconditioner/amg_preconditioner.cpp
-    solver/preconditioner/uaamg_preconditioner.cpp
-    solver/preconditioner/gmg_preconditioner_3d.cpp
-    solver/preconditioner/amg_preconditioner_3d.cpp
-    solver/preconditioner/uaamg_preconditioner_3d.cpp
+    solver/preconditioner/2d/gmg_preconditioner.cpp
+    solver/preconditioner/2d/amg_preconditioner.cpp
+    solver/preconditioner/2d/uaamg_preconditioner.cpp
+    solver/preconditioner/3d/gmg_preconditioner_3d.cpp
+    solver/preconditioner/3d/amg_preconditioner_3d.cpp
+    solver/preconditioner/3d/uaamg_preconditioner_3d.cpp
     solver/factory.cpp
     simulator/flow_map_2d.cpp
     simulator/lfm_simulator.cpp

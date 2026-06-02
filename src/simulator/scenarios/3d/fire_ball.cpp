@@ -1,4 +1,4 @@
-#include "simulator/scenarios/fire_ball.h"
+#include "simulator/scenarios/3d/fire_ball.h"
 #include <cmath>
 
 namespace scenarios {

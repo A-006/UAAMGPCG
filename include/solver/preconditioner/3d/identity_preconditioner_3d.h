@@ -5,7 +5,7 @@
  * @date 2026-05-24
  */
 #pragma once
-#include "solver/preconditioner/preconditioner_3d.h"
+#include "solver/preconditioner/3d/preconditioner_3d.h"
 
 /**
  * @brief Identity preconditioner: \f$z = r\f$ (no preconditioning).

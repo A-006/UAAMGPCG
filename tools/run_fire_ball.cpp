@@ -13,7 +13,7 @@
 #include "solver/factory_3d.h"
 #include "io/vtk_writer_3d.h"
 #include "core/scalar_field_3d.h"
-#include "simulator/scenarios/fire_ball.h"
+#include "simulator/scenarios/3d/fire_ball.h"
 #include <iostream>
 #include <iomanip>
 #include <chrono>

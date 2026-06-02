@@ -8,10 +8,10 @@
 #include "solver/jacobi.h"
 #include "solver/rbgs.h"
 #include "solver/pcg.h"
-#include "solver/preconditioner/identity_preconditioner.h"
-#include "solver/preconditioner/gmg_preconditioner.h"
-#include "solver/preconditioner/amg_preconditioner.h"
-#include "solver/preconditioner/uaamg_preconditioner.h"
+#include "solver/preconditioner/2d/identity_preconditioner.h"
+#include "solver/preconditioner/2d/gmg_preconditioner.h"
+#include "solver/preconditioner/2d/amg_preconditioner.h"
+#include "solver/preconditioner/2d/uaamg_preconditioner.h"
 #include "util/registry.h"
 
 namespace {

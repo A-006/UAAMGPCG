@@ -1,4 +1,4 @@
-#include "solver/preconditioner/uaamg_preconditioner_3d.h"
+#include "solver/preconditioner/3d/uaamg_preconditioner_3d.h"
 #include <algorithm>
 #include <cmath>
 

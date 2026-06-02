@@ -4,7 +4,7 @@
  * @author liutao
  * @date 2026-05-22
  */
-#include "solver/preconditioner/gmg_preconditioner.h"
+#include "solver/preconditioner/2d/gmg_preconditioner.h"
 #include <algorithm>
 #include <cmath>
 

@@ -1,4 +1,4 @@
-#include "simulator/scenarios/delta_wing.h"
+#include "simulator/scenarios/3d/delta_wing.h"
 #include <cmath>
 
 namespace scenarios {

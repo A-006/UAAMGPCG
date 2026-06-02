@@ -1,5 +1,5 @@
 #include "solver/pcg_3d.h"
-#include "solver/preconditioner/identity_preconditioner_3d.h"
+#include "solver/preconditioner/3d/identity_preconditioner_3d.h"
 #include <cstdio>
 #include <cmath>
 #include <vector>

@@ -5,7 +5,7 @@
  * @date 2026-05-22
  */
 #pragma once
-#include "solver/preconditioner/preconditioner.h"
+#include "solver/preconditioner/2d/preconditioner.h"
 #include <vector>
 
 /**

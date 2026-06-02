@@ -5,9 +5,9 @@
 #include "solver/jacobi_3d.h"
 #include "solver/rbgs_3d.h"
 #include "solver/pcg_3d.h"
-#include "solver/preconditioner/identity_preconditioner_3d.h"
-#include "solver/preconditioner/gmg_preconditioner_3d.h"
-#include "solver/preconditioner/uaamg_preconditioner_3d.h"
+#include "solver/preconditioner/3d/identity_preconditioner_3d.h"
+#include "solver/preconditioner/3d/gmg_preconditioner_3d.h"
+#include "solver/preconditioner/3d/uaamg_preconditioner_3d.h"
 #include "../test_utils.h"
 #include <iostream>
 #include <chrono>

@@ -1,6 +1,6 @@
-#include "simulator/scenarios/karman_scenario.h"
+#include "simulator/scenarios/2d/karman_scenario.h"
 #include "numerics/bc/patches.h"
-#include "simulator/scenarios/karman.h"
+#include "simulator/scenarios/2d/karman.h"
 #include <algorithm>
 
 namespace scenarios {

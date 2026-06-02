@@ -14,7 +14,7 @@
  * Each level stores stencil channels (diag, cx, cy). cx[c] is the coupling
  * between c and its +x neighbour (A[c,c+ex] = -cx[c]); the −x coupling is cx[c-ex].
  */
-#include "solver/preconditioner/uaamg_preconditioner.h"
+#include "solver/preconditioner/2d/uaamg_preconditioner.h"
 #include <algorithm>
 #include <cmath>
 

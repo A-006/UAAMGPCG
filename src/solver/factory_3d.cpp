@@ -8,7 +8,7 @@
 #include "solver/jacobi_3d.h"
 #include "solver/rbgs_3d.h"
 #include "solver/pcg_3d.h"
-#include "solver/preconditioner/identity_preconditioner_3d.h"
+#include "solver/preconditioner/3d/identity_preconditioner_3d.h"
 #include "util/registry.h"
 // 3D multigrid preconditioners (gmg/amg/uaamg) are not wired in yet; the pcg*
 // keys fall back to Jacobi3D below until they exist.

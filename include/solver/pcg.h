@@ -6,7 +6,7 @@
  */
 #pragma once
 #include "solver/solver.h"
-#include "solver/preconditioner/preconditioner.h"
+#include "solver/preconditioner/2d/preconditioner.h"
 #include <memory>
 
 /**

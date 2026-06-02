@@ -4,7 +4,7 @@
  * @author liutao
  * @date 2026-05-24
  */
-#include "solver/preconditioner/amg_preconditioner_3d.h"
+#include "solver/preconditioner/3d/amg_preconditioner_3d.h"
 #include <algorithm>
 #include <cmath>
 

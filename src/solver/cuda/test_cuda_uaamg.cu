@@ -9,7 +9,7 @@
  */
 #include "solver/cuda/cuda_pcg.h"
 #include "solver/pcg.h"
-#include "solver/preconditioner/uaamg_preconditioner.h"
+#include "solver/preconditioner/2d/uaamg_preconditioner.h"
 #include "core/grid.h"
 #include <cstdio>
 #include <cmath>

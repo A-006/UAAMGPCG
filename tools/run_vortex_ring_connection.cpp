@@ -12,7 +12,7 @@
 #include "simulator/simulator_3d.h"
 #include "solver/factory_3d.h"
 #include "io/vtk_writer_3d.h"
-#include "simulator/scenarios/vortex_ring.h"
+#include "simulator/scenarios/3d/vortex_ring.h"
 #include <iostream>
 #include <iomanip>
 #include <chrono>

@@ -1,4 +1,4 @@
-#include "simulator/scenarios/smoke_scenario.h"
+#include "simulator/scenarios/2d/smoke_scenario.h"
 #include "numerics/bc/patches.h"
 
 namespace scenarios {

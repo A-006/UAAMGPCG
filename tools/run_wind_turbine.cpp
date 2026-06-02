@@ -11,8 +11,8 @@
 #include "simulator/simulator_3d.h"
 #include "solver/factory_3d.h"
 #include "io/vtk_writer_3d.h"
-#include "simulator/scenarios/wind_turbine.h"
-#include "simulator/scenarios/delta_wing.h" // set_uniform_inflow
+#include "simulator/scenarios/3d/wind_turbine.h"
+#include "simulator/scenarios/3d/delta_wing.h" // set_uniform_inflow
 #include <iostream>
 #include <iomanip>
 #include <chrono>

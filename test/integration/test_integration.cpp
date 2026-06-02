@@ -5,8 +5,8 @@
 #include "solver/jacobi.h"
 #include "solver/rbgs.h"
 #include "solver/pcg.h"
-#include "solver/preconditioner/identity_preconditioner.h"
-#include "solver/preconditioner/gmg_preconditioner.h"
+#include "solver/preconditioner/2d/identity_preconditioner.h"
+#include "solver/preconditioner/2d/gmg_preconditioner.h"
 #include "../test_utils.h"
 #include "../test_config.h"
 #include <cmath>
