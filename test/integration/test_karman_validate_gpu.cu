@@ -12,9 +12,9 @@
 #include "simulator/lfm_simulator.h"
 #include "solver/factory.h"
 #include "solver/cuda_pcg_solver.h"
-#include "force/force.h"
+#include "io/force.h"
 #include "io/vtk_writer.h"
-#include "scenarios/karman.h"
+#include "simulator/scenarios/karman.h"
 #include "../test_utils.h"
 #include <iostream>
 #include <chrono>

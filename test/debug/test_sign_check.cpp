@@ -2,7 +2,7 @@
 #include "config/config.h"
 #include "core/grid.h"
 #include "solver/factory.h"
-#include "pressure/pressure.h"
+#include "numerics/pressure/pressure.h"
 #include <iostream>
 #include <cmath>
 #include <iomanip>

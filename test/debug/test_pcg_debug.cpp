@@ -2,7 +2,7 @@
 #include "core/grid.h"
 #include "simulator/chorin_simulator.h"
 #include "solver/factory.h"
-#include "pressure/pressure.h"
+#include "numerics/pressure/pressure.h"
 #include <iostream>
 #include <cmath>
 #include <iomanip>

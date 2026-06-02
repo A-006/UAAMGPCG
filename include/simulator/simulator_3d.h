@@ -2,7 +2,7 @@
 #include "config/config.h"
 #include "core/grid_3d.h"
 #include "solver/solver_3d.h"
-#include "bc/patches_3d.h"
+#include "numerics/bc/patches_3d.h"
 #include <memory>
 #include <string>
 #include <vector>

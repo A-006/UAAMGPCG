@@ -12,8 +12,8 @@
 #include "simulator/simulator_3d.h"
 #include "solver/factory_3d.h"
 #include "io/vtk_writer_3d.h"
-#include "scalar/scalar_field_3d.h"
-#include "scenarios/fire_ball.h"
+#include "core/scalar_field_3d.h"
+#include "simulator/scenarios/fire_ball.h"
 #include <iostream>
 #include <iomanip>
 #include <chrono>

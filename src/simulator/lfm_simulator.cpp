@@ -1,6 +1,6 @@
 #include "simulator/lfm_simulator.h"
-#include "pressure/pressure.h"
-#include "scenarios/scenario_registry.h"
+#include "numerics/pressure/pressure.h"
+#include "simulator/scenarios/scenario_registry.h"
 #include "io/vtk_writer.h"
 #include <cmath>
 #include <iostream>

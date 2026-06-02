@@ -2,29 +2,29 @@
 set(LFM_SOURCES
     core/grid.cpp
     core/grid_3d.cpp
-    advection/advection_3d.cpp
-    bc/patches_3d.cpp
-    pressure/pressure_3d.cpp
+    numerics/advection/advection_3d.cpp
+    numerics/bc/patches_3d.cpp
+    numerics/pressure/pressure_3d.cpp
     simulator/simulator_3d.cpp
     io/vtk_writer_3d.cpp
-    scalar/scalar_field_3d.cpp
-    scenarios/karman.cpp
-    scenarios/scenario_registry.cpp
-    scenarios/karman_scenario.cpp
-    scenarios/smoke_scenario.cpp
-    scenarios/scenario_3d_registry.cpp
-    scenarios/vortex_ring.cpp
-    scenarios/trefoil_knot.cpp
-    scenarios/delta_wing.cpp
-    scenarios/fire_ball.cpp
-    scenarios/wind_turbine.cpp
+    core/scalar_field_3d.cpp
+    simulator/scenarios/karman.cpp
+    simulator/scenarios/scenario_registry.cpp
+    simulator/scenarios/karman_scenario.cpp
+    simulator/scenarios/smoke_scenario.cpp
+    simulator/scenarios/scenario_3d_registry.cpp
+    simulator/scenarios/vortex_ring.cpp
+    simulator/scenarios/trefoil_knot.cpp
+    simulator/scenarios/delta_wing.cpp
+    simulator/scenarios/fire_ball.cpp
+    simulator/scenarios/wind_turbine.cpp
     config/config.cpp
     config/cli.cpp
-    advection/advection.cpp
-    bc/patches.cpp
-    force/force.cpp
+    numerics/advection/advection.cpp
+    numerics/bc/patches.cpp
+    io/force.cpp
     io/vtk_writer.cpp
-    pressure/pressure.cpp
+    numerics/pressure/pressure.cpp
     simulator/chorin_simulator.cpp
     simulator/runner.cpp
     simulator/factory.cpp

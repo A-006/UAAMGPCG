@@ -12,7 +12,7 @@
 #include "simulator/factory.h"
 #include "solver/cuda_pcg_solver.h"
 #include "io/vtk_writer.h"
-#include "force/force.h"
+#include "io/force.h"
 #include <iostream>
 #include <iomanip>
 #include <chrono>

@@ -4,7 +4,7 @@
  * Usage: run_karman_chorin [t_end] [frame_skip] [NX]
  */
 #include "config/config.h"
-#include "force/force.h"
+#include "io/force.h"
 #include "simulator/factory.h"
 #include "simulator/runner.h"
 #include <cmath>

@@ -9,7 +9,7 @@
 #include "core/grid.h"
 #include "simulator/factory.h"
 #include "io/vtk_writer.h"
-#include "force/force.h"
+#include "io/force.h"
 #include <iostream>
 #include <iomanip>
 #include <chrono>

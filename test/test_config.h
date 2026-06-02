@@ -1,7 +1,7 @@
 #pragma once
 #include "config/config.h"
-#include "scenarios/karman_scenario.h"
-#include "scenarios/smoke_scenario.h"
+#include "simulator/scenarios/karman_scenario.h"
+#include "simulator/scenarios/smoke_scenario.h"
 
 // ──────────────────────────────────────────────────────────────────
 // Shared Config builders for tests. They reuse the SAME scenario presets

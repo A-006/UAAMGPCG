@@ -8,7 +8,7 @@
 #include "core/grid.h"
 #include "simulator/chorin_simulator.h"
 #include "solver/factory.h"
-#include "force/force.h"
+#include "io/force.h"
 #include <iostream>
 #include <fstream>
 #include <chrono>

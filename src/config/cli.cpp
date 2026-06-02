@@ -1,5 +1,5 @@
 #include "config/cli.h"
-#include "scenarios/scenario_registry.h"
+#include "simulator/scenarios/scenario_registry.h"
 #include <algorithm>
 #include <cctype>
 #include <fstream>

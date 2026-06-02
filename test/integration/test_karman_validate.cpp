@@ -13,7 +13,7 @@
 #include "simulator/chorin_simulator.h"
 #include "simulator/lfm_simulator.h"
 #include "solver/factory.h"
-#include "force/force.h"
+#include "io/force.h"
 #include "../test_utils.h"
 #include "../test_config.h"
 #include <iostream>
