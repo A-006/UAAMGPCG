@@ -10,11 +10,12 @@
 #include "config/config.h"
 #include "core/grid.h"
 #include "simulator/simulator_base.h"
-#include "simulator/simulator.h"
-#include "lfm/lfm_simulator.h"
+#include "simulator/chorin_simulator.h"
+#include "simulator/lfm_simulator.h"
 #include "solver/factory.h"
 #include "force/force.h"
 #include "../test_utils.h"
+#include "../test_config.h"
 #include <iostream>
 #include <chrono>
 #include <iomanip>
@@ -30,18 +31,7 @@ int main(int argc, char** argv) {
     if (argc > 2)
         TEND = std::atof(argv[2]);
 
-    Config cfg;
-    cfg.scenario        = "karman";
-    cfg.NX              = NX;
-    cfg.Lx              = 4.0;
-    cfg.Ly              = 1.0;
-    cfg.U_inf           = 1.0;
-    cfg.Re              = 200;
-    cfg.cyl_cx          = 1.0;
-    cfg.cyl_cy          = 0.5;
-    cfg.cyl_R           = 0.1;
-    cfg.t_end           = TEND;
-    cfg.dt              = 0.0; // auto
+    Config cfg          = make_karman_config(NX, TEND);
     cfg.solve_iters     = (cfg.time_integrator == "lfm") ? 200 : 100;
     cfg.solve_tol       = 1e-8;
     cfg.frame_skip      = (cfg.time_integrator == "lfm") ? 1 : 1000;
@@ -50,9 +40,6 @@ int main(int argc, char** argv) {
     cfg.time_integrator = "chorin"; // "chorin" or "lfm"
     if (argc > 3)
         cfg.time_integrator = argv[3];
-
-    cfg.NY = std::max(16, cfg.NX / 4);
-    cfg.dt = 0.5 * (cfg.Lx / cfg.NX) / cfg.U_inf;
 
     // Compute steps: LFM advances lfm_cycle_steps*dt per step()
     double dt_per_step = (cfg.time_integrator == "lfm") ? cfg.dt * cfg.lfm_cycle_steps : cfg.dt;

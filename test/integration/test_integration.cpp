@@ -1,13 +1,14 @@
 #include "config/config.h"
 #include "core/grid.h"
 #include "advection/advection.h"
-#include "simulator/simulator.h"
+#include "simulator/chorin_simulator.h"
 #include "solver/jacobi.h"
 #include "solver/rbgs.h"
 #include "solver/pcg.h"
 #include "solver/preconditioner/identity_preconditioner.h"
 #include "solver/preconditioner/gmg_preconditioner.h"
 #include "../test_utils.h"
+#include "../test_config.h"
 #include <cmath>
 #include <vector>
 #include <memory>
@@ -29,16 +30,9 @@ int main() {
 
     // Test 1: Uniform inflow with each solver
     for (auto name : {"jacobi", "rbgs", "cg", "pcg"}) {
-        Config cfg;
-        cfg.scenario    = "karman";
-        cfg.NX          = 32;
-        cfg.NY          = 16;
-        cfg.Lx          = 4.0;
-        cfg.Ly          = 1.0;
-        cfg.cyl_R       = 0;
-        cfg.dt          = 0.5 * (cfg.Lx / cfg.NX) / cfg.U_inf;
+        Config cfg      = make_karman_config(32);
+        cfg.cyl_R       = 0; // no cylinder: just uniform inflow
         cfg.solve_iters = (name[0] == 'j' || name[0] == 'r') ? 500 : 30;
-        cfg.solve_tol   = 1e-6;
 
         ChorinSimulator sim(cfg, make_solver(name));
         bool ok = true;
@@ -55,15 +49,9 @@ int main() {
 
     // Test 2: Cylinder with CG/PCG
     for (auto name : {"cg", "pcg"}) {
-        Config cfg;
-        cfg.scenario    = "karman";
-        cfg.NX          = 64;
-        cfg.NY          = 32;
-        cfg.Lx          = 4.0;
-        cfg.Ly          = 1.0;
-        cfg.dt          = 0.5 * (cfg.Lx / cfg.NX) / cfg.U_inf;
+        Config cfg      = make_karman_config(64);
+        cfg.NY          = 32; // taller grid than the default NX/4 aspect
         cfg.solve_iters = 30;
-        cfg.solve_tol   = 1e-6;
 
         ChorinSimulator sim(cfg, make_solver(name));
         bool ok = true;
@@ -85,15 +73,8 @@ int main() {
 
     // Test 3: Smoke buoyancy with each solver
     for (auto name : {"jacobi", "rbgs", "cg", "pcg"}) {
-        Config cfg;
-        cfg.scenario    = "smoke";
-        cfg.NX          = 32;
-        cfg.NY          = 32;
-        cfg.Lx          = 1.0;
-        cfg.Ly          = 1.0;
-        cfg.dt          = 0.005;
+        Config cfg      = make_smoke_config(32);
         cfg.solve_iters = (name[0] == 'j' || name[0] == 'r') ? 1000 : 20;
-        cfg.solve_tol   = 1e-6;
 
         ChorinSimulator sim(cfg, make_solver(name));
         bool ok = true;

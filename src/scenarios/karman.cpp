@@ -1,5 +1,4 @@
 #include "scenarios/karman.h"
-#include "bc/patches.h"
 #include <cmath>
 
 namespace scenarios {
@@ -36,12 +35,6 @@ void seed_wake_perturbation(Grid& g, const Karman& k, double amplitude) {
                 g.v_at(i, j - 1) += eps * std::sin(M_PI * (y - k.cyl_cy) / k.cyl_R);
         }
     }
-}
-
-bc::BoundaryManager karman_bcs(double U_inf) {
-    // Reuses the BC factory defined in bc/patches.h — single place where
-    // the inflow / outflow / free-slip / solid patches are wired together.
-    return bc::karman(U_inf);
 }
 
 } // namespace scenarios

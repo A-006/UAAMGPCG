@@ -26,6 +26,8 @@ Makefile
 # Simulation output dirs (anywhere they may appear)
 output_karman/
 output_karman_*/
+output_smoke/
+output_smoke_*/
 diagnostic_output/
 diagnostic_output_*/
 

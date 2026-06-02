@@ -4,7 +4,7 @@
  */
 #include "config/config.h"
 #include "core/grid.h" // 2D grid for simulator
-#include "simulator/simulator.h"
+#include "simulator/chorin_simulator.h"
 #include "solver/factory.h"
 #include "../test_utils.h"
 #include <iostream>

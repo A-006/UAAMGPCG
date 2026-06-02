@@ -11,9 +11,8 @@
  */
 #include "config/config.h"
 #include "core/grid.h"
-#include "lfm/lfm_simulator.h"
+#include "simulator/lfm_simulator.h"
 #include "solver/factory.h"
-#include "boundary/boundary.h"
 #include "force/force.h"
 #include "../test_utils.h"
 #include <iostream>

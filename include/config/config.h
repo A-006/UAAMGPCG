@@ -1,4 +1,6 @@
 #pragma once
+#include <array>
+#include <map>
 #include <string>
 
 // ── Unified 2D / 3D configuration ──
@@ -33,4 +35,17 @@ public:
     // ── I/O ──
     int frame_skip      = 10;
     std::string out_dir = "output";
+
+    // ── Scenario-specific extras ──
+    // Keys from an INPUT file that don't map to a core field above land here
+    // (e.g. 3D geometry knobs: ring_radius, blade_omega, buoyancy_beta, …).
+    // Read them through the typed accessors below; each falls back to `def`
+    // when the key is absent or unparseable.
+    std::map<std::string, std::string> extra;
+
+    double dget(const std::string& key, double def) const;
+    int iget(const std::string& key, int def) const;
+    std::string sget(const std::string& key, const std::string& def) const;
+    // Parse a comma-separated triple ("0.5,0.5,0.5") into {x,y,z}.
+    std::array<double, 3> v3get(const std::string& key, std::array<double, 3> def) const;
 };

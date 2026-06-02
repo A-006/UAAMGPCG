@@ -21,7 +21,13 @@
 // ──────────────────────────────────────────────────────────────────
 namespace SimulatorFactory {
 
-// Returns an appropriate Simulator (2D or 3D) based on cfg.
+// Returns an appropriate Simulator (2D or 3D) based on cfg, building the
+// matching pressure solver internally. This is the one-call entry point for
+// the common case.
+std::unique_ptr<Simulator> create(const Config& cfg);
+
+// Same, but with a caller-supplied solver (e.g. a GPU solver injected by a
+// benchmark tool). The overload above delegates here.
 std::unique_ptr<Simulator> create(const Config& cfg, std::unique_ptr<Solver> pressure_solver);
 
 // Returns a pressure solver matching cfg.dim and cfg.solver.

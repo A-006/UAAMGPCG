@@ -1,30 +1,17 @@
 #include "config/config.h"
 #include "core/grid.h"
-#include "simulator/simulator.h"
+#include "simulator/chorin_simulator.h"
 #include "solver/factory.h"
+#include "../test_config.h"
 #include <iostream>
 #include <iomanip>
 #include <cmath>
 
 int main() {
-    Config cfg;
-    cfg.scenario    = "karman";
-    cfg.NX          = 128;
-    cfg.Lx          = 4.0;
-    cfg.Ly          = 1.0;
-    cfg.U_inf       = 1.0;
-    cfg.Re          = 200;
-    cfg.cyl_cx      = 1.0;
-    cfg.cyl_cy      = 0.5;
-    cfg.cyl_R       = 0.1;
-    cfg.t_end       = 0.1;
-    cfg.dt          = 0.0;
+    Config cfg      = make_karman_config(128, 0.1);
     cfg.solve_iters = 50;
-    cfg.solve_tol   = 1e-6;
     cfg.frame_skip  = 100;
     cfg.out_dir     = "/tmp/kdiag";
-    cfg.NY          = std::max(16, cfg.NX / 4);
-    cfg.dt          = 0.5 * (cfg.Lx / cfg.NX) / cfg.U_inf;
     cfg.solver      = "pcg_uaamg";
 
     std::cout << "dt=" << cfg.dt << " grid=" << cfg.NX << "x" << cfg.NY << "\n";

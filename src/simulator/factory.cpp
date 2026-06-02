@@ -1,6 +1,6 @@
 #include "simulator/factory.h"
-#include "simulator/simulator.h"
-#include "lfm/lfm_simulator.h"
+#include "simulator/chorin_simulator.h"
+#include "simulator/lfm_simulator.h"
 #include "solver/factory.h"
 #include <stdexcept>
 
@@ -13,6 +13,10 @@ std::unique_ptr<Solver> make_pressure_solver(const Config& cfg) {
         throw std::runtime_error("make_pressure_solver: dim=3 path returns Solver3D; "
                                  "use Factory3D directly until the 3D Simulator is implemented.");
     throw std::runtime_error("make_pressure_solver: cfg.dim must be 2 or 3.");
+}
+
+std::unique_ptr<Simulator> create(const Config& cfg) {
+    return create(cfg, make_pressure_solver(cfg));
 }
 
 std::unique_ptr<Simulator> create(const Config& cfg, std::unique_ptr<Solver> solver) {

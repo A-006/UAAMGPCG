@@ -1,6 +1,6 @@
 #pragma once
+#include "bc/patches.h"
 #include "core/grid.h"
-#include "boundary/boundary.h"
 #include <cmath>
 
 /// Set uniform velocity: u = U, v = V on all fluid faces.
@@ -14,7 +14,7 @@ inline void set_uniform(Grid& g, double U, double V) {
         for (int j = 0; j <= g.ny; j++)
             if (!g.is_solid(i, j) && !g.is_solid(i, j + 1))
                 g.v_at(i, j) = V;
-    BoundaryConditions::applySolid(g);
+    bc::NoSlipImmersedSolid().apply(g);
 }
 
 /// Set linear shear: u = alpha * y, v = 0.
@@ -29,7 +29,7 @@ inline void set_shear(Grid& g, double alpha) {
         for (int j = 0; j <= g.ny; j++)
             if (!g.is_solid(i, j) && !g.is_solid(i, j + 1))
                 g.v_at(i, j) = 0.0;
-    BoundaryConditions::applySolid(g);
+    bc::NoSlipImmersedSolid().apply(g);
 }
 
 /// Set a Lamb-Oseen vortex centered at (cx, cy) with given circulation strength Gamma
@@ -67,7 +67,7 @@ inline void set_vortex(Grid& g, double cx, double cy, double Gamma, double r0, d
             double u_theta = Gamma / (2.0 * M_PI * r) * (1.0 - std::exp(-r * r / (r0 * r0)));
             g.v_at(i, j)   = u_theta * rx / r;
         }
-    BoundaryConditions::applySolid(g);
+    bc::NoSlipImmersedSolid().apply(g);
 }
 
 /// Set Taylor-Green vortex array: u =  sin(kx*x)*cos(ky*y), v = -cos(kx*x)*sin(ky*y)
@@ -90,7 +90,7 @@ inline void set_taylor_green(Grid& g, double kx, double ky) {
             double y     = j * dy;
             g.v_at(i, j) = -std::cos(kx * x) * std::sin(ky * y);
         }
-    BoundaryConditions::applySolid(g);
+    bc::NoSlipImmersedSolid().apply(g);
 }
 
 /// Compute total circulation: sum of vorticity * cell area over fluid cells
@@ -119,6 +119,16 @@ inline double max_vorticity(const Grid& g) {
             max_w = std::max(max_w, std::abs(w));
         }
     return max_w;
+}
+
+/// Peak |divergence| over fluid cells — the standard incompressibility check.
+inline double max_divergence(const Grid& g) {
+    double max_d = 0;
+    for (int i = 1; i <= g.nx; i++)
+        for (int j = 1; j <= g.ny; j++)
+            if (!g.is_solid(i, j))
+                max_d = std::max(max_d, std::abs(g.divergence(i, j)));
+    return max_d;
 }
 
 /// Find vortex center: position of max |vorticity|

@@ -1,4 +1,4 @@
-#include "lfm/flow_map_2d.h"
+#include "simulator/flow_map_2d.h"
 
 FlowMap2D::FlowMap2D(int nx_, int ny_, double dx_, double dy_)
     : nx(nx_), ny(ny_), dx(dx_), dy(dy_) {

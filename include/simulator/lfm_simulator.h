@@ -1,7 +1,8 @@
 #pragma once
 #include "config/config.h"
 #include "core/grid.h"
-#include "lfm/flow_map_2d.h"
+#include "simulator/flow_map_2d.h"
+#include "scenarios/scenario.h"
 #include "simulator/simulator_base.h"
 #include "solver/solver.h"
 #include <memory>
@@ -30,6 +31,8 @@ private:
     double t_ = 0;
     int step_ = 0;
     std::unique_ptr<Solver> solver_;
+    std::unique_ptr<scenarios::Scenario> scenario_;
+    bc::BoundaryManager bcs_;
     FlowMap2D flow_map_;
 
     std::vector<double> m_x_, m_y_;

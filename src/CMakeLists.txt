@@ -9,6 +9,10 @@ set(LFM_SOURCES
     io/vtk_writer_3d.cpp
     scalar/scalar_field_3d.cpp
     scenarios/karman.cpp
+    scenarios/scenario_registry.cpp
+    scenarios/karman_scenario.cpp
+    scenarios/smoke_scenario.cpp
+    scenarios/scenario_3d_registry.cpp
     scenarios/vortex_ring.cpp
     scenarios/trefoil_knot.cpp
     scenarios/delta_wing.cpp
@@ -17,12 +21,12 @@ set(LFM_SOURCES
     config/config.cpp
     config/cli.cpp
     advection/advection.cpp
-    boundary/boundary.cpp
     bc/patches.cpp
     force/force.cpp
     io/vtk_writer.cpp
     pressure/pressure.cpp
-    simulator/simulator.cpp
+    simulator/chorin_simulator.cpp
+    simulator/runner.cpp
     simulator/factory.cpp
     solver/jacobi.cpp
     solver/rbgs.cpp
@@ -38,8 +42,8 @@ set(LFM_SOURCES
     solver/preconditioner/amg_preconditioner_3d.cpp
     solver/preconditioner/uaamg_preconditioner_3d.cpp
     solver/factory.cpp
-    lfm/flow_map_2d.cpp
-    lfm/lfm_simulator.cpp
+    simulator/flow_map_2d.cpp
+    simulator/lfm_simulator.cpp
 )
 
 add_library(lfm_lib ${LFM_SOURCES})

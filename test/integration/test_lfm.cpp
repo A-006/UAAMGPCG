@@ -15,12 +15,11 @@
  */
 #include "config/config.h"
 #include "core/grid.h"
-#include "lfm/flow_map_2d.h"
-#include "lfm/lfm_simulator.h"
-#include "simulator/simulator.h"
+#include "simulator/flow_map_2d.h"
+#include "simulator/lfm_simulator.h"
+#include "simulator/chorin_simulator.h"
 #include "simulator/simulator_base.h"
 #include "solver/factory.h"
-#include "boundary/boundary.h"
 #include "pressure/pressure.h"
 #include "force/force.h"
 #include "../test_utils.h"
@@ -878,7 +877,9 @@ static void t17_lfm_vortex_advection() {
     cfg.cyl_R           = 0;
     cfg.time_integrator = "lfm";
     cfg.lfm_cycle_steps = 4;
-    cfg.scenario        = "smoke";
+    // Uniform-background advection needs inflow/outflow BCs, so use karman
+    // (with cyl_R=0, i.e. no cylinder) rather than smoke's closed no-slip box.
+    cfg.scenario        = "karman";
     auto solver         = Factory::create("pcg_uaamg");
     LFMSimulator sim(cfg, std::move(solver));
     Grid& g = const_cast<Grid&>(sim.grid());

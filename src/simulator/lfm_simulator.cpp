@@ -1,7 +1,6 @@
-#include "lfm/lfm_simulator.h"
+#include "simulator/lfm_simulator.h"
 #include "pressure/pressure.h"
-#include "boundary/boundary.h"
-#include "scenarios/karman.h"
+#include "scenarios/scenario_registry.h"
 #include "io/vtk_writer.h"
 #include <cmath>
 #include <iostream>
@@ -20,17 +19,10 @@ LFMSimulator::LFMSimulator(const Config& cfg, std::unique_ptr<Solver> solver)
     F_mid_01_.resize(N, 0.0);
     F_mid_11_.resize(N, 0.0);
 
-    if (cfg_.scenario == "karman") {
-        scenarios::Karman k{cfg_.cyl_cx, cfg_.cyl_cy, cfg_.cyl_R, cfg_.U_inf};
-        if (k.cyl_R > 0)
-            scenarios::setup_karman_cylinder(grid_, k);
-        scenarios::set_uniform_inflow(grid_, k.U_inf);
-        // Break the y-symmetry — without this seed a perfectly symmetric setup
-        // produces a standing symmetric vortex pair, never the alternating street.
-        scenarios::seed_wake_perturbation(grid_, k);
-    }
-    BoundaryConditions::applyKarman(grid_, cfg_.U_inf);
-    BoundaryConditions::applySolid(grid_);
+    scenario_ = scenarios::ScenarioRegistry::instance().create(cfg_.scenario);
+    scenario_->init_grid(grid_, cfg_);
+    bcs_ = scenario_->boundary_manager(cfg_);
+    bcs_.apply(grid_);
 }
 
 void LFMSimulator::step() {
@@ -66,11 +58,9 @@ void LFMSimulator::run_cycle(int n_steps) {
     Grid u_half(nx, ny, grid_.Lx(), grid_.Ly());
     u_half = grid_;
     rk2_advect(u_half, grid_, grid_.u, grid_.v, dt / 2.0);
-    BoundaryConditions::applyKarman(u_half, cfg_.U_inf);
-    BoundaryConditions::applySolid(u_half);
+    bcs_.apply(u_half);
     project(u_half);
-    BoundaryConditions::applyKarman(u_half, cfg_.U_inf);
-    BoundaryConditions::applySolid(u_half);
+    bcs_.apply(u_half);
     vel_buffer_[0] = {u_half.u, u_half.v};
 
     // Step 4: Forward march, save midpoint for Step 5 path integral
@@ -93,11 +83,9 @@ void LFMSimulator::run_cycle(int n_steps) {
         Grid u_3half(nx, ny, grid_.Lx(), grid_.Ly());
         u_3half = u_half;
         rk2_advect(u_3half, u_half, vel_buffer_[0].u, vel_buffer_[0].v, dt);
-        BoundaryConditions::applyKarman(u_3half, cfg_.U_inf);
-        BoundaryConditions::applySolid(u_3half);
+        bcs_.apply(u_3half);
         project(u_3half);
-        BoundaryConditions::applyKarman(u_3half, cfg_.U_inf);
-        BoundaryConditions::applySolid(u_3half);
+        bcs_.apply(u_3half);
         vel_buffer_[1] = {u_3half.u, u_3half.v};
 
         save_flow_map_state();
@@ -131,11 +119,9 @@ void LFMSimulator::run_cycle(int n_steps) {
         u_next = u_im32;
         // Leapfrog: advect u_{i-3/2}^† with velocity field u_{i-1/2} for 2Δt
         rk2_advect(u_next, u_im32, vel_buffer_[i_step - 1].u, vel_buffer_[i_step - 1].v, 2.0 * dt);
-        BoundaryConditions::applyKarman(u_next, cfg_.U_inf);
-        BoundaryConditions::applySolid(u_next);
+        bcs_.apply(u_next);
         project(u_next);
-        BoundaryConditions::applyKarman(u_next, cfg_.U_inf);
-        BoundaryConditions::applySolid(u_next);
+        bcs_.apply(u_next);
         vel_buffer_[i_step] = {u_next.u, u_next.v};
 
         save_flow_map_state();
@@ -208,8 +194,7 @@ void LFMSimulator::run_cycle(int n_steps) {
     // integrate the correct surface pressure.
     PressureProjection::recoverStaticPressure(grid_, *solver_, cfg_.solve_iters * 2,
                                               cfg_.solve_tol);
-    BoundaryConditions::applyKarman(grid_, cfg_.U_inf);
-    BoundaryConditions::applySolid(grid_);
+    bcs_.apply(grid_);
 
     t_ += n_steps * dt;
     step_++;

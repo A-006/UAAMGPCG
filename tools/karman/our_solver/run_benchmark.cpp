@@ -6,7 +6,7 @@
  */
 #include "config/config.h"
 #include "core/grid.h"
-#include "simulator/simulator.h"
+#include "simulator/chorin_simulator.h"
 #include "solver/factory.h"
 #include "force/force.h"
 #include <iostream>
