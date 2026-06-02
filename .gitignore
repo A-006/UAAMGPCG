@@ -34,3 +34,5 @@ tools/karman_vortex_street/inputs/
 tools/karman_vortex_street/output/
 tools/karman_vortex_street/figures/
 tools/karman/*
+/slides/*
+*.md

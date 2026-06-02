@@ -23,7 +23,8 @@ public:
      * @param max_iter Number of Jacobi sweeps.
      * @param tol      Ignored.
      */
-    void solve(Grid3D& g, const std::vector<double>& rhs,
-               int max_iter, double tol) override;
-    std::string name() const override { return "Jacobi3D"; }
+    void solve(Grid3D& g, const std::vector<double>& rhs, int max_iter, double tol) override;
+    std::string name() const override {
+        return "Jacobi3D";
+    }
 };

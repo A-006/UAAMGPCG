@@ -7,23 +7,27 @@ namespace {
 
 // Build an orthonormal pair (e1, e2) perpendicular to `axis`. Used to
 // parametrize the ring filament in the plane normal to `axis`.
-void make_basis(const std::array<double, 3>& axis,
-                std::array<double, 3>& e1,
+void make_basis(const std::array<double, 3>& axis, std::array<double, 3>& e1,
                 std::array<double, 3>& e2) {
     std::array<double, 3> n = axis;
-    double m = std::sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]);
-    if (m < 1e-12) m = 1.0;
-    n[0] /= m; n[1] /= m; n[2] /= m;
+    double m                = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+    if (m < 1e-12)
+        m = 1.0;
+    n[0] /= m;
+    n[1] /= m;
+    n[2] /= m;
 
     // Pick a vector not parallel to n
-    std::array<double, 3> tmp = (std::abs(n[0]) < 0.9) ? std::array<double,3>{1,0,0}
-                                                       : std::array<double,3>{0,1,0};
+    std::array<double, 3> tmp =
+        (std::abs(n[0]) < 0.9) ? std::array<double, 3>{1, 0, 0} : std::array<double, 3>{0, 1, 0};
     // e1 = (tmp × n) normalized
     e1[0] = tmp[1] * n[2] - tmp[2] * n[1];
     e1[1] = tmp[2] * n[0] - tmp[0] * n[2];
     e1[2] = tmp[0] * n[1] - tmp[1] * n[0];
-    m = std::sqrt(e1[0]*e1[0] + e1[1]*e1[1] + e1[2]*e1[2]);
-    e1[0] /= m; e1[1] /= m; e1[2] /= m;
+    m     = std::sqrt(e1[0] * e1[0] + e1[1] * e1[1] + e1[2] * e1[2]);
+    e1[0] /= m;
+    e1[1] /= m;
+    e1[2] /= m;
     // e2 = n × e1
     e2[0] = n[1] * e1[2] - n[2] * e1[1];
     e2[1] = n[2] * e1[0] - n[0] * e1[2];
@@ -35,12 +39,11 @@ void make_basis(const std::array<double, 3>& axis,
 // The a² regularization is a standard Rosenhead/Lamb-Oseen-style fix that
 // avoids the 1/r² singularity at the filament and gives a smooth Gaussian-
 // like core of radius ~core_radius. Sum is per filament segment.
-std::array<double, 3> biot_savart_at(const VortexRing& vr,
-                                      const std::array<double, 3>& e1,
-                                      const std::array<double, 3>& e2,
-                                      double px, double py, double pz) {
-    double a2 = vr.core * vr.core;
-    double dphi = 2.0 * M_PI / vr.n_segments;
+std::array<double, 3> biot_savart_at(const VortexRing& vr, const std::array<double, 3>& e1,
+                                     const std::array<double, 3>& e2, double px, double py,
+                                     double pz) {
+    double a2             = vr.core * vr.core;
+    double dphi           = 2.0 * M_PI / vr.n_segments;
     double Gamma_over_4pi = vr.circulation / (4.0 * M_PI);
     double ux = 0, uy = 0, uz = 0;
     for (int s = 0; s < vr.n_segments; s++) {
@@ -55,17 +58,17 @@ std::array<double, 3> biot_savart_at(const VortexRing& vr,
         double dly = vr.radius * dphi * (-sn * e1[1] + cs * e2[1]);
         double dlz = vr.radius * dphi * (-sn * e1[2] + cs * e2[2]);
         double rx = px - fx, ry = py - fy, rz = pz - fz;
-        double r2 = rx*rx + ry*ry + rz*rz + a2;
+        double r2     = rx * rx + ry * ry + rz * rz + a2;
         double inv_r3 = 1.0 / (r2 * std::sqrt(r2));
         // dl × r
         ux += (dly * rz - dlz * ry) * inv_r3;
         uy += (dlz * rx - dlx * rz) * inv_r3;
         uz += (dlx * ry - dly * rx) * inv_r3;
     }
-    return { Gamma_over_4pi * ux, Gamma_over_4pi * uy, Gamma_over_4pi * uz };
+    return {Gamma_over_4pi * ux, Gamma_over_4pi * uy, Gamma_over_4pi * uz};
 }
 
-}  // namespace
+} // namespace
 
 void add_vortex_ring(Grid3D& g, const VortexRing& vr) {
     std::array<double, 3> e1{}, e2{};
@@ -78,7 +81,7 @@ void add_vortex_ring(Grid3D& g, const VortexRing& vr) {
                 double px = i * g.dx;
                 double py = (j - 0.5) * g.dy;
                 double pz = (k - 0.5) * g.dz;
-                auto u = biot_savart_at(vr, e1, e2, px, py, pz);
+                auto u    = biot_savart_at(vr, e1, e2, px, py, pz);
                 g.u_at(i, j, k) += u[0];
             }
         }
@@ -90,7 +93,7 @@ void add_vortex_ring(Grid3D& g, const VortexRing& vr) {
                 double px = (i - 0.5) * g.dx;
                 double py = j * g.dy;
                 double pz = (k - 0.5) * g.dz;
-                auto u = biot_savart_at(vr, e1, e2, px, py, pz);
+                auto u    = biot_savart_at(vr, e1, e2, px, py, pz);
                 g.v_at(i, j, k) += u[1];
             }
         }
@@ -102,11 +105,11 @@ void add_vortex_ring(Grid3D& g, const VortexRing& vr) {
                 double px = (i - 0.5) * g.dx;
                 double py = (j - 0.5) * g.dy;
                 double pz = k * g.dz;
-                auto u = biot_savart_at(vr, e1, e2, px, py, pz);
+                auto u    = biot_savart_at(vr, e1, e2, px, py, pz);
                 g.w_at(i, j, k) += u[2];
             }
         }
     }
 }
 
-}  // namespace scenarios
+} // namespace scenarios

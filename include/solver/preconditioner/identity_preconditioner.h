@@ -15,7 +15,10 @@
 class IdentityPreconditioner : public Preconditioner {
 public:
     /** @brief Copies r to z unchanged. */
-    void apply(const Grid&, const std::vector<double>& r,
-               std::vector<double>& z) override { z = r; }
-    std::string name() const override { return "none"; }
+    void apply(const Grid&, const std::vector<double>& r, std::vector<double>& z) override {
+        z = r;
+    }
+    std::string name() const override {
+        return "none";
+    }
 };

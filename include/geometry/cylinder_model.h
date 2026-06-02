@@ -16,9 +16,7 @@ public:
 
     /// Modify Laplacian coefficients and mark solid cells.
     /// Smooth: cells with φ>0.999 marked as solid; transition zone gets variable coeffs.
-    virtual void applyToLaplacian(Grid& g,
-                                  std::vector<double>& diag,
-                                  std::vector<double>& off_x,
+    virtual void applyToLaplacian(Grid& g, std::vector<double>& diag, std::vector<double>& off_x,
                                   std::vector<double>& off_y) = 0;
 
     /// Enforce no-slip boundary: modify velocity field near cylinder.
@@ -35,11 +33,12 @@ class StairStepCylinder : public CylinderModel {
 public:
     StairStepCylinder(double cx, double cy, double R, double dx, double dy);
     double solidFraction(double x, double y) const override;
-    void applyToLaplacian(Grid& g, std::vector<double>& diag,
-                          std::vector<double>& off_x,
+    void applyToLaplacian(Grid& g, std::vector<double>& diag, std::vector<double>& off_x,
                           std::vector<double>& off_y) override;
     void applyToVelocity(Grid& g) const override;
-    std::string name() const override { return "StairStep"; }
+    std::string name() const override {
+        return "StairStep";
+    }
 
 private:
     double cx_, cy_, R_, dx_, dy_;
@@ -55,13 +54,14 @@ public:
     SmoothCylinder(double cx, double cy, double R, double dx, double dy,
                    double transition_width = 0.0);
     double solidFraction(double x, double y) const override;
-    void applyToLaplacian(Grid& g, std::vector<double>& diag,
-                          std::vector<double>& off_x,
+    void applyToLaplacian(Grid& g, std::vector<double>& diag, std::vector<double>& off_x,
                           std::vector<double>& off_y) override;
     void applyToVelocity(Grid& g) const override;
-    std::string name() const override { return "Smooth(IB)"; }
+    std::string name() const override {
+        return "Smooth(IB)";
+    }
 
 private:
-    double cx_, cy_, R_, dx_, dy_, tw_;  // tw = transition width
-    static double smoothstep(double t);   // Hermite interpolation
+    double cx_, cy_, R_, dx_, dy_, tw_; // tw = transition width
+    static double smoothstep(double t); // Hermite interpolation
 };

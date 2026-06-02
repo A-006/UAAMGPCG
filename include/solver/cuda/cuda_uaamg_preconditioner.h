@@ -10,7 +10,9 @@
 /// - Matrix-free Galerkin coarse operators
 class CudaUAAMGPreconditioner {
 public:
-    ~CudaUAAMGPreconditioner() { destroy(); }
+    ~CudaUAAMGPreconditioner() {
+        destroy();
+    }
 
     /// Build multi-level hierarchy on the GPU.
     void build(const CudaGrid& fine);

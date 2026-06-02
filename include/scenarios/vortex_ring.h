@@ -15,14 +15,14 @@
 namespace scenarios {
 
 struct VortexRing {
-    std::array<double, 3> center;  // ring center (cx, cy, cz)
-    std::array<double, 3> axis;    // unit normal of the ring plane
-    double radius;                 // ring radius
-    double core;                   // Gaussian core radius (regularization)
-    double circulation;            // Γ (sign sets rotation direction)
-    int    n_segments = 200;       // filament discretization
+    std::array<double, 3> center; // ring center (cx, cy, cz)
+    std::array<double, 3> axis;   // unit normal of the ring plane
+    double radius;                // ring radius
+    double core;                  // Gaussian core radius (regularization)
+    double circulation;           // Γ (sign sets rotation direction)
+    int n_segments = 200;         // filament discretization
 };
 
 void add_vortex_ring(Grid3D& g, const VortexRing& vr);
 
-}  // namespace scenarios
+} // namespace scenarios

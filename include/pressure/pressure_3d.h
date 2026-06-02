@@ -8,6 +8,5 @@
 //   3. u = ũ - Δt·∇p     (and same for v, w)
 class PressureProjection3D {
 public:
-    static void project(Grid3D& g, double dt, Solver3D& solver,
-                        int max_iter, double tol);
+    static void project(Grid3D& g, double dt, Solver3D& solver, int max_iter, double tol);
 };

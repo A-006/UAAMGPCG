@@ -15,6 +15,7 @@ set(LFM_SOURCES
     scenarios/fire_ball.cpp
     scenarios/wind_turbine.cpp
     config/config.cpp
+    config/cli.cpp
     advection/advection.cpp
     boundary/boundary.cpp
     bc/patches.cpp

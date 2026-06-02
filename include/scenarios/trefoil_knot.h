@@ -18,13 +18,13 @@
 namespace scenarios {
 
 struct TrefoilKnot {
-    std::array<double, 3> center{ {0.5, 0.5, 0.5} };
-    double scale = 0.08;             // bounding box ≈ 6*scale wide
-    double core  = 0.025;
+    std::array<double, 3> center{{0.5, 0.5, 0.5}};
+    double scale       = 0.08; // bounding box ≈ 6*scale wide
+    double core        = 0.025;
     double circulation = 0.4;
-    int    n_segments = 360;
+    int n_segments     = 360;
 };
 
 void add_trefoil_knot(Grid3D& g, const TrefoilKnot& tk);
 
-}  // namespace scenarios
+} // namespace scenarios

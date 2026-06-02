@@ -31,12 +31,11 @@ public:
      * @param max_iter Maximum PCG iterations.
      * @param tol      Convergence tolerance on residual L2-norm.
      */
-    void solve(Grid& g, const std::vector<double>& rhs,
-               int max_iter, double tol) override;
+    void solve(Grid& g, const std::vector<double>& rhs, int max_iter, double tol) override;
 
     /** @brief Returns "PCG(<preconditioner>)". */
     std::string name() const override;
 
 private:
-    std::unique_ptr<Preconditioner> precond_;  ///< Preconditioner instance.
+    std::unique_ptr<Preconditioner> precond_; ///< Preconditioner instance.
 };

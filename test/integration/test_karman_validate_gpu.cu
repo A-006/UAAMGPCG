@@ -25,45 +25,57 @@
 #include <memory>
 
 int main(int argc, char** argv) {
-    int NX = 128;
-    double TEND = 5.0;
+    int NX       = 128;
+    double TEND  = 5.0;
     bool use_gpu = true;
-    if (argc > 1) NX = std::atoi(argv[1]);
-    if (argc > 2) TEND = std::atof(argv[2]);
+    if (argc > 1)
+        NX = std::atoi(argv[1]);
+    if (argc > 2)
+        TEND = std::atof(argv[2]);
 
     Config cfg;
-    cfg.scenario = "karman";
-    cfg.NX       = NX;
-    cfg.Lx       = 8.0; cfg.Ly = 2.0; cfg.U_inf = 1.0;        // larger domain (blockage 10%)
-    cfg.Re = 200; cfg.cyl_cx = 2.0; cfg.cyl_cy = 1.0; cfg.cyl_R = 0.1;
-    cfg.t_end = TEND; cfg.dt = 0.0;
-    cfg.solve_iters = 100; cfg.solve_tol = 1e-8;
-    cfg.frame_skip = (cfg.time_integrator == "lfm") ? 1 : 10; cfg.out_dir = "/tmp/karman_lfm_vtk";
-    cfg.solver = "pcg_uaamg";
+    cfg.scenario        = "karman";
+    cfg.NX              = NX;
+    cfg.Lx              = 8.0;
+    cfg.Ly              = 2.0;
+    cfg.U_inf           = 1.0; // larger domain (blockage 10%)
+    cfg.Re              = 200;
+    cfg.cyl_cx          = 2.0;
+    cfg.cyl_cy          = 1.0;
+    cfg.cyl_R           = 0.1;
+    cfg.t_end           = TEND;
+    cfg.dt              = 0.0;
+    cfg.solve_iters     = 100;
+    cfg.solve_tol       = 1e-8;
+    cfg.frame_skip      = (cfg.time_integrator == "lfm") ? 1 : 10;
+    cfg.out_dir         = "/tmp/karman_lfm_vtk";
+    cfg.solver          = "pcg_uaamg";
     cfg.time_integrator = "chorin";
     cfg.lfm_cycle_steps = 10;
-    cfg.solve_iters = 200;
-    cfg.cylinder_type = "stair";
-    if (argc > 3) cfg.time_integrator = argv[3];
-    if (argc > 4) cfg.cylinder_type = argv[4];
-    if (argc > 5) use_gpu = (std::string(argv[5]) == "gpu");
+    cfg.solve_iters     = 200;
+    cfg.cylinder_type   = "stair";
+    if (argc > 3)
+        cfg.time_integrator = argv[3];
+    if (argc > 4)
+        cfg.cylinder_type = argv[4];
+    if (argc > 5)
+        use_gpu = (std::string(argv[5]) == "gpu");
 
     cfg.NY = std::max(16, cfg.NX / 4);
     cfg.dt = (cfg.time_integrator == "lfm" ? 0.25 : 0.5) * (cfg.Lx / cfg.NX) / cfg.U_inf;
     double dt_per_step = (cfg.time_integrator == "lfm") ? cfg.dt * cfg.lfm_cycle_steps : cfg.dt;
-    int nsteps = (int)(cfg.t_end / dt_per_step);
+    int nsteps         = (int)(cfg.t_end / dt_per_step);
 
     double D = 2.0 * cfg.cyl_R;
     double U = cfg.U_inf;
 
     test_header("Karman Vortex Street Validation (Re=200)");
-    std::cout << "Grid: " << cfg.NX << "x" << cfg.NY
-              << "  dt=" << cfg.dt << "  dt/step=" << dt_per_step
-              << "  steps=" << nsteps << "  t_end=" << cfg.t_end
+    std::cout << "Grid: " << cfg.NX << "x" << cfg.NY << "  dt=" << cfg.dt
+              << "  dt/step=" << dt_per_step << "  steps=" << nsteps << "  t_end=" << cfg.t_end
               << "  integrator=" << cfg.time_integrator
               << "  solver=" << (use_gpu ? "GPU(UAAMG)" : "CPU(UAAMG)") << "\n";
-    std::cout << "Cylinder: cx=" << cfg.cyl_cx << " cy=" << cfg.cyl_cy
-              << " D=" << D << "  Re=" << cfg.Re << "\n";
+    std::cout << "Cylinder: cx=" << cfg.cyl_cx << " cy=" << cfg.cyl_cy << " D=" << D
+              << "  Re=" << cfg.Re << "\n";
     std::cout << "Reference: St=0.19-0.20, Cd_mean=1.3-1.4\n\n";
 
     // Create solver
@@ -85,7 +97,7 @@ int main(int argc, char** argv) {
 
     std::vector<double> time_hist, Cd_hist, Cl_hist;
     double t_transient = 2.0;
-    bool collecting = false;
+    bool collecting    = false;
 
     auto t0 = std::chrono::high_resolution_clock::now();
 
@@ -100,30 +112,32 @@ int main(int argc, char** argv) {
 
         if (collecting && s % 2 == 0) {
             const Grid& g = sim->grid();
-            auto force = computeForce(g, cfg.dt, U, cfg.Re, cfg.cyl_cx, cfg.cyl_cy, cfg.cyl_R);
+            auto force    = computeForce(g, cfg.dt, U, cfg.Re, cfg.cyl_cx, cfg.cyl_cy, cfg.cyl_R);
             time_hist.push_back(t);
             Cd_hist.push_back(force.Cd(U, D));
             Cl_hist.push_back(force.Cl(U, D));
         }
 
-        if (nsteps <= 10 || s % (nsteps/10) == 0) {
-            const Grid& g = sim->grid();
+        if (nsteps <= 10 || s % (nsteps / 10) == 0) {
+            const Grid& g  = sim->grid();
             double max_div = 0;
-            for (int i=1;i<=g.nx;i++) for(int j=1;j<=g.ny;j++)
-                if(!g.is_solid(i,j)) max_div = std::max(max_div, std::abs(g.divergence(i,j)));
-            std::cout << "  [" << (100*s/nsteps) << "%] t=" << t
+            for (int i = 1; i <= g.nx; i++)
+                for (int j = 1; j <= g.ny; j++)
+                    if (!g.is_solid(i, j))
+                        max_div = std::max(max_div, std::abs(g.divergence(i, j)));
+            std::cout << "  [" << (100 * s / nsteps) << "%] t=" << t
                       << " max_div=" << std::scientific << std::setprecision(2) << max_div << "\n";
         }
         // Write VTK every 4 steps for LFM visualization (avoid temporal aliasing)
         if (cfg.time_integrator == "lfm" && s % 4 == 0) {
-            VtkWriter::write(const_cast<Grid&>(sim->grid()), s/4, cfg);
+            VtkWriter::write(const_cast<Grid&>(sim->grid()), s / 4, cfg);
         }
     }
 
-    auto t1 = std::chrono::high_resolution_clock::now();
+    auto t1        = std::chrono::high_resolution_clock::now();
     double elapsed = std::chrono::duration<double>(t1 - t0).count();
     std::cout << "\n  Total time: " << std::scientific << std::setprecision(4) << elapsed << " s ("
-              << std::setprecision(1) << (elapsed/nsteps*1000) << " ms/step)\n";
+              << std::setprecision(1) << (elapsed / nsteps * 1000) << " ms/step)\n";
 
     // Force statistics
     if (Cd_hist.size() < 10) {
@@ -131,24 +145,31 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    double Cd_sum=0, Cl_sq_sum=0, Cd_max=-1e30, Cd_min=1e30, Cl_max=-1e30, Cl_min=1e30;
-    size_t start_i = Cd_hist.size()/3;
-    for (size_t i=start_i; i<Cd_hist.size(); i++) {
-        Cd_sum+=Cd_hist[i]; Cl_sq_sum+=Cl_hist[i]*Cl_hist[i];
-        Cd_max=std::max(Cd_max,Cd_hist[i]); Cd_min=std::min(Cd_min,Cd_hist[i]);
-        Cl_max=std::max(Cl_max,Cl_hist[i]); Cl_min=std::min(Cl_min,Cl_hist[i]);
+    double Cd_sum = 0, Cl_sq_sum = 0, Cd_max = -1e30, Cd_min = 1e30, Cl_max = -1e30, Cl_min = 1e30;
+    size_t start_i = Cd_hist.size() / 3;
+    for (size_t i = start_i; i < Cd_hist.size(); i++) {
+        Cd_sum += Cd_hist[i];
+        Cl_sq_sum += Cl_hist[i] * Cl_hist[i];
+        Cd_max = std::max(Cd_max, Cd_hist[i]);
+        Cd_min = std::min(Cd_min, Cd_hist[i]);
+        Cl_max = std::max(Cl_max, Cl_hist[i]);
+        Cl_min = std::min(Cl_min, Cl_hist[i]);
     }
-    double Cd_mean = Cd_sum/(Cd_hist.size()-start_i);
-    double Cl_rms = std::sqrt(Cl_sq_sum/(Cd_hist.size()-start_i));
-    double St = estimateStrouhal(time_hist, Cl_hist, U, D);
+    double Cd_mean = Cd_sum / (Cd_hist.size() - start_i);
+    double Cl_rms  = std::sqrt(Cl_sq_sum / (Cd_hist.size() - start_i));
+    double St      = estimateStrouhal(time_hist, Cl_hist, U, D);
 
     std::cout << "\n+-------------------------------------------------------+\n";
     std::cout << "| Quantity                        Our Solver  Literature |\n";
     std::cout << "+-------------------------------------------------------+\n";
-    std::cout << "| Cd_mean                         " << std::fixed << std::setprecision(4) << std::setw(8) << Cd_mean << "   1.30-1.40 |\n";
-    std::cout << "| Cd_amplitude                    " << std::setw(8) << (Cd_max-Cd_min)/2.0 << "       ~0.02 |\n";
-    std::cout << "| Cl_rms                          " << std::setw(8) << Cl_rms << "   0.30-0.50 |\n";
-    std::cout << "| Cl_amplitude                    " << std::setw(8) << (Cl_max-Cl_min)/2.0 << "    ~0.5-1.0 |\n";
+    std::cout << "| Cd_mean                         " << std::fixed << std::setprecision(4)
+              << std::setw(8) << Cd_mean << "   1.30-1.40 |\n";
+    std::cout << "| Cd_amplitude                    " << std::setw(8) << (Cd_max - Cd_min) / 2.0
+              << "       ~0.02 |\n";
+    std::cout << "| Cl_rms                          " << std::setw(8) << Cl_rms
+              << "   0.30-0.50 |\n";
+    std::cout << "| Cl_amplitude                    " << std::setw(8) << (Cl_max - Cl_min) / 2.0
+              << "    ~0.5-1.0 |\n";
     std::cout << "| Strouhal number                 " << std::setw(8) << St << "   0.19-0.20 |\n";
     std::cout << "+-------------------------------------------------------+\n\n";
 
@@ -161,7 +182,7 @@ int main(int argc, char** argv) {
         std::string outfile = "/tmp/karman_validate/force_history.csv";
         std::ofstream f(outfile);
         f << "# time,Cd,Cl\n";
-        for (size_t i=0;i<time_hist.size();i++)
+        for (size_t i = 0; i < time_hist.size(); i++)
             f << time_hist[i] << "," << Cd_hist[i] << "," << Cl_hist[i] << "\n";
         std::cout << "  Force history written to: " << outfile << "\n";
     }

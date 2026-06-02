@@ -13,7 +13,7 @@
 namespace scenarios {
 
 struct FireBall {
-    std::array<double, 3> center{ {0.5, 0.2, 0.5} };
+    std::array<double, 3> center{{0.5, 0.2, 0.5}};
     double radius = 0.08;
     double T_hot  = 1.0;
     double T_ref  = 0.0;
@@ -21,4 +21,4 @@ struct FireBall {
 
 void seed_fire_ball(ScalarField3D& T, const Grid3D& g, const FireBall& fb);
 
-}  // namespace scenarios
+} // namespace scenarios

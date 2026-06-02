@@ -21,29 +21,30 @@
  */
 class GMGPreconditioner3D : public Preconditioner3D {
 public:
-    void apply(const Grid3D& g, const std::vector<double>& r,
-               std::vector<double>& z) override;
-    std::string name() const override { return "GMG3D"; }
+    void apply(const Grid3D& g, const std::vector<double>& r, std::vector<double>& z) override;
+    std::string name() const override {
+        return "GMG3D";
+    }
 
 private:
     /// One level of the 3D GMG hierarchy.
     struct Level {
         int nx, ny, nz;
         double dx, dy, dz;
-        std::vector<double> p;     ///< Pressure / correction.
-        std::vector<double> b;     ///< Right-hand side.
-        std::vector<bool> solid;   ///< Solid mask.
+        std::vector<double> p;   ///< Pressure / correction.
+        std::vector<double> b;   ///< Right-hand side.
+        std::vector<bool> solid; ///< Solid mask.
     };
 
-    std::vector<Level> levels_;                    ///< Hierarchy (finest to coarsest).
+    std::vector<Level> levels_;                            ///< Hierarchy (finest to coarsest).
     int cached_nx_ = -1, cached_ny_ = -1, cached_nz_ = -1; ///< Cache key.
 
     void buildHierarchy(const Grid3D& g);
     void vCycle(int level, int nlevels);
 
-    static void restrictSolid     (const Level& fine, Level& coarse);
-    static void smooth            (Level& L, int sweeps);
-    static void smoothReverse     (Level& L, int sweeps);
-    static void restrictResidual  (const Level& fine, Level& coarse);
-    static void prolongateAdd     (const Level& coarse, Level& fine);
+    static void restrictSolid(const Level& fine, Level& coarse);
+    static void smooth(Level& L, int sweeps);
+    static void smoothReverse(Level& L, int sweeps);
+    static void restrictResidual(const Level& fine, Level& coarse);
+    static void prolongateAdd(const Level& coarse, Level& fine);
 };

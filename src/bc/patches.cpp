@@ -10,7 +10,7 @@ void InflowLeft::apply(Grid& g) const {
         g.v_at(0, j) = 0.0;
     }
     // Ghost row v at left corner (j=0 and j=ny) — keep symmetric
-    g.v_at(0, 0) = 0.0;
+    g.v_at(0, 0)  = 0.0;
     g.v_at(0, ny) = 0.0;
     (void)nx;
 }
@@ -19,7 +19,7 @@ void InflowLeft::apply(Grid& g) const {
 void OutflowRight::apply(Grid& g) const {
     int nx = g.nx, ny = g.ny;
     for (int j = 1; j <= ny; j++) {
-        g.u_at(nx, j)   = g.u_at(nx - 1, j);
+        g.u_at(nx, j)     = g.u_at(nx - 1, j);
         g.v_at(nx + 1, j) = g.v_at(nx, j);
     }
     g.v_at(nx + 1, 0)  = 0.0;
@@ -73,11 +73,16 @@ void NoSlipImmersedSolid::apply(Grid& g) const {
     int nx = g.nx, ny = g.ny;
     for (int i = 1; i <= nx; i++) {
         for (int j = 1; j <= ny; j++) {
-            if (!g.is_solid(i, j)) continue;
-            if (i > 1  && !g.is_solid(i - 1, j))  g.u_at(i - 1, j) = 0.0;
-            if (i < nx && !g.is_solid(i + 1, j))  g.u_at(i, j)     = 0.0;
-            if (j > 1  && !g.is_solid(i, j - 1))  g.v_at(i, j - 1) = 0.0;
-            if (j < ny && !g.is_solid(i, j + 1))  g.v_at(i, j)     = 0.0;
+            if (!g.is_solid(i, j))
+                continue;
+            if (i > 1 && !g.is_solid(i - 1, j))
+                g.u_at(i - 1, j) = 0.0;
+            if (i < nx && !g.is_solid(i + 1, j))
+                g.u_at(i, j) = 0.0;
+            if (j > 1 && !g.is_solid(i, j - 1))
+                g.v_at(i, j - 1) = 0.0;
+            if (j < ny && !g.is_solid(i, j + 1))
+                g.v_at(i, j) = 0.0;
         }
     }
 }
@@ -100,4 +105,4 @@ BoundaryManager smoke() {
     return mgr;
 }
 
-}  // namespace bc
+} // namespace bc

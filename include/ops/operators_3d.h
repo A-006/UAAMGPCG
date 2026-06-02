@@ -15,25 +15,24 @@
 namespace fvc {
 
 inline double divergence(const Grid3D& g, int i, int j, int k) {
-    return (g.u_at(i, j, k) - g.u_at(i - 1, j, k)) / g.dx
-         + (g.v_at(i, j, k) - g.v_at(i, j - 1, k)) / g.dy
-         + (g.w_at(i, j, k) - g.w_at(i, j, k - 1)) / g.dz;
+    return (g.u_at(i, j, k) - g.u_at(i - 1, j, k)) / g.dx +
+           (g.v_at(i, j, k) - g.v_at(i, j - 1, k)) / g.dy +
+           (g.w_at(i, j, k) - g.w_at(i, j, k - 1)) / g.dz;
 }
 
-inline double laplacian(const Grid3D& g, const std::vector<double>& s,
-                        int i, int j, int k) {
+inline double laplacian(const Grid3D& g, const std::vector<double>& s, int i, int j, int k) {
     double idx2 = 1.0 / (g.dx * g.dx);
     double idy2 = 1.0 / (g.dy * g.dy);
     double idz2 = 1.0 / (g.dz * g.dz);
-    return (s[g.ip(i + 1, j, k)] - 2.0 * s[g.ip(i, j, k)] + s[g.ip(i - 1, j, k)]) * idx2
-         + (s[g.ip(i, j + 1, k)] - 2.0 * s[g.ip(i, j, k)] + s[g.ip(i, j - 1, k)]) * idy2
-         + (s[g.ip(i, j, k + 1)] - 2.0 * s[g.ip(i, j, k)] + s[g.ip(i, j, k - 1)]) * idz2;
+    return (s[g.ip(i + 1, j, k)] - 2.0 * s[g.ip(i, j, k)] + s[g.ip(i - 1, j, k)]) * idx2 +
+           (s[g.ip(i, j + 1, k)] - 2.0 * s[g.ip(i, j, k)] + s[g.ip(i, j - 1, k)]) * idy2 +
+           (s[g.ip(i, j, k + 1)] - 2.0 * s[g.ip(i, j, k)] + s[g.ip(i, j, k - 1)]) * idz2;
 }
 
 inline double kinetic_energy(const Grid3D& g, int i, int j, int k) {
-    double uc = 0.5 * (g.u_at(i, j, k)   + g.u_at(i - 1, j, k));
-    double vc = 0.5 * (g.v_at(i, j, k)   + g.v_at(i, j - 1, k));
-    double wc = 0.5 * (g.w_at(i, j, k)   + g.w_at(i, j, k - 1));
+    double uc = 0.5 * (g.u_at(i, j, k) + g.u_at(i - 1, j, k));
+    double vc = 0.5 * (g.v_at(i, j, k) + g.v_at(i, j - 1, k));
+    double wc = 0.5 * (g.w_at(i, j, k) + g.w_at(i, j, k - 1));
     return 0.5 * (uc * uc + vc * vc + wc * wc);
 }
 
@@ -51,7 +50,7 @@ inline std::array<double, 3> vorticity(const Grid3D& g, int i, int j, int k) {
     double dw_dx = (g.w_at(ip, j, k) - g.w_at(im, j, k)) / (2.0 * g.dx);
     double dv_dx = (g.v_at(ip, j, k) - g.v_at(im, j, k)) / (2.0 * g.dx);
     double du_dy = (g.u_at(i, jp, k) - g.u_at(i, jm, k)) / (2.0 * g.dy);
-    return { dw_dy - dv_dz, du_dz - dw_dx, dv_dx - du_dy };
+    return {dw_dy - dv_dz, du_dz - dw_dx, dv_dx - du_dy};
 }
 
 inline double vorticity_magnitude(const Grid3D& g, int i, int j, int k) {
@@ -59,4 +58,4 @@ inline double vorticity_magnitude(const Grid3D& g, int i, int j, int k) {
     return std::sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]);
 }
 
-}  // namespace fvc
+} // namespace fvc

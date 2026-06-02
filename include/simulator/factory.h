@@ -28,4 +28,4 @@ std::unique_ptr<Simulator> create(const Config& cfg, std::unique_ptr<Solver> pre
 // Wraps Factory::create / Factory3D::create.
 std::unique_ptr<Solver> make_pressure_solver(const Config& cfg);
 
-}  // namespace SimulatorFactory
+} // namespace SimulatorFactory

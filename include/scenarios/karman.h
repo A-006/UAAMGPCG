@@ -34,4 +34,4 @@ void seed_wake_perturbation(Grid& g, const Karman& k, double amplitude = 0.01);
 // y=0 / y=Ly, no-slip on the cylinder.
 bc::BoundaryManager karman_bcs(double U_inf);
 
-}  // namespace scenarios
+} // namespace scenarios

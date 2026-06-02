@@ -13,8 +13,8 @@ public:
     static double sampleW(const Grid3D& g, double x, double y, double z);
 
     // RK2 midpoint backtrace from physical position (x,y,z) by dt.
-    static void backtrace(const Grid3D& g, double x, double y, double z, double dt,
-                          double& xp, double& yp, double& zp);
+    static void backtrace(const Grid3D& g, double x, double y, double z, double dt, double& xp,
+                          double& yp, double& zp);
 
     // Semi-Lagrangian advection of all three components in old→new.
     static void advect(const Grid3D& oldGrid, Grid3D& newGrid, double dt);

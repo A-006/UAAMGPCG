@@ -30,9 +30,10 @@
  */
 class UAAMGPreconditioner3D : public Preconditioner3D {
 public:
-    void apply(const Grid3D& g, const std::vector<double>& r,
-               std::vector<double>& z) override;
-    std::string name() const override { return "UAAMG3D"; }
+    void apply(const Grid3D& g, const std::vector<double>& r, std::vector<double>& z) override;
+    std::string name() const override {
+        return "UAAMG3D";
+    }
 
 private:
     /// One level of the 3D UAAMG hierarchy.
@@ -52,10 +53,10 @@ private:
     void buildHierarchy(const Grid3D& g);
     void vCycle(int level, int nlevels);
 
-    static void restrictSolid    (const Level& fine, Level& coarse);
-    static void setupFineCoeffs  (Level& L);                       // finest stencil from solid mask
-    static void galerkinCoarsen  (const Level& fine, Level& coarse); // A_c = Rᵀ A P
-    static void smooth           (Level& L, int sweeps, bool reverse=false); // RBGS (stored coeffs)
-    static void restrictResidual (const Level& fine, Level& coarse); // R = Pᵀ (sum)
-    static void prolongateAdd    (const Level& coarse, Level& fine); // x += 2 P x_c
+    static void restrictSolid(const Level& fine, Level& coarse);
+    static void setupFineCoeffs(Level& L);                         // finest stencil from solid mask
+    static void galerkinCoarsen(const Level& fine, Level& coarse); // A_c = Rᵀ A P
+    static void smooth(Level& L, int sweeps, bool reverse = false); // RBGS (stored coeffs)
+    static void restrictResidual(const Level& fine, Level& coarse); // R = Pᵀ (sum)
+    static void prolongateAdd(const Level& coarse, Level& fine);    // x += 2 P x_c
 };

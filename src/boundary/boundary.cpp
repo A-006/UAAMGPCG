@@ -7,14 +7,19 @@
 // returned BoundaryManager directly.
 
 void BoundaryConditions::applyKarman(Grid& g, double U_inf) {
-    bc::InflowLeft        in(U_inf);  in.apply(g);
-    bc::OutflowRight      out;        out.apply(g);
-    bc::FreeSlipTopBottom slip;       slip.apply(g);
+    bc::InflowLeft in(U_inf);
+    in.apply(g);
+    bc::OutflowRight out;
+    out.apply(g);
+    bc::FreeSlipTopBottom slip;
+    slip.apply(g);
 }
 
 void BoundaryConditions::applySmoke(Grid& g) {
-    bc::NoSlipLeftRight  lr;  lr.apply(g);
-    bc::NoSlipTopBottom  tb;  tb.apply(g);
+    bc::NoSlipLeftRight lr;
+    lr.apply(g);
+    bc::NoSlipTopBottom tb;
+    tb.apply(g);
 }
 
 void BoundaryConditions::applySolid(Grid& g) {

@@ -24,32 +24,33 @@
  */
 class AMGPreconditioner : public Preconditioner {
 public:
-    void apply(const Grid& g, const std::vector<double>& r,
-               std::vector<double>& z) override;
-    std::string name() const override { return "AMG"; }
+    void apply(const Grid& g, const std::vector<double>& r, std::vector<double>& z) override;
+    std::string name() const override {
+        return "AMG";
+    }
 
 private:
     /// One level of the AMG hierarchy.
     struct AggLevel {
         int nx, ny;
         double dx, dy;
-        double idx2, idy2, diag;     ///< Cached stencil coefficients.
-        std::vector<double> p;        ///< Pressure / correction.
-        std::vector<double> b;        ///< Right-hand side.
-        std::vector<bool>   solid;    ///< Solid mask.
-        std::vector<int>    agg;      ///< Aggregate id per fine cell (-1 = solid).
+        double idx2, idy2, diag; ///< Cached stencil coefficients.
+        std::vector<double> p;   ///< Pressure / correction.
+        std::vector<double> b;   ///< Right-hand side.
+        std::vector<bool> solid; ///< Solid mask.
+        std::vector<int> agg;    ///< Aggregate id per fine cell (-1 = solid).
     };
 
-    std::vector<AggLevel> levels_;           ///< Hierarchy (finest to coarsest).
-    int cached_nx_ = -1, cached_ny_ = -1;    ///< Cache key for the hierarchy.
+    std::vector<AggLevel> levels_;        ///< Hierarchy (finest to coarsest).
+    int cached_nx_ = -1, cached_ny_ = -1; ///< Cache key for the hierarchy.
 
     void buildHierarchy(const Grid& g);
     void vCycle(int level, int nlevels);
 
-    static void smooth           (AggLevel& L, int sweeps);
-    static void smoothReverse    (AggLevel& L, int sweeps);
-    static void restrictResidual (const AggLevel& fine, AggLevel& coarse);
-    static void prolongateAdd    (const AggLevel& coarse, AggLevel& fine);
-    static void buildAggregates  (AggLevel& fine, const AggLevel& coarse);
-    static void restrictSolid    (const AggLevel& fine, AggLevel& coarse);
+    static void smooth(AggLevel& L, int sweeps);
+    static void smoothReverse(AggLevel& L, int sweeps);
+    static void restrictResidual(const AggLevel& fine, AggLevel& coarse);
+    static void prolongateAdd(const AggLevel& coarse, AggLevel& fine);
+    static void buildAggregates(AggLevel& fine, const AggLevel& coarse);
+    static void restrictSolid(const AggLevel& fine, AggLevel& coarse);
 };

@@ -4,9 +4,10 @@
 
 class UAAMGPreconditioner : public Preconditioner {
 public:
-    void apply(const Grid& g, const std::vector<double>& r,
-               std::vector<double>& z) override;
-    std::string name() const override { return "UAAMG"; }
+    void apply(const Grid& g, const std::vector<double>& r, std::vector<double>& z) override;
+    std::string name() const override {
+        return "UAAMG";
+    }
 
 private:
     struct Level {
@@ -24,9 +25,9 @@ private:
     void buildHierarchy(const Grid& g);
     void vCycle(int level, int nlevels);
     static void restrictSolid(const Level& fine, Level& coarse);
-    static void setupFineCoeffs(Level& L);                        // finest stencil from solid
-    static void galerkinCoarsen(const Level& fine, Level& coarse); // A_c = Rᵀ A P
-    static void smooth(Level& L, int sweeps, bool reverse=false);  // RBGS (stored coeffs)
+    static void setupFineCoeffs(Level& L);                          // finest stencil from solid
+    static void galerkinCoarsen(const Level& fine, Level& coarse);  // A_c = Rᵀ A P
+    static void smooth(Level& L, int sweeps, bool reverse = false); // RBGS (stored coeffs)
     static void restrictResidual(const Level& fine, Level& coarse); // R = Pᵀ (sum)
-    static void prolongateAdd(const Level& coarse, Level& fine);   // x += 2 P x_c
+    static void prolongateAdd(const Level& coarse, Level& fine);    // x += 2 P x_c
 };

@@ -19,7 +19,10 @@ public:
                 g.w_at(0, j, k) = 0.0;
             }
     }
-    const char* name() const override { return "InflowXMin3D"; }
+    const char* name() const override {
+        return "InflowXMin3D";
+    }
+
 private:
     double U_;
 };
@@ -30,12 +33,14 @@ public:
         int nx = g.nx;
         for (int k = 1; k <= g.nz; k++)
             for (int j = 1; j <= g.ny; j++) {
-                g.u_at(nx,     j, k) = g.u_at(nx - 1, j, k);
-                g.v_at(nx + 1, j, k) = g.v_at(nx,     j, k);
-                g.w_at(nx + 1, j, k) = g.w_at(nx,     j, k);
+                g.u_at(nx, j, k)     = g.u_at(nx - 1, j, k);
+                g.v_at(nx + 1, j, k) = g.v_at(nx, j, k);
+                g.w_at(nx + 1, j, k) = g.w_at(nx, j, k);
             }
     }
-    const char* name() const override { return "OutflowXMax3D"; }
+    const char* name() const override {
+        return "OutflowXMax3D";
+    }
 };
 
 // Free-slip on the y=0/y=Ly and z=0/z=Lz walls.
@@ -46,15 +51,15 @@ public:
         // y faces
         for (int k = 1; k <= nz; k++) {
             for (int i = 1; i <= nx; i++) {
-                g.v_at(i, 0,  k) = 0.0;
+                g.v_at(i, 0, k)  = 0.0;
                 g.v_at(i, ny, k) = 0.0;
             }
             for (int i = 0; i <= nx; i++) {
-                g.u_at(i, 0,      k) = g.u_at(i, 1,  k);
+                g.u_at(i, 0, k)      = g.u_at(i, 1, k);
                 g.u_at(i, ny + 1, k) = g.u_at(i, ny, k);
             }
             for (int i = 1; i <= nx; i++) {
-                g.w_at(i, 0,      k) = g.w_at(i, 1,  k);
+                g.w_at(i, 0, k)      = g.w_at(i, 1, k);
                 g.w_at(i, ny + 1, k) = g.w_at(i, ny, k);
             }
         }
@@ -74,10 +79,12 @@ public:
             }
         }
     }
-    const char* name() const override { return "FreeSlipYZ3D"; }
+    const char* name() const override {
+        return "FreeSlipYZ3D";
+    }
 };
 
-}  // namespace
+} // namespace
 
 void setup_delta_wing(Grid3D& g, const DeltaWing& wing) {
     double aoa = wing.aoa_deg * M_PI / 180.0;
@@ -100,15 +107,18 @@ void setup_delta_wing(Grid3D& g, const DeltaWing& wing) {
                 // Rotate about z-axis by -aoa: the wing is at angle of
                 // attack, so the x-axis of the wing frame is the chord
                 // direction rotated up by aoa in world coords.
-                double xb =  dx * cs + dy * sn;
+                double xb = dx * cs + dy * sn;
                 double yb = -dx * sn + dy * cs;
 
-                if (xb < 0.0 || xb > wing.chord) continue;
+                if (xb < 0.0 || xb > wing.chord)
+                    continue;
                 // Triangular planform: at chord position xb, semi-span
                 // tapers from 0 at apex to semi_span at root.
                 double half_span_at_xb = wing.semi_span * (xb / wing.chord);
-                if (std::abs(dz) > half_span_at_xb) continue;
-                if (std::abs(yb) > wing.thickness)  continue;
+                if (std::abs(dz) > half_span_at_xb)
+                    continue;
+                if (std::abs(yb) > wing.thickness)
+                    continue;
                 g.set_solid(i, j, k);
             }
         }
@@ -131,4 +141,4 @@ bc::BoundaryManager3D delta_wing_bcs(double U_inf) {
     return mgr;
 }
 
-}  // namespace scenarios
+} // namespace scenarios

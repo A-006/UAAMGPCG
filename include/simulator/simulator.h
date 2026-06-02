@@ -13,16 +13,22 @@ public:
     void step() override;
     void run();
 
-    const Grid& grid() const override { return grid_; }
-    double time() const override { return t_; }
-    int  step_count() const override { return step_; }
+    const Grid& grid() const override {
+        return grid_;
+    }
+    double time() const override {
+        return t_;
+    }
+    int step_count() const override {
+        return step_;
+    }
 
 private:
     Config cfg_;
-    Grid   grid_;
-    Grid   prev_;
+    Grid grid_;
+    Grid prev_;
     double t_ = 0;
-    int    step_ = 0;
+    int step_ = 0;
     std::unique_ptr<Solver> solver_;
 
     void apply_forces();

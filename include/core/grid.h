@@ -16,7 +16,7 @@
 class Grid : public Mesh2D {
 public:
     std::vector<double> u, v, p;
-    std::vector<bool>   solid;
+    std::vector<bool> solid;
 
     // Variable Laplacian coefficients for ∇·((1-φ)∇p).
     // When empty, PCG uses uniform coefficients.
@@ -24,25 +24,46 @@ public:
 
     Grid(int nx_, int ny_, double lx, double ly);
 
-    const std::vector<double>& u_data() const { return u; }
-    const std::vector<double>& v_data() const { return v; }
+    const std::vector<double>& u_data() const {
+        return u;
+    }
+    const std::vector<double>& v_data() const {
+        return v;
+    }
 
-    bool has_variable_lap() const { return !lap_diag.empty(); }
+    bool has_variable_lap() const {
+        return !lap_diag.empty();
+    }
     void init_variable_lap();
 
-    double  u_at(int i, int j) const { return u[iu(i, j)]; }
-    double& u_at(int i, int j)       { return u[iu(i, j)]; }
-    double  v_at(int i, int j) const { return v[iv(i, j)]; }
-    double& v_at(int i, int j)       { return v[iv(i, j)]; }
-    double  p_at(int i, int j) const { return p[ip(i, j)]; }
-    double& p_at(int i, int j)       { return p[ip(i, j)]; }
+    double u_at(int i, int j) const {
+        return u[iu(i, j)];
+    }
+    double& u_at(int i, int j) {
+        return u[iu(i, j)];
+    }
+    double v_at(int i, int j) const {
+        return v[iv(i, j)];
+    }
+    double& v_at(int i, int j) {
+        return v[iv(i, j)];
+    }
+    double p_at(int i, int j) const {
+        return p[ip(i, j)];
+    }
+    double& p_at(int i, int j) {
+        return p[ip(i, j)];
+    }
 
-    bool is_solid(int i, int j) const { return solid[ip(i, j)]; }
-    void set_solid(int i, int j)       { solid[ip(i, j)] = true; }
+    bool is_solid(int i, int j) const {
+        return solid[ip(i, j)];
+    }
+    void set_solid(int i, int j) {
+        solid[ip(i, j)] = true;
+    }
 
     // Divergence — kept for back-compat; new code should use fvc::divergence.
     double divergence(int i, int j) const {
-        return (u_at(i, j) - u_at(i - 1, j)) / dx
-             + (v_at(i, j) - v_at(i, j - 1)) / dy;
+        return (u_at(i, j) - u_at(i - 1, j)) / dx + (v_at(i, j) - v_at(i, j - 1)) / dy;
     }
 };

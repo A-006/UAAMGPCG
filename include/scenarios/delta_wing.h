@@ -14,12 +14,12 @@
 namespace scenarios {
 
 struct DeltaWing {
-    double leading_x = 0.6;            // x of the apex
-    double chord     = 0.8;            // root chord length (apex → trailing edge)
-    double semi_span = 0.4;            // half of the wing span (z direction)
-    double thickness = 0.02;           // wing half-thickness (y direction)
-    double aoa_deg   = 12.0;           // angle of attack (rotation about z)
-    double y_mid     = 0.5;            // wing mid-plane y position
+    double leading_x = 0.6;  // x of the apex
+    double chord     = 0.8;  // root chord length (apex → trailing edge)
+    double semi_span = 0.4;  // half of the wing span (z direction)
+    double thickness = 0.02; // wing half-thickness (y direction)
+    double aoa_deg   = 12.0; // angle of attack (rotation about z)
+    double y_mid     = 0.5;  // wing mid-plane y position
 };
 
 // Mark grid cells inside the delta wing as solid.
@@ -33,4 +33,4 @@ void set_uniform_inflow(Grid3D& g, double U_inf);
 //   no-slip on the immersed wing.
 bc::BoundaryManager3D delta_wing_bcs(double U_inf);
 
-}  // namespace scenarios
+} // namespace scenarios

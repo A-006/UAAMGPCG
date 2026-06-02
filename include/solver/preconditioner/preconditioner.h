@@ -25,8 +25,7 @@ public:
      * @param r Input residual vector.
      * @param z Output: \f$z = M^{-1} r\f$.
      */
-    virtual void apply(const Grid& g, const std::vector<double>& r,
-                       std::vector<double>& z) = 0;
+    virtual void apply(const Grid& g, const std::vector<double>& r, std::vector<double>& z) = 0;
 
     /** @brief Human-readable preconditioner name. */
     virtual std::string name() const = 0;
