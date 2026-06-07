@@ -39,6 +39,7 @@ diagnostic_output_*/
 output_burst_re450/*
 output_burst_re600/*
 
+
 # Karman tool outputs
 tools/karman_vortex_street/inputs/
 tools/karman_vortex_street/output/
