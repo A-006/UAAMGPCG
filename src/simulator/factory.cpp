@@ -1,7 +1,10 @@
 #include "simulator/factory.h"
 #include "simulator/chorin_simulator.h"
 #include "simulator/lfm_simulator.h"
+#include "simulator/lfm_simulator_3d.h"
+#include "simulator/simulator_3d.h"
 #include "solver/factory.h"
+#include "solver/factory_3d.h"
 #include <stdexcept>
 
 namespace SimulatorFactory {
@@ -32,6 +35,20 @@ std::unique_ptr<Simulator> create(const Config& cfg, std::unique_ptr<Solver> sol
                                  "tracked as a follow-up.");
     }
     throw std::runtime_error("SimulatorFactory::create: cfg.dim must be 2 or 3.");
+}
+
+std::unique_ptr<Solver3D> make_pressure_solver_3d(const Config& cfg) {
+    return Factory3D::create(cfg.solver);
+}
+
+std::unique_ptr<Simulator3D> create3d(const Config& cfg) {
+    return create3d(cfg, make_pressure_solver_3d(cfg));
+}
+
+std::unique_ptr<Simulator3D> create3d(const Config& cfg, std::unique_ptr<Solver3D> solver) {
+    if (cfg.time_integrator == "lfm")
+        return std::make_unique<LFMSimulator3D>(cfg, std::move(solver));
+    return std::make_unique<ChorinSimulator3D>(cfg, std::move(solver));
 }
 
 } // namespace SimulatorFactory

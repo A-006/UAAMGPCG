@@ -1,7 +1,9 @@
 #pragma once
 #include "config/config.h"
+#include "simulator/simulator_3d.h"
 #include "simulator/simulator_base.h"
 #include "solver/solver.h"
+#include "solver/solver_3d.h"
 #include <memory>
 
 // ──────────────────────────────────────────────────────────────────
@@ -33,5 +35,17 @@ std::unique_ptr<Simulator> create(const Config& cfg, std::unique_ptr<Solver> pre
 // Returns a pressure solver matching cfg.dim and cfg.solver.
 // Wraps Factory::create / Factory3D::create.
 std::unique_ptr<Solver> make_pressure_solver(const Config& cfg);
+
+// ── 3D entry points ───────────────────────────────────────────────
+// Simulator3D is a separate base class from Simulator (the codebase keeps
+// 2D/3D types parallel rather than templating), so the 3D simulators cannot
+// be returned through the Simulator-typed create() above — these typed
+// entry points mirror the 2D factory for the dim==3 case.
+//
+//   dim=3, integrator="chorin" → ChorinSimulator3D
+//   dim=3, integrator="lfm"    → LFMSimulator3D
+std::unique_ptr<Solver3D> make_pressure_solver_3d(const Config& cfg);
+std::unique_ptr<Simulator3D> create3d(const Config& cfg);
+std::unique_ptr<Simulator3D> create3d(const Config& cfg, std::unique_ptr<Solver3D> pressure_solver);
 
 } // namespace SimulatorFactory

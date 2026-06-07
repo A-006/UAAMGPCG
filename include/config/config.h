@@ -25,7 +25,13 @@ public:
     std::string time_integrator = "chorin"; // "chorin" | "lfm"
     double dt                   = 0.005;
     double t_end                = 10.0;
-    int lfm_cycle_steps         = 10; // n in LFM Algorithm 1
+    int lfm_cycle_steps         = 10;    // n in LFM Algorithm 1
+    bool lfm_bfecc_clamp        = false; // clamp BFECC-corrected impulse to neighbor min/max
+                                         // (paper's BfeccClamp: lets inviscid runs stay stable)
+    // Velocity wall BC for the LFM cycle: "free_slip" (closed box, default) or
+    // "freestream" (prescribe inflow_u on all walls — delta wing / wind tunnel).
+    std::string lfm_bc = "free_slip";
+    double inflow_ux = 0.0, inflow_uy = 0.0, inflow_uz = 0.0;
 
     // ── Pressure solver ──
     std::string solver = "pcg"; // jacobi | rbgs | cg | pcg | pcg_gmg | pcg_amg | pcg_uaamg

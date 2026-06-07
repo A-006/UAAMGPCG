@@ -44,6 +44,8 @@ set(LFM_SOURCES
     solver/factory.cpp
     simulator/flow_map_2d.cpp
     simulator/lfm_simulator.cpp
+    simulator/flow_map_3d.cpp
+    simulator/lfm_simulator_3d.cpp
 )
 
 add_library(lfm_lib ${LFM_SOURCES})

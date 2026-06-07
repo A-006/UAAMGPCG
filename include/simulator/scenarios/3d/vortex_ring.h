@@ -21,6 +21,11 @@ struct VortexRing {
     double core;                  // Gaussian core radius (regularization)
     double circulation;           // Γ (sign sets rotation direction)
     int n_segments = 200;         // filament discretization
+    // Optional azimuthal perturbation R(φ)=R(1+amp·cos(nφ)) + axial wobble, used
+    // to seed the Widnall (azimuthal) instability of a head-on ring collision so
+    // it bursts into a radial necklace of secondary vortices (paper Fig. 3).
+    double perturb_amp = 0.0;
+    int perturb_n      = 0;
 };
 
 void add_vortex_ring(Grid3D& g, const VortexRing& vr);

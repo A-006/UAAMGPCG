@@ -32,6 +32,9 @@ target_link_libraries(test_uaamg PRIVATE lfm_lib)
 add_executable(test_uaamg_3d integration/test_uaamg_3d.cpp)
 target_link_libraries(test_uaamg_3d PRIVATE lfm_lib)
 
+add_executable(test_lfm_3d integration/test_lfm_3d.cpp)
+target_link_libraries(test_lfm_3d PRIVATE lfm_lib)
+
 add_executable(test_karman_bench_3d integration/test_karman_bench_3d.cpp)
 target_link_libraries(test_karman_bench_3d PRIVATE lfm_lib)
 
@@ -66,8 +69,12 @@ add_executable(run_trefoil_knot            ../tools/run_trefoil_knot.cpp)
 add_executable(run_delta_wing              ../tools/run_delta_wing.cpp)
 add_executable(run_fire_ball               ../tools/run_fire_ball.cpp)
 add_executable(run_wind_turbine            ../tools/run_wind_turbine.cpp)
+add_executable(test_bfecc_clamp            ../tools/test_bfecc_clamp.cpp)
+add_executable(run_delta_wing_lfm          ../tools/run_delta_wing_lfm.cpp)
+add_executable(dump_collision_ic           ../tools/dump_collision_ic.cpp)
 foreach(_t run_vortex_ring_collision run_vortex_ring_connection
-           run_trefoil_knot run_delta_wing run_fire_ball run_wind_turbine)
+           run_trefoil_knot run_delta_wing run_fire_ball run_wind_turbine test_bfecc_clamp
+           run_delta_wing_lfm dump_collision_ic)
     target_link_libraries(${_t} PRIVATE lfm_lib)
 endforeach()
 

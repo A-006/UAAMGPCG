@@ -28,6 +28,7 @@ public:
         T cxd = 0, cyd = 0, czd = 0, diagd = 0; // per-level uniform default stencil
         bool* trimmed = nullptr;
         int ntx = 0, nty = 0, ntz = 0; // per-tile "uniform" flag
+        T* scratch    = nullptr;       // ping-pong buffer for the fused post-smooth
     };
 
 private:

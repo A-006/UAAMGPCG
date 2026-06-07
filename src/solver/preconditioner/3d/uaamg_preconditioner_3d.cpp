@@ -8,6 +8,37 @@ static inline int cidx(int i, int j, int k, int nx, int ny) {
     return i + j * si + k * si * (ny + 2);
 }
 
+// Subtract the mean over interior fluid cells. On a pure-Neumann (closed)
+// domain the discrete Laplacian is singular with the constants as its null
+// space, so the system is only solvable for a zero-mean RHS and its solution
+// is defined only up to a constant. Projecting onto the zero-mean subspace
+// keeps the (otherwise unbounded) null-space component from growing — without
+// it the coarsest-level Gauss–Seidel "solve" diverges (residual → ~1e141).
+static void removeMeanFluid(std::vector<double>& v, const std::vector<bool>& solid, int nx, int ny,
+                            int nz) {
+    double sum = 0;
+    int count  = 0;
+    for (int i = 1; i <= nx; i++)
+        for (int j = 1; j <= ny; j++)
+            for (int k = 1; k <= nz; k++) {
+                int id = cidx(i, j, k, nx, ny);
+                if (!solid[id]) {
+                    sum += v[id];
+                    count++;
+                }
+            }
+    if (count == 0)
+        return;
+    double mean = sum / count;
+    for (int i = 1; i <= nx; i++)
+        for (int j = 1; j <= ny; j++)
+            for (int k = 1; k <= nz; k++) {
+                int id = cidx(i, j, k, nx, ny);
+                if (!solid[id])
+                    v[id] -= mean;
+            }
+}
+
 void UAAMGPreconditioner3D::buildHierarchy(const Grid3D& fine) {
     levels_.clear();
     int nx = fine.nx, ny = fine.ny, nz = fine.nz;
@@ -224,10 +255,16 @@ void UAAMGPreconditioner3D::prolongateAdd(const Level& coarse, Level& fine) {
 void UAAMGPreconditioner3D::vCycle(int level, int nlevels) {
     Level& L = levels_[level];
     if (level == nlevels - 1) { // coarsest: symmetric RBGS
+        // The coarsest operator is singular on a closed (pure-Neumann) domain.
+        // Enforce a compatible (zero-mean) RHS before the iterative solve, and
+        // pin the solution's constant afterwards, so the null-space component
+        // stays bounded instead of blowing up the whole V-cycle.
+        removeMeanFluid(L.b, L.solid, L.nx, L.ny, L.nz);
         for (int s = 0; s < 10; s++) {
             smooth(L, 1, false);
             smooth(L, 1, true);
         }
+        removeMeanFluid(L.p, L.solid, L.nx, L.ny, L.nz);
         return;
     }
     smooth(L, 1, false); // pre-smooth (forward)
@@ -271,6 +308,12 @@ void UAAMGPreconditioner3D::apply(const Grid3D& g, const std::vector<double>& r,
         std::fill(levels_[l].p.begin(), levels_[l].p.end(), 0.0);
 
     vCycle(0, nl);
+
+    // Return a zero-mean correction: on a singular (pure-Neumann) system the
+    // preconditioner output is only defined up to a constant, and PCG expects
+    // its preconditioned residual to live in the same zero-mean subspace as the
+    // residual. (Harmless on non-singular systems — the mean is already ~0.)
+    removeMeanFluid(levels_[0].p, levels_[0].solid, nx, ny, nz);
 
     for (int i = 1; i <= nx; i++)
         for (int j = 1; j <= ny; j++)

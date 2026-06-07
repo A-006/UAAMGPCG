@@ -898,7 +898,7 @@ __global__ void restrict_solid_opt_kernel_f(const bool* sf, bool* sc, int fnx, i
             for (int dk = 0; dk < 2; dk++)
                 if (sf[opti_idx_f(i_f + di, j_f + dj, k_f + dk, fpitch, fny)])
                     scount++;
-    sc[opti_idx_f(ic, jc, kc, cpitch, cny)] = (scount >= 4);
+    sc[opti_idx_f(ic, jc, kc, cpitch, cny)] = (scount == 8); // solid only if all 8 children solid
 }
 
 // ═══════════════════════════════════════════════════════════════

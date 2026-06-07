@@ -20,6 +20,51 @@ __device__ inline int dev_idx3d(int i, int j, int k, int pitch, int ny) {
     return i + j * pitch + k * pitch * (ny + 2);
 }
 
+// Subtract the mean over interior fluid cells (single-block; for the tiny
+// coarsest level). On a pure-Neumann (closed) domain the coarsest operator is
+// singular with the constants as null space, so its iterative "solve" is only
+// well-posed on the zero-mean subspace — projecting the RHS (and the solution)
+// there stops the null-space component from growing and stalling the V-cycle.
+template <typename T>
+__global__ void coarse_remove_mean_kernel_3d(T* v, const bool* solid, int nx, int ny, int nz,
+                                             int pitch) {
+    __shared__ double ssum[256];
+    __shared__ int scnt[256];
+    __shared__ double smean;
+    int t        = threadIdx.x;
+    long total   = (long)nx * ny * nz;
+    double sum   = 0;
+    int cnt      = 0;
+    for (long l = t; l < total; l += blockDim.x) {
+        int i = (int)(l % nx) + 1, j = (int)((l / nx) % ny) + 1, k = (int)(l / ((long)nx * ny)) + 1;
+        int id = dev_idx3d(i, j, k, pitch, ny);
+        if (!solid[id]) {
+            sum += (double)v[id];
+            cnt++;
+        }
+    }
+    ssum[t] = sum;
+    scnt[t] = cnt;
+    __syncthreads();
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (t < s) {
+            ssum[t] += ssum[t + s];
+            scnt[t] += scnt[t + s];
+        }
+        __syncthreads();
+    }
+    if (t == 0)
+        smean = (scnt[0] > 0) ? ssum[0] / scnt[0] : 0.0;
+    __syncthreads();
+    T mean = (T)smean;
+    for (long l = t; l < total; l += blockDim.x) {
+        int i = (int)(l % nx) + 1, j = (int)((l / nx) % ny) + 1, k = (int)(l / ((long)nx * ny)) + 1;
+        int id = dev_idx3d(i, j, k, pitch, ny);
+        if (!solid[id])
+            v[id] -= mean;
+    }
+}
+
 // ── Finest-level stencil from the solid mask ──
 template <typename T>
 __global__ void setup_fine_coeffs_kernel_3d(const bool* solid, T* cx, T* cy, T* cz, int nx, int ny,
@@ -157,6 +202,105 @@ __global__ void rbgs_coeff_kernel_3d(T* x, const T* b, const bool* solid, const 
     x[id] = (b[id] + nb) / D;
 }
 
+// ── Coarsest solve in ONE launch (replaces 42 tiny launches) ──
+// The coarsest grid is a handful of cells → one block covers it, so
+// __syncthreads() is a full-grid barrier. Does: remove mean(b) + `iters`×
+// (forward RBGS + reverse RBGS) + remove mean(x), exactly mirroring the
+// multi-launch sequence (same parities [1,0,0,1], same per-cell math) → identical
+// convergence, but ~42 launches → 1 (kills the fixed launch overhead).
+template <typename T>
+__global__ void coarsest_solve_kernel_3d(T* x, T* b, const bool* solid, const T* diag, const T* cx,
+                                         const T* cy, const T* cz, int nx, int ny, int nz, int pitch,
+                                         const bool* trimmed, T cxd, T cyd, T czd, T diagd,
+                                         int iters) {
+    __shared__ double ssum[256];
+    __shared__ int scnt[256];
+    __shared__ double smean;
+    int t      = threadIdx.x;
+    long total = (long)nx * ny * nz;
+    int gtx = (nx + 7) / 8, gty = (ny + 7) / 8;
+    auto cell = [&](long l, int& i, int& j, int& k) {
+        i = (int)(l % nx) + 1;
+        j = (int)((l / nx) % ny) + 1;
+        k = (int)(l / ((long)nx * ny)) + 1;
+    };
+    auto remove_mean = [&](T* v) {
+        double sum = 0;
+        int cnt    = 0;
+        for (long l = t; l < total; l += blockDim.x) {
+            int i, j, k;
+            cell(l, i, j, k);
+            int id = dev_idx3d(i, j, k, pitch, ny);
+            if (!solid[id]) {
+                sum += (double)v[id];
+                cnt++;
+            }
+        }
+        ssum[t] = sum;
+        scnt[t] = cnt;
+        __syncthreads();
+        for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+            if (t < s) {
+                ssum[t] += ssum[t + s];
+                scnt[t] += scnt[t + s];
+            }
+            __syncthreads();
+        }
+        if (t == 0)
+            smean = (scnt[0] > 0) ? ssum[0] / scnt[0] : 0.0;
+        __syncthreads();
+        T m = (T)smean;
+        for (long l = t; l < total; l += blockDim.x) {
+            int i, j, k;
+            cell(l, i, j, k);
+            int id = dev_idx3d(i, j, k, pitch, ny);
+            if (!solid[id])
+                v[id] -= m;
+        }
+        __syncthreads();
+    };
+
+    remove_mean(b);
+    const int order[4] = {1, 0, 0, 1}; // forward(red,black) + reverse(black,red)
+    for (int it = 0; it < iters; it++) {
+        for (int s = 0; s < 4; s++) {
+            int parity = order[s];
+            for (long l = t; l < total; l += blockDim.x) {
+                int i, j, k;
+                cell(l, i, j, k);
+                if (((i + j + k) & 1) != parity)
+                    continue;
+                int id = dev_idx3d(i, j, k, pitch, ny);
+                if (solid[id])
+                    continue;
+                int ip = dev_idx3d(i + 1, j, k, pitch, ny), jp = dev_idx3d(i, j + 1, k, pitch, ny),
+                    kp = dev_idx3d(i, j, k + 1, pitch, ny);
+                int im = dev_idx3d(i - 1, j, k, pitch, ny), jm = dev_idx3d(i, j - 1, k, pitch, ny),
+                    km     = dev_idx3d(i, j, k - 1, pitch, ny);
+                int tileid = ((k - 1) / 8) * gtx * gty + ((j - 1) / 8) * gtx + (i - 1) / 8;
+                T Cxp, Cxm, Cyp, Cym, Czp, Czm, D;
+                if (trimmed[tileid]) {
+                    Cxp = Cxm = cxd;
+                    Cyp = Cym = cyd;
+                    Czp = Czm = czd;
+                    D         = diagd;
+                } else {
+                    D = diag[id];
+                    if (D < T(1e-30))
+                        continue;
+                    Cxp = cx[id], Cxm = cx[im], Cyp = cy[id], Cym = cy[jm], Czp = cz[id],
+                    Czm = cz[km];
+                }
+                T nb  = Cxp * x[ip] + Cxm * x[im] + Cyp * x[jp] + Cym * x[jm] + Czp * x[kp] +
+                       Czm * x[km];
+                x[id] = (b[id] + nb) / D;
+            }
+            __syncthreads();
+        }
+    }
+    remove_mean(x);
+}
+
 // ── Residual restriction R = Pᵀ (sum over 2×2×2 children) ──
 template <typename T>
 __global__ void restrict_coeff_kernel_3d(const T* xf, const T* bf, const bool* fsolid,
@@ -192,6 +336,254 @@ __global__ void restrict_coeff_kernel_3d(const T* xf, const T* bf, const bool* f
     bc[cid] = sum;
 }
 
+// ════════════════════════════════════════════════════════════════════
+//  FUSED down-leg: block-RBGS(2 colours) + residual + restrict, ONE launch.
+//  Mirrors the paper's GaussSeidelRestrict kernel: x lives in shared across
+//  both colour passes (no global x reload between red/black), the residual is
+//  produced as a by-product of smoothing, and restricted in the same launch —
+//  so restriction never costs its own full-grid A-apply or coefficient reads.
+//  Trivial (uniform) tiles use scalar coefficients (no a_* array reads).
+//  NOTE: this is block-RBGS (tile-boundary cells use the pre-smooth halo), so
+//  convergence per V-cycle differs slightly from exact RBGS — fine for a
+//  preconditioner. Pair with the reverse-colour fused up-leg to stay symmetric.
+// ════════════════════════════════════════════════════════════════════
+// Exact single RBGS pre-smooth from x=0 (the V-cycle zeroes x at entry of every
+// level). Author's trick: red cells = b/diag computed locally, so the tile halo
+// has no stale-x problem — every tile derives the same b/diag for its red cells.
+// Red is set directly (skip a pass); black is then exact from the red halo too.
+// Smooth-only: the proven separate restrict reads fresh global x for the residual.
+// Uniform-coefficient (trivial) path; non-trivial tiles fall back to the global x.
+template <typename T>
+__global__ void smooth_from_zero_3d(T* x, const T* b, const bool* solid, const T* diag, const T* cx,
+                                    const T* cy, const T* cz, int nx, int ny, int nz, int pitch,
+                                    const bool* trimmed, T cxd, T cyd, T czd, T diagd) {
+    __shared__ T sx[10][10][10];
+    int tx = threadIdx.x, ty = threadIdx.y, tz = threadIdx.z;
+    int gi = blockIdx.x * 8 + tx + 1, gj = blockIdx.y * 8 + ty + 1, gk = blockIdx.z * 8 + tz + 1;
+    int li = tx + 1, lj = ty + 1, lk = tz + 1;
+    bool valid    = (gi <= nx && gj <= ny && gk <= nz);
+    T inv         = T(1) / diagd;
+    // init red cells (interior + halo) = b/diag, exploiting x=0. black = 0.
+    auto red_bd   = [&](int ci, int cj, int ck) -> T {
+        if (ci < 1 || ci > nx || cj < 1 || cj > ny || ck < 1 || ck > nz)
+            return T(0);
+        int id = dev_idx3d(ci, cj, ck, pitch, ny);
+        if (solid[id] || ((ci + cj + ck) & 1) == 0)
+            return T(0); // only red parity carries b/diag; black stays 0
+        return b[id] * inv;
+    };
+    sx[li][lj][lk] = red_bd(gi, gj, gk);
+    if (tx == 0)
+        sx[0][lj][lk] = red_bd(gi - 1, gj, gk);
+    if (tx == 7)
+        sx[9][lj][lk] = red_bd(gi + 1, gj, gk);
+    if (ty == 0)
+        sx[li][0][lk] = red_bd(gi, gj - 1, gk);
+    if (ty == 7)
+        sx[li][9][lk] = red_bd(gi, gj + 1, gk);
+    if (tz == 0)
+        sx[li][lj][0] = red_bd(gi, gj, gk - 1);
+    if (tz == 7)
+        sx[li][lj][9] = red_bd(gi, gj, gk + 1);
+
+    int gid       = valid ? dev_idx3d(gi, gj, gk, pitch, ny) : 0;
+    bool is_solid = valid && solid[gid];
+    bool dof      = valid && !is_solid;
+    int tileid    = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    bool triv     = trimmed[tileid];
+    __syncthreads();
+    if (!triv) {
+        // non-uniform tile: do the safe exact 2-pass RBGS reading global x
+        // (correctness over speed on the few boundary tiles).
+        sx[li][lj][lk] = valid ? x[gid] : T(0);
+        if (tx == 0)
+            sx[0][lj][lk] = (gi > 1 && valid) ? x[dev_idx3d(gi - 1, gj, gk, pitch, ny)] : T(0);
+        if (tx == 7)
+            sx[9][lj][lk] = (gi < nx && valid) ? x[dev_idx3d(gi + 1, gj, gk, pitch, ny)] : T(0);
+        if (ty == 0)
+            sx[li][0][lk] = (gj > 1 && valid) ? x[dev_idx3d(gi, gj - 1, gk, pitch, ny)] : T(0);
+        if (ty == 7)
+            sx[li][9][lk] = (gj < ny && valid) ? x[dev_idx3d(gi, gj + 1, gk, pitch, ny)] : T(0);
+        if (tz == 0)
+            sx[li][lj][0] = (gk > 1 && valid) ? x[dev_idx3d(gi, gj, gk - 1, pitch, ny)] : T(0);
+        if (tz == 7)
+            sx[li][lj][9] = (gk < nz && valid) ? x[dev_idx3d(gi, gj, gk + 1, pitch, ny)] : T(0);
+        T D = dof ? diag[gid] : diagd;
+        if (D < T(1e-30))
+            dof = false;
+        int im = dev_idx3d(gi - 1, gj, gk, pitch, ny), jm = dev_idx3d(gi, gj - 1, gk, pitch, ny),
+            km    = dev_idx3d(gi, gj, gk - 1, pitch, ny);
+        T cxp = dof ? cx[gid] : cxd, cxm = dof ? cx[im] : cxd, cyp = dof ? cy[gid] : cyd,
+          cym = dof ? cy[jm] : cyd, czp = dof ? cz[gid] : czd, czm = dof ? cz[km] : czd;
+        __syncthreads();
+        for (int pass = 0; pass < 2; pass++) {
+            int par = pass; // 0 then 1
+            if (dof && ((gi + gj + gk) & 1) == par) {
+                T nb = cxp * sx[li + 1][lj][lk] + cxm * sx[li - 1][lj][lk] +
+                       cyp * sx[li][lj + 1][lk] + cym * sx[li][lj - 1][lk] +
+                       czp * sx[li][lj][lk + 1] + czm * sx[li][lj][lk - 1];
+                sx[li][lj][lk] = (b[gid] + nb) / D;
+            }
+            __syncthreads();
+        }
+        if (dof)
+            x[gid] = sx[li][lj][lk];
+        return;
+    }
+    // trivial tile: red already = b/diag in shared; compute black exactly.
+    if (dof && ((gi + gj + gk) & 1) == 0) { // black cells
+        T nb = cxd * (sx[li + 1][lj][lk] + sx[li - 1][lj][lk] + sx[li][lj + 1][lk] +
+                      sx[li][lj - 1][lk] + sx[li][lj][lk + 1] + sx[li][lj][lk - 1]);
+        sx[li][lj][lk] = (b[gid] + nb) * inv;
+    }
+    __syncthreads();
+    if (dof)
+        x[gid] = sx[li][lj][lk];
+}
+
+// Prolonged fine value on the fly from read-only coarse x + read-only fine x:
+// x_fine + 2·x_coarse[parent] (solid/out-of-range untouched). Reads only inputs.
+template <typename T>
+__device__ inline T dev_prolonged3(const T* x, const T* xc, const bool* solid, int fi, int fj,
+                                   int fk, int nx, int ny, int nz, int pitch, int cpitch) {
+    if (fi < 1 || fi > nx || fj < 1 || fj > ny || fk < 1 || fk > nz)
+        return T(0);
+    int fid = dev_idx3d(fi, fj, fk, pitch, ny);
+    if (solid[fid])
+        return x[fid];
+    int cny = ny / 2;
+    return x[fid] + T(2) * xc[dev_idx3d((fi + 1) / 2, (fj + 1) / 2, (fk + 1) / 2, cpitch, cny)];
+}
+
+// ── FUSED prolong + post-smooth first colour (black), PING-PONG (x_in→dst) ──
+// Reads x_in (const) + coarse, writes a SEPARATE dst buffer → no read/write race
+// (the author's _x→_dst_x trick). Loads the prolonged x for self+halo from x_in,
+// updates black cells, writes ALL cells to dst (red = prolonged, black =
+// prolonged+smoothed). The second colour (red) is then a separate exact sweep on
+// dst. Replaces [prolong + black + red] (3 launches) with [this + red] (2).
+template <typename T>
+__global__ void prolong_black_fused_3d(T* dst, const T* x, const T* xc, const T* b,
+                                       const bool* solid, const T* diag, const T* cx, const T* cy,
+                                       const T* cz, int nx, int ny, int nz, int pitch, int cpitch,
+                                       const bool* trimmed, T cxd, T cyd, T czd, T diagd) {
+    __shared__ T sx[10][10][10];
+    int tx = threadIdx.x, ty = threadIdx.y, tz = threadIdx.z;
+    int gi = blockIdx.x * 8 + tx + 1, gj = blockIdx.y * 8 + ty + 1, gk = blockIdx.z * 8 + tz + 1;
+    int li = tx + 1, lj = ty + 1, lk = tz + 1;
+    bool valid     = (gi <= nx && gj <= ny && gk <= nz);
+    sx[li][lj][lk] = dev_prolonged3(x, xc, solid, gi, gj, gk, nx, ny, nz, pitch, cpitch);
+    if (tx == 0)
+        sx[0][lj][lk] = dev_prolonged3(x, xc, solid, gi - 1, gj, gk, nx, ny, nz, pitch, cpitch);
+    if (tx == 7)
+        sx[9][lj][lk] = dev_prolonged3(x, xc, solid, gi + 1, gj, gk, nx, ny, nz, pitch, cpitch);
+    if (ty == 0)
+        sx[li][0][lk] = dev_prolonged3(x, xc, solid, gi, gj - 1, gk, nx, ny, nz, pitch, cpitch);
+    if (ty == 7)
+        sx[li][9][lk] = dev_prolonged3(x, xc, solid, gi, gj + 1, gk, nx, ny, nz, pitch, cpitch);
+    if (tz == 0)
+        sx[li][lj][0] = dev_prolonged3(x, xc, solid, gi, gj, gk - 1, nx, ny, nz, pitch, cpitch);
+    if (tz == 7)
+        sx[li][lj][9] = dev_prolonged3(x, xc, solid, gi, gj, gk + 1, nx, ny, nz, pitch, cpitch);
+
+    int gid       = valid ? dev_idx3d(gi, gj, gk, pitch, ny) : 0;
+    bool is_solid = valid && solid[gid];
+    bool dof      = valid && !is_solid;
+    int tileid    = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    bool triv     = trimmed[tileid];
+    T cxp = cxd, cxm = cxd, cyp = cyd, cym = cyd, czp = czd, czm = czd, D = diagd;
+    if (!triv && dof) {
+        D = diag[gid];
+        if (D < T(1e-30))
+            dof = false;
+        int im = dev_idx3d(gi - 1, gj, gk, pitch, ny), jm = dev_idx3d(gi, gj - 1, gk, pitch, ny),
+            km = dev_idx3d(gi, gj, gk - 1, pitch, ny);
+        cxp = cx[gid], cxm = cx[im], cyp = cy[gid], cym = cy[jm], czp = cz[gid], czm = cz[km];
+    }
+    __syncthreads();
+    if (dof && ((gi + gj + gk) & 1) == 0) { // post-smooth first colour = black (reverse)
+        T nb = cxp * sx[li + 1][lj][lk] + cxm * sx[li - 1][lj][lk] + cyp * sx[li][lj + 1][lk] +
+               cym * sx[li][lj - 1][lk] + czp * sx[li][lj][lk + 1] + czm * sx[li][lj][lk - 1];
+        sx[li][lj][lk] = (b[gid] + nb) / D;
+    }
+    __syncthreads();
+    if (dof)
+        dst[gid] = sx[li][lj][lk]; // red = prolonged, black = prolonged+smoothed
+    else if (valid)
+        dst[gid] = x[gid]; // solid: carry through
+}
+
+// ── Tiled residual + restrict (replaces restrict_coeff_kernel_3d on big levels) ──
+// One block per fine 8³ tile: load x tile+halo from FRESH global x (the pre-smooth
+// already wrote it — so no halo reconstruction needed, exact residual), compute
+// r=b-Ax in shared with the trim fast path (uniform tiles skip coefficient reads),
+// then sum 2×2×2 children → coarse b. Same math as restrict_coeff_kernel_3d but
+// ~7× less x traffic (shared vs strided) and no coefficient reads on uniform tiles.
+template <typename T>
+__global__ void restrict_residual_tiled_3d(const T* x, const T* b, const bool* solid, const T* diag,
+                                           const T* cx, const T* cy, const T* cz, T* bc,
+                                           const bool* csolid, int nx, int ny, int nz, int pitch,
+                                           int cnx, int cny, int cnz, int cpitch,
+                                           const bool* trimmed, T cxd, T cyd, T czd, T diagd) {
+    __shared__ T sx[10][10][10];
+    __shared__ T sr[8][8][8];
+    int tx = threadIdx.x, ty = threadIdx.y, tz = threadIdx.z;
+    int gi = blockIdx.x * 8 + tx + 1, gj = blockIdx.y * 8 + ty + 1, gk = blockIdx.z * 8 + tz + 1;
+    int li = tx + 1, lj = ty + 1, lk = tz + 1;
+    bool valid     = (gi <= nx && gj <= ny && gk <= nz);
+    sx[li][lj][lk] = valid ? x[dev_idx3d(gi, gj, gk, pitch, ny)] : T(0);
+    if (tx == 0)
+        sx[0][lj][lk] = (gi > 1 && valid) ? x[dev_idx3d(gi - 1, gj, gk, pitch, ny)] : T(0);
+    if (tx == 7)
+        sx[9][lj][lk] = (gi < nx && valid) ? x[dev_idx3d(gi + 1, gj, gk, pitch, ny)] : T(0);
+    if (ty == 0)
+        sx[li][0][lk] = (gj > 1 && valid) ? x[dev_idx3d(gi, gj - 1, gk, pitch, ny)] : T(0);
+    if (ty == 7)
+        sx[li][9][lk] = (gj < ny && valid) ? x[dev_idx3d(gi, gj + 1, gk, pitch, ny)] : T(0);
+    if (tz == 0)
+        sx[li][lj][0] = (gk > 1 && valid) ? x[dev_idx3d(gi, gj, gk - 1, pitch, ny)] : T(0);
+    if (tz == 7)
+        sx[li][lj][9] = (gk < nz && valid) ? x[dev_idx3d(gi, gj, gk + 1, pitch, ny)] : T(0);
+
+    int gid       = valid ? dev_idx3d(gi, gj, gk, pitch, ny) : 0;
+    bool is_solid = valid && solid[gid];
+    bool dof      = valid && !is_solid;
+    int tileid    = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    bool triv     = trimmed[tileid];
+    T cxp = cxd, cxm = cxd, cyp = cyd, cym = cyd, czp = czd, czm = czd, D = diagd;
+    if (!triv && dof) {
+        D = diag[gid];
+        if (D < T(1e-30))
+            dof = false;
+        int im = dev_idx3d(gi - 1, gj, gk, pitch, ny), jm = dev_idx3d(gi, gj - 1, gk, pitch, ny),
+            km = dev_idx3d(gi, gj, gk - 1, pitch, ny);
+        cxp = cx[gid], cxm = cx[im], cyp = cy[gid], cym = cy[jm], czp = cz[gid], czm = cz[km];
+    }
+    __syncthreads();
+    T r = T(0);
+    if (dof) {
+        T nb = cxp * sx[li + 1][lj][lk] + cxm * sx[li - 1][lj][lk] + cyp * sx[li][lj + 1][lk] +
+               cym * sx[li][lj - 1][lk] + czp * sx[li][lj][lk + 1] + czm * sx[li][lj][lk - 1];
+        r = b[gid] - D * sx[li][lj][lk] + nb;
+    }
+    sr[tx][ty][tz] = r;
+    __syncthreads();
+    if (tx < 4 && ty < 4 && tz < 4) {
+        int cic = blockIdx.x * 4 + tx + 1, cjc = blockIdx.y * 4 + ty + 1,
+            cck = blockIdx.z * 4 + tz + 1;
+        if (cic <= cnx && cjc <= cny && cck <= cnz) {
+            int cid = dev_idx3d(cic, cjc, cck, cpitch, cny);
+            if (!csolid[cid]) {
+                T s = T(0);
+                for (int di = 0; di < 2; di++)
+                    for (int dj = 0; dj < 2; dj++)
+                        for (int dk = 0; dk < 2; dk++)
+                            s += sr[2 * tx + di][2 * ty + dj][2 * tz + dk];
+                bc[cid] = s;
+            }
+        }
+    }
+}
+
 // ── Prolongation: constant injection with ×2 scaling (paper Eq. 11) ──
 template <typename T>
 __global__ void prolong_kernel_3d(T* x_fine, const T* x_coarse, const bool* solid_fine, int fnx,
@@ -223,7 +615,12 @@ __global__ void restrict_solid_kernel_3d(const bool* solid_fine, bool* solid_coa
             for (int dk = 0; dk < 2; dk++)
                 if (solid_fine[dev_idx3d(i_f + di, j_f + dj, k_f + dk, fpitch, fny)])
                     sc++;
-    solid_coarse[dev_idx3d(ic, jc, kc, cpitch, cny)] = (sc >= 4);
+    // A coarse cell is solid ONLY if ALL 8 children are solid (i.e. it is fluid
+    // if ANY child is fluid). Mirrors the author's is_dof propagation. A majority
+    // vote (sc>=4) spuriously turns half-blocked coarse cells solid, which loses
+    // fluid DOFs across thin solids (e.g. a delta-wing plate) and makes the V-cycle
+    // operator inconsistent with the fine matrix → PCG stalls.
+    solid_coarse[dev_idx3d(ic, jc, kc, cpitch, cny)] = (sc == 8);
 }
 
 template <typename T> __global__ void zero_kernel_3d(T* a, int N) {
@@ -336,30 +733,65 @@ static void vCycle3D(typename CudaUAAMGPreconditioner3DT<T>::Level* levels, int 
     auto& L = levels[level];
     int nx = L.g.nx, ny = L.g.ny, nz = L.g.nz;
     if (level == nlevels - 1) {
-        for (int s = 0; s < 10; s++) {
-            rbgs_sweep_3d<T>(L, stream, false);
-            rbgs_sweep_3d<T>(L, stream, true);
-        }
+        // Singular coarsest system: enforce a compatible (zero-mean) RHS, solve,
+        // then pin the solution's constant — otherwise the null-space component
+        // grows and stalls the whole V-cycle on a pure-Neumann domain.
+        // Single-launch coarsest solve (was 42 tiny launches): mean(b) + 10×
+        // (forward+reverse RBGS) + mean(x), one block, identical math.
+        coarsest_solve_kernel_3d<T><<<1, 256, 0, stream>>>(L.g.x, L.g.b, L.g.solid, L.diag, L.cx,
+                                                           L.cy, L.cz, nx, ny, nz, L.g.pitch,
+                                                           L.trimmed, L.cxd, L.cyd, L.czd, L.diagd,
+                                                           10);
         return;
     }
-    rbgs_sweep_3d<T>(L, stream, false); // pre-smooth (forward)
-
     auto& coarse = levels[level + 1];
     int cnx = coarse.g.nx, cny = coarse.g.ny, cnz = coarse.g.nz;
-    dim3 cblock(8, 8, 8), cgrid((cnx + 7) / 8, (cny + 7) / 8, (cnz + 7) / 8);
-    restrict_coeff_kernel_3d<T><<<cgrid, cblock, 0, stream>>>(
-        L.g.x, L.g.b, L.g.solid, L.diag, L.cx, L.cy, L.cz, coarse.g.b, coarse.g.solid, nx, ny, nz,
-        L.g.pitch, cnx, cny, cnz, coarse.g.pitch);
+    int Nc  = (cnx + 2) * (cny + 2) * (cnz + 2);
+    // Down-leg pre-smooth. On large levels use smooth_from_zero_3d: exploits
+    // x=0-at-entry (author's trick) to compute red=b/diag locally and black
+    // exactly in ONE launch with no global x reads/reload — identical output to
+    // the forward rbgs_sweep, fewer launches + less traffic.
+    if ((long)nx * ny * nz >= (1L << 21)) {
+        dim3 block(8, 8, 8), grid((nx + 7) / 8, (ny + 7) / 8, (nz + 7) / 8);
+        smooth_from_zero_3d<T><<<grid, block, 0, stream>>>(L.g.x, L.g.b, L.g.solid, L.diag, L.cx,
+                                                           L.cy, L.cz, nx, ny, nz, L.g.pitch,
+                                                           L.trimmed, L.cxd, L.cyd, L.czd, L.diagd);
+    } else {
+        rbgs_sweep_3d<T>(L, stream, false); // pre-smooth (forward)
+    }
+    // Residual + restrict. On large levels use the tiled version (shared-mem x +
+    // trim fast path); reads the fresh global x the pre-smooth just wrote.
+    if ((long)nx * ny * nz >= (1L << 21)) {
+        dim3 block(8, 8, 8), grid((nx + 7) / 8, (ny + 7) / 8, (nz + 7) / 8);
+        restrict_residual_tiled_3d<T><<<grid, block, 0, stream>>>(
+            L.g.x, L.g.b, L.g.solid, L.diag, L.cx, L.cy, L.cz, coarse.g.b, coarse.g.solid, nx, ny,
+            nz, L.g.pitch, cnx, cny, cnz, coarse.g.pitch, L.trimmed, L.cxd, L.cyd, L.czd, L.diagd);
+    } else {
+        dim3 cblock(8, 8, 8), cgrid((cnx + 7) / 8, (cny + 7) / 8, (cnz + 7) / 8);
+        restrict_coeff_kernel_3d<T><<<cgrid, cblock, 0, stream>>>(
+            L.g.x, L.g.b, L.g.solid, L.diag, L.cx, L.cy, L.cz, coarse.g.b, coarse.g.solid, nx, ny,
+            nz, L.g.pitch, cnx, cny, cnz, coarse.g.pitch);
+    }
 
-    int Nc = (cnx + 2) * (cny + 2) * (cnz + 2);
     zero_kernel_3d<T><<<(Nc + 255) / 256, 256, 0, stream>>>(coarse.g.x, Nc);
     vCycle3D<T>(levels, level + 1, nlevels, stream);
 
     dim3 fblock(8, 8, 8), fgrid((nx + 7) / 8, (ny + 7) / 8, (nz + 7) / 8);
-    prolong_kernel_3d<T><<<fgrid, fblock, 0, stream>>>(L.g.x, coarse.g.x, L.g.solid, nx, ny, nz,
-                                                       L.g.pitch, coarse.g.pitch);
-
-    rbgs_sweep_3d<T>(L, stream, true); // post-smooth (reverse → symmetric)
+    if ((long)nx * ny * nz >= (1L << 21)) {
+        // Ping-pong fused prolong+black (x→scratch, no race), then red on scratch,
+        // then swap so L.g.x holds the result. [prolong+black+red] → [fused+red].
+        prolong_black_fused_3d<T><<<fgrid, fblock, 0, stream>>>(
+            L.scratch, L.g.x, coarse.g.x, L.g.b, L.g.solid, L.diag, L.cx, L.cy, L.cz, nx, ny, nz,
+            L.g.pitch, coarse.g.pitch, L.trimmed, L.cxd, L.cyd, L.czd, L.diagd);
+        rbgs_tiled_pass_kernel_3d<T><<<fgrid, fblock, 0, stream>>>(
+            L.scratch, L.g.b, L.g.solid, L.diag, L.cx, L.cy, L.cz, nx, ny, nz, L.g.pitch, 1,
+            L.trimmed, L.cxd, L.cyd, L.czd, L.diagd); // red pass (parity 1) on scratch
+        std::swap(L.g.x, L.scratch);                  // result now in L.g.x
+    } else {
+        prolong_kernel_3d<T><<<fgrid, fblock, 0, stream>>>(L.g.x, coarse.g.x, L.g.solid, nx, ny, nz,
+                                                           L.g.pitch, coarse.g.pitch);
+        rbgs_sweep_3d<T>(L, stream, true); // post-smooth (reverse → symmetric)
+    }
 }
 
 // ── CudaUAAMGPreconditioner3DT<T> ──
@@ -388,6 +820,7 @@ template <typename T> void CudaUAAMGPreconditioner3DT<T>::build(const CudaGrid3D
         L.ntz = (nz + 7) / 8;
         cudaMalloc(&L.trimmed, (size_t)L.ntx * L.nty * L.ntz * sizeof(bool));
         cudaMemset(L.trimmed, 0, (size_t)L.ntx * L.nty * L.ntz * sizeof(bool));
+        cudaMalloc(&L.scratch, N * sizeof(T)); // ping-pong for fused post-smooth
         levels_.push_back(std::move(L));
         if (nx <= 4 || ny <= 4 || nz <= 4)
             break;
@@ -496,8 +929,10 @@ template <typename T> void CudaUAAMGPreconditioner3DT<T>::destroy() {
             cudaFree(L.cz);
         if (L.trimmed)
             cudaFree(L.trimmed);
-        L.diag = L.cx = L.cy = L.cz = nullptr;
-        L.trimmed                   = nullptr;
+        if (L.scratch)
+            cudaFree(L.scratch);
+        L.diag = L.cx = L.cy = L.cz = L.scratch = nullptr;
+        L.trimmed                               = nullptr;
     }
     levels_.clear();
     cached_nx_ = cached_ny_ = cached_nz_ = -1;

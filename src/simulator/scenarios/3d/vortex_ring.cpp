@@ -46,14 +46,32 @@ std::array<double, 3> biot_savart_at(const VortexRing& vr, const std::array<doub
     double dphi           = 2.0 * M_PI / vr.n_segments;
     double Gamma_over_4pi = vr.circulation / (4.0 * M_PI);
     double ux = 0, uy = 0, uz = 0;
+    // Axis normal (for the axial wobble of the perturbation).
+    std::array<double, 3> nrm = vr.axis;
+    {
+        double m = std::sqrt(nrm[0] * nrm[0] + nrm[1] * nrm[1] + nrm[2] * nrm[2]);
+        if (m < 1e-12)
+            m = 1.0;
+        nrm[0] /= m;
+        nrm[1] /= m;
+        nrm[2] /= m;
+    }
     for (int s = 0; s < vr.n_segments; s++) {
         double phi = (s + 0.5) * dphi;
         double cs = std::cos(phi), sn = std::sin(phi);
-        // Filament point
-        double fx = vr.center[0] + vr.radius * (cs * e1[0] + sn * e2[0]);
-        double fy = vr.center[1] + vr.radius * (cs * e1[1] + sn * e2[1]);
-        double fz = vr.center[2] + vr.radius * (cs * e1[2] + sn * e2[2]);
-        // Tangent dl = R dphi * (-sin·e1 + cos·e2)
+        // Azimuthal perturbation seed (radius modulation + axial wobble).
+        double Rs   = vr.radius;
+        double zoff = 0.0;
+        if (vr.perturb_n > 0 && vr.perturb_amp != 0.0) {
+            Rs += vr.radius * vr.perturb_amp * std::cos(vr.perturb_n * phi);
+            zoff = vr.radius * vr.perturb_amp * std::sin(vr.perturb_n * phi);
+        }
+        // Filament point (perturbed)
+        double fx = vr.center[0] + Rs * (cs * e1[0] + sn * e2[0]) + zoff * nrm[0];
+        double fy = vr.center[1] + Rs * (cs * e1[1] + sn * e2[1]) + zoff * nrm[1];
+        double fz = vr.center[2] + Rs * (cs * e1[2] + sn * e2[2]) + zoff * nrm[2];
+        // Tangent dl = R dphi * (-sin·e1 + cos·e2)  (unperturbed direction; the
+        // small seed only needs to break axisymmetry, not be exactly tangent)
         double dlx = vr.radius * dphi * (-sn * e1[0] + cs * e2[0]);
         double dly = vr.radius * dphi * (-sn * e1[1] + cs * e2[1]);
         double dlz = vr.radius * dphi * (-sn * e1[2] + cs * e2[2]);
@@ -74,7 +92,13 @@ void add_vortex_ring(Grid3D& g, const VortexRing& vr) {
     std::array<double, 3> e1{}, e2{};
     make_basis(vr.axis, e1, e2);
 
+    // Biot-Savart over the filament is embarrassingly parallel across faces;
+    // each face writes its own cell, so a plain parallel-for is race-free.
+    // (Single-threaded this dominates IC setup at high resolution — ~minutes
+    // at 192³ with hundreds of segments.)
+
     // u-face: physical position (i*dx, (j-0.5)*dy, (k-0.5)*dz)
+#pragma omp parallel for collapse(2) schedule(static)
     for (int k = 1; k <= g.nz; k++) {
         for (int j = 1; j <= g.ny; j++) {
             for (int i = 0; i <= g.nx; i++) {
@@ -87,6 +111,7 @@ void add_vortex_ring(Grid3D& g, const VortexRing& vr) {
         }
     }
     // v-face: ((i-0.5)*dx, j*dy, (k-0.5)*dz)
+#pragma omp parallel for collapse(2) schedule(static)
     for (int k = 1; k <= g.nz; k++) {
         for (int j = 0; j <= g.ny; j++) {
             for (int i = 1; i <= g.nx; i++) {
@@ -99,6 +124,7 @@ void add_vortex_ring(Grid3D& g, const VortexRing& vr) {
         }
     }
     // w-face: ((i-0.5)*dx, (j-0.5)*dy, k*dz)
+#pragma omp parallel for collapse(2) schedule(static)
     for (int k = 0; k <= g.nz; k++) {
         for (int j = 1; j <= g.ny; j++) {
             for (int i = 1; i <= g.nx; i++) {

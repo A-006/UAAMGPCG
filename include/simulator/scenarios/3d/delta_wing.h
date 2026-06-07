@@ -33,4 +33,18 @@ void set_uniform_inflow(Grid3D& g, double U_inf);
 //   no-slip on the immersed wing.
 bc::BoundaryManager3D delta_wing_bcs(double U_inf);
 
+// Set a uniform freestream (Ux,Uy,Uz) over the whole field (initial condition).
+void set_uniform_freestream(Grid3D& g, double Ux, double Uy, double Uz);
+
+// Load the authors' exact wing geometry from a .npy signed-distance field
+// (float32, C-order, shape = grid nx×ny×nz): mark every cell with sdf<0 as
+// solid. Lets us reproduce the paper's delta wing cell-for-cell.
+void load_sdf_solid(Grid3D& g, const std::string& npy_path);
+
+// Paper's delta-wing BC: prescribe the SAME freestream velocity on all six
+// walls (so inflow flux = outflow flux exactly → mass-balanced, well-posed
+// pure-Neumann pressure) + no-slip on the immersed wing. This is what the
+// authors use (SetWallBcAsync with neg_bc_val == pos_bc_val == freestream).
+bc::BoundaryManager3D freestream_box_bcs(double Ux, double Uy, double Uz);
+
 } // namespace scenarios
