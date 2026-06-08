@@ -1425,13 +1425,25 @@ template <typename T>
 __global__ void matvec_tiled_kernel_3d(const T* __restrict p, T* __restrict Ap,
                                        const bool* __restrict solid, const T* __restrict diag,
                                        const T* __restrict cx, const T* __restrict cy,
-                                       const T* __restrict cz, int nx, int ny, int nz) {
+                                       const T* __restrict cz, int nx, int ny, int nz,
+                                       const bool* __restrict trimmed, T cxd, T cyd, T czd,
+                                       T diagd) {
     int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
     int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
     int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
     if (i > nx || j > ny || k > nz)
         return;
-    int id = dev_idx3d(i, j, k, ny, nz);
+    int id     = dev_idx3d(i, j, k, ny, nz);
+    int tileid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    if (trimmed[tileid]) {
+        // uniform tile: scalar stencil, all 6 neighbours in range/fluid → no coeff or
+        // solid reads (the §5.4 trim win, now on the PCG's per-iteration matvec too).
+        Ap[id] = diagd * p[id] -
+                 cxd * (p[dev_idx3d(i + 1, j, k, ny, nz)] + p[dev_idx3d(i - 1, j, k, ny, nz)]) -
+                 cyd * (p[dev_idx3d(i, j + 1, k, ny, nz)] + p[dev_idx3d(i, j - 1, k, ny, nz)]) -
+                 czd * (p[dev_idx3d(i, j, k + 1, ny, nz)] + p[dev_idx3d(i, j, k - 1, ny, nz)]);
+        return;
+    }
     if (solid[id]) {
         Ap[id] = T(0);
         return;
@@ -1773,7 +1785,8 @@ void CudaUAAMGPreconditioner3DT<T>::matvec_tiled(const T* p, T* Ap) {
     auto& L = levels_[0];
     int nx = L.g.nx, ny = L.g.ny, nz = L.g.nz;
     dim3 b(8, 8, 8), g((nx + 7) / 8, (ny + 7) / 8, (nz + 7) / 8);
-    matvec_tiled_kernel_3d<T><<<g, b>>>(p, Ap, L.g.solid, L.diag, L.cx, L.cy, L.cz, nx, ny, nz);
+    matvec_tiled_kernel_3d<T><<<g, b>>>(p, Ap, L.g.solid, L.diag, L.cx, L.cy, L.cz, nx, ny, nz,
+                                        L.trimmed, L.cxd, L.cyd, L.czd, L.diagd);
 }
 // In-place M⁻¹: the finest b (== the PCG's r) is already set; run the V-cycle and
 // leave the result in the finest x (== the PCG's z). No memcpy, no conversion —
