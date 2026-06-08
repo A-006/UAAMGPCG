@@ -726,7 +726,7 @@ __global__ void __launch_bounds__(128) prolong_smooth_nontrivial_3d(
     T* __restrict dst, const T* __restrict x, const T* __restrict xc, const T* __restrict b,
     const bool* __restrict solid, const T* __restrict diag, const T* __restrict cx,
     const T* __restrict cy, const T* __restrict cz, int nx, int ny, int nz,
-    const bool* __restrict trimmed) {
+    const bool* __restrict trimmed, T cxd, T cyd, T czd, T diagd) {
     int tileid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
     if (trimmed[tileid])
         return; // trivial → warp trivial up-leg
@@ -808,12 +808,18 @@ __global__ void __launch_bounds__(128) prolong_smooth_nontrivial_3d(
         return prol(nvx, nvy, nvz);
     };
     auto blacksm = [&](int vx, int vy, int vz, T d) -> T { // (b + Σ coupling·red_nbr)/diag
-        T nb = gget(cz, vx, vy, vz) * pnbr(vx + 1, vy, vz) +
-               gget(cz, vx - 1, vy, vz) * pnbr(vx - 1, vy, vz) +
-               gget(cy, vx, vy, vz) * pnbr(vx, vy + 1, vz) +
-               gget(cy, vx, vy - 1, vz) * pnbr(vx, vy - 1, vz) +
-               gget(cx, vx, vy, vz) * pnbr(vx, vy, vz + 1) +
-               gget(cx, vx, vy, vz - 1) * pnbr(vx, vy, vz - 1);
+        T nb;
+        if (d == diagd) // per-cell §5.4 trim: uniform cell → scalar couplings
+            nb = czd * (pnbr(vx + 1, vy, vz) + pnbr(vx - 1, vy, vz)) +
+                 cyd * (pnbr(vx, vy + 1, vz) + pnbr(vx, vy - 1, vz)) +
+                 cxd * (pnbr(vx, vy, vz + 1) + pnbr(vx, vy, vz - 1));
+        else
+            nb = gget(cz, vx, vy, vz) * pnbr(vx + 1, vy, vz) +
+                 gget(cz, vx - 1, vy, vz) * pnbr(vx - 1, vy, vz) +
+                 gget(cy, vx, vy, vz) * pnbr(vx, vy + 1, vz) +
+                 gget(cy, vx, vy - 1, vz) * pnbr(vx, vy - 1, vz) +
+                 gget(cx, vx, vy, vz) * pnbr(vx, vy, vz + 1) +
+                 gget(cx, vx, vy, vz - 1) * pnbr(vx, vy, vz - 1);
         return (gget(b, vx, vy, vz) + nb) / d;
     };
     // ── phase 1: BLACK(voxel-odd) post-smooth, compacted (solid keeps prolonged) ──
@@ -853,12 +859,18 @@ __global__ void __launch_bounds__(128) prolong_smooth_nontrivial_3d(
         int vx = a, vy = b2 / 4, vz = 2 * (b2 % 4) + (((b2 / 4) + a) & 1); // red (even)
         T d    = gget(diag, vx, vy, vz);
         if (d > T(1e-30)) {
-            T nb = gget(cz, vx, vy, vz) * sx[vx + 2][vy + 1][vz + 1] +
-                   gget(cz, vx - 1, vy, vz) * sx[vx][vy + 1][vz + 1] +
-                   gget(cy, vx, vy, vz) * sx[vx + 1][vy + 2][vz + 1] +
-                   gget(cy, vx, vy - 1, vz) * sx[vx + 1][vy][vz + 1] +
-                   gget(cx, vx, vy, vz) * sx[vx + 1][vy + 1][vz + 2] +
-                   gget(cx, vx, vy, vz - 1) * sx[vx + 1][vy + 1][vz];
+            T nb;
+            if (d == diagd)
+                nb = czd * (sx[vx + 2][vy + 1][vz + 1] + sx[vx][vy + 1][vz + 1]) +
+                     cyd * (sx[vx + 1][vy + 2][vz + 1] + sx[vx + 1][vy][vz + 1]) +
+                     cxd * (sx[vx + 1][vy + 1][vz + 2] + sx[vx + 1][vy + 1][vz]);
+            else
+                nb = gget(cz, vx, vy, vz) * sx[vx + 2][vy + 1][vz + 1] +
+                     gget(cz, vx - 1, vy, vz) * sx[vx][vy + 1][vz + 1] +
+                     gget(cy, vx, vy, vz) * sx[vx + 1][vy + 2][vz + 1] +
+                     gget(cy, vx, vy - 1, vz) * sx[vx + 1][vy][vz + 1] +
+                     gget(cx, vx, vy, vz) * sx[vx + 1][vy + 1][vz + 2] +
+                     gget(cx, vx, vy, vz - 1) * sx[vx + 1][vy + 1][vz];
             dst[idxv(vx, vy, vz)] = (sb[vx][vy][vz] + nb) / d;
         } else
             dst[idxv(vx, vy, vz)] = sx[vx + 1][vy + 1][vz + 1]; // solid → carry prolonged
@@ -1209,7 +1221,7 @@ __global__ void __launch_bounds__(128) smooth_restrict_nontrivial_3d(
     const T* __restrict b, T* __restrict x, T* __restrict bc, const bool* __restrict csolid,
     const bool* __restrict solid, const T* __restrict diag, const T* __restrict cx,
     const T* __restrict cy, const T* __restrict cz, int nx, int ny, int nz, int cnx, int cny,
-    int cnz, const bool* __restrict trimmed) {
+    int cnz, const bool* __restrict trimmed, T cxd, T cyd, T czd, T diagd) {
     int tileid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
     if (trimmed[tileid])
         return; // trivial → handled by the warp trivial kernel
@@ -1293,17 +1305,25 @@ __global__ void __launch_bounds__(128) smooth_restrict_nontrivial_3d(
             return sx[si][sj][sk];
         return redv(nvx, nvy, nvz);
     };
-    // black smooth helper for cell (vx,vy,vz): (b + Σ coupling·red_nbr)/diag, per-cell.
+    // black smooth helper for cell (vx,vy,vz): (b + Σ coupling·red_nbr)/diag.
+    // Per-cell §5.4 trim: a uniform cell (diag==diagd) has all 6 couplings scalar, so
+    // skip the 6 scattered coupling reads — the bulk of a boundary tile is uniform.
     auto black = [&](int vx, int vy, int vz, T bv) -> T {
         T d = gget(diag, vx, vy, vz);
         if (!(d > T(1e-30)))
             return T(0); // solid / out-of-domain
-        T nb = gget(cz, vx, vy, vz) * rnbr(vx + 1, vy, vz) +
-               gget(cz, vx - 1, vy, vz) * rnbr(vx - 1, vy, vz) +
-               gget(cy, vx, vy, vz) * rnbr(vx, vy + 1, vz) +
-               gget(cy, vx, vy - 1, vz) * rnbr(vx, vy - 1, vz) +
-               gget(cx, vx, vy, vz) * rnbr(vx, vy, vz + 1) +
-               gget(cx, vx, vy, vz - 1) * rnbr(vx, vy, vz - 1);
+        T nb;
+        if (d == diagd)
+            nb = czd * (rnbr(vx + 1, vy, vz) + rnbr(vx - 1, vy, vz)) +
+                 cyd * (rnbr(vx, vy + 1, vz) + rnbr(vx, vy - 1, vz)) +
+                 cxd * (rnbr(vx, vy, vz + 1) + rnbr(vx, vy, vz - 1));
+        else
+            nb = gget(cz, vx, vy, vz) * rnbr(vx + 1, vy, vz) +
+                 gget(cz, vx - 1, vy, vz) * rnbr(vx - 1, vy, vz) +
+                 gget(cy, vx, vy, vz) * rnbr(vx, vy + 1, vz) +
+                 gget(cy, vx, vy - 1, vz) * rnbr(vx, vy - 1, vz) +
+                 gget(cx, vx, vy, vz) * rnbr(vx, vy, vz + 1) +
+                 gget(cx, vx, vy, vz - 1) * rnbr(vx, vy, vz - 1);
         return (bv + nb) / d;
     };
     // ── phase 1: black(voxel-odd) interior, compacted ──
@@ -1339,12 +1359,18 @@ __global__ void __launch_bounds__(128) smooth_restrict_nontrivial_3d(
         x[c]    = xc;
         T d     = diag[c];
         if (d > T(1e-30)) {
-            T nb = gget(cz, vx, vy, vz) * sx[vx + 2][vy + 1][vz + 1] +
-                   gget(cz, vx - 1, vy, vz) * sx[vx][vy + 1][vz + 1] +
-                   gget(cy, vx, vy, vz) * sx[vx + 1][vy + 2][vz + 1] +
-                   gget(cy, vx, vy - 1, vz) * sx[vx + 1][vy][vz + 1] +
-                   gget(cx, vx, vy, vz) * sx[vx + 1][vy + 1][vz + 2] +
-                   gget(cx, vx, vy, vz - 1) * sx[vx + 1][vy + 1][vz];
+            T nb;
+            if (d == diagd)
+                nb = czd * (sx[vx + 2][vy + 1][vz + 1] + sx[vx][vy + 1][vz + 1]) +
+                     cyd * (sx[vx + 1][vy + 2][vz + 1] + sx[vx + 1][vy][vz + 1]) +
+                     cxd * (sx[vx + 1][vy + 1][vz + 2] + sx[vx + 1][vy + 1][vz]);
+            else
+                nb = gget(cz, vx, vy, vz) * sx[vx + 2][vy + 1][vz + 1] +
+                     gget(cz, vx - 1, vy, vz) * sx[vx][vy + 1][vz + 1] +
+                     gget(cy, vx, vy, vz) * sx[vx + 1][vy + 2][vz + 1] +
+                     gget(cy, vx, vy - 1, vz) * sx[vx + 1][vy][vz + 1] +
+                     gget(cx, vx, vy, vz) * sx[vx + 1][vy + 1][vz + 2] +
+                     gget(cx, vx, vy, vz - 1) * sx[vx + 1][vy + 1][vz];
             sb[vx][vy][vz] = b[c] - d * xc + nb;
         } else
             sb[vx][vy][vz] = T(0); // solid → no residual
@@ -1593,7 +1619,7 @@ static void vCycle3D(typename CudaUAAMGPreconditioner3DT<T>::Level* levels, int 
         (void)block;
         smooth_restrict_nontrivial_3d<T><<<grid128, 128, 0, stream>>>(
             L.g.b, L.g.x, coarse.g.b, coarse.g.solid, L.g.solid, L.diag, L.cx, L.cy, L.cz, nx, ny, nz,
-            cnx, cny, cnz, L.trimmed);
+            cnx, cny, cnz, L.trimmed, L.cxd, L.cyd, L.czd, L.diagd);
     } else {
         rbgs_sweep_3d<T>(L, stream, false); // pre-smooth (forward)
         dim3 cblock(8, 8, 8), cgrid((cnx + 7) / 8, (cny + 7) / 8, (cnz + 7) / 8);
@@ -1620,7 +1646,7 @@ static void vCycle3D(typename CudaUAAMGPreconditioner3DT<T>::Level* levels, int 
             L.diagd);
         prolong_smooth_nontrivial_3d<T><<<grid128, 128, 0, stream>>>(
             L.scratch, L.g.x, coarse.g.x, L.g.b, L.g.solid, L.diag, L.cx, L.cy, L.cz, nx, ny, nz,
-            L.trimmed);
+            L.trimmed, L.cxd, L.cyd, L.czd, L.diagd);
         std::swap(L.g.x, L.scratch); // result now in L.g.x
     } else {
         prolong_kernel_3d<T><<<fgrid, fblock, 0, stream>>>(L.g.x, coarse.g.x, L.g.solid, nx, ny, nz);
