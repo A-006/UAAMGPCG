@@ -1730,9 +1730,12 @@ void CudaUAAMGPreconditioner3DT<T>::vcycle_apply(const CudaGrid3DT_<T>& fine, co
     // pitched r → tile-contiguous level-0 b.
     scatter_p2t_kernel_3d<T><<<cgrid, cblock, 0, stream>>>(r, levels_[0].g.b, nx0, ny0, nz0,
                                                            fine.pitch);
-    for (int l = 0; l < nl; l++) {
-        long N = levels_[l].g.num_tiles * 512;
-        zero_kernel_3d<T><<<(N + 255) / 256, 256, 0, stream>>>(levels_[l].g.x, N);
+    // Coarse levels' x are zeroed per-level in vCycle3D. Level 0 only needs an
+    // upfront zero when it uses the STRIDED path (in-place GS reads x); the warp
+    // down-leg writes every level-0 interior cell, so no zero needed there.
+    if ((long)nx0 * ny0 * nz0 < (1L << 21)) {
+        long N0 = (long)levels_[0].g.num_tiles * 512;
+        zero_kernel_3d<T><<<(N0 + 255) / 256, 256, 0, stream>>>(levels_[0].g.x, N0);
     }
     vCycle3D<T>(levels_.data(), 0, nl, stream);
     cudaDeviceSynchronize();
@@ -1779,9 +1782,10 @@ void CudaUAAMGPreconditioner3DT<T>::matvec_tiled(const T* p, T* Ap) {
 template <typename T> void CudaUAAMGPreconditioner3DT<T>::vcycle_inplace() {
     int nl              = (int)levels_.size();
     cudaStream_t stream = 0;
-    for (int l = 0; l < nl; l++) {
-        long N = (long)levels_[l].g.num_tiles * 512;
-        zero_kernel_3d<T><<<(N + 255) / 256, 256, 0, stream>>>(levels_[l].g.x, N);
+    // See vcycle_apply: only a strided level-0 needs the upfront x-zero.
+    if ((long)levels_[0].g.nx * levels_[0].g.ny * levels_[0].g.nz < (1L << 21)) {
+        long N0 = (long)levels_[0].g.num_tiles * 512;
+        zero_kernel_3d<T><<<(N0 + 255) / 256, 256, 0, stream>>>(levels_[0].g.x, N0);
     }
     vCycle3D<T>(levels_.data(), 0, nl, stream);
     cudaDeviceSynchronize();
