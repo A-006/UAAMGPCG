@@ -19,6 +19,27 @@ public:
     void apply(const CudaGrid3DT_<T>& fine, const T* r, T* z);
     void destroy();
 
+    // ── Tile-native fast path (PCG stays in the tile layout; no per-iter convert) ──
+    long level0_count() const {
+        return levels_.empty() ? 0 : (long)levels_[0].g.num_tiles * 512;
+    }
+    const bool* level0_solid() const {
+        return levels_.empty() ? nullptr : levels_[0].g.solid;
+    }
+    // The finest-level tile b/x ARE the PCG's r and z (aliased) — no copy needed:
+    // the V-cycle reads b (=r) and writes x (=z) in place, so the entire solve runs
+    // in the tile layout with zero per-iteration pitched↔tile conversion.
+    T* level0_b() {
+        return levels_.empty() ? nullptr : levels_[0].g.b;
+    }
+    T* level0_x() {
+        return levels_.empty() ? nullptr : levels_[0].g.x;
+    }
+    void to_tile(const T* pitched, T* tile, const CudaGrid3DT_<T>& fine);   // scatter (once)
+    void from_tile(const T* tile, T* pitched, const CudaGrid3DT_<T>& fine); // gather (once)
+    void matvec_tiled(const T* p_tile, T* Ap_tile);                        // A·p in tile layout
+    void vcycle_inplace(); // M⁻¹ in place: b(=r) already set → result in x(=z)
+
     /// Matrix-free Galerkin stencil per level + §5.4 trimming metadata.
     struct Level {
         CudaGrid3DT_<T> g;

@@ -157,6 +157,66 @@ __global__ void axpy_kernel_3d(double* y, const double* x, double a, const bool*
         y[id] += a * x[id];
 }
 
+// ── Flat (tile-layout) vector ops: iterate the contiguous num_tiles*512 array with
+//    the tile-layout solid mask. Valid because all grid dims are multiples of 8, so
+//    the tile array is exactly the interior (no padding cells). Used by the
+//    tile-native solve path so r/z/p/Ap never round-trip through scatter/gather. ──
+__global__ void negate_flat_kernel(double* v, const bool* solid, long N) {
+    long k = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (k < N && !solid[k])
+        v[k] = -v[k];
+}
+__global__ void subtract_mean_flat_kernel(double* v, double mean, const bool* solid, long N) {
+    long k = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (k < N && !solid[k])
+        v[k] -= mean;
+}
+__global__ void axpy_flat_kernel(double* y, const double* x, double a, const bool* solid, long N) {
+    long k = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (k < N && !solid[k])
+        y[k] += a * x[k];
+}
+// y = x + b*y  (PCG direction update p = z + beta*p)
+__global__ void xpby_flat_kernel(double* y, const double* x, double b, const bool* solid, long N) {
+    long k = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (k < N && !solid[k])
+        y[k] = x[k] + b * y[k];
+}
+__global__ void sum_flat_kernel(const double* v, const bool* solid, long N, double* part) {
+    __shared__ double s[256];
+    int tid    = threadIdx.x;
+    double sum = 0;
+    for (long k = (long)blockIdx.x * blockDim.x + tid; k < N; k += (long)blockDim.x * gridDim.x)
+        if (!solid[k])
+            sum += v[k];
+    s[tid] = sum;
+    __syncthreads();
+    for (int st = blockDim.x / 2; st > 0; st >>= 1) {
+        if (tid < st)
+            s[tid] += s[tid + st];
+        __syncthreads();
+    }
+    if (tid == 0)
+        part[blockIdx.x] = s[0];
+}
+__global__ void count_flat_kernel(const bool* solid, long N, int* part) {
+    __shared__ int s[256];
+    int tid = threadIdx.x;
+    int c   = 0;
+    for (long k = (long)blockIdx.x * blockDim.x + tid; k < N; k += (long)blockDim.x * gridDim.x)
+        if (!solid[k])
+            c++;
+    s[tid] = c;
+    __syncthreads();
+    for (int st = blockDim.x / 2; st > 0; st >>= 1) {
+        if (tid < st)
+            s[tid] += s[tid + st];
+        __syncthreads();
+    }
+    if (tid == 0)
+        part[blockIdx.x] = s[0];
+}
+
 // ── Host reduction (deterministic sequential) ──
 static double host_reduce_3d(const double* d_partial, int nblocks) {
     std::vector<double> h(nblocks);
@@ -198,6 +258,7 @@ void CudaPCG3D::ensure_buffers(int N) {
     cudaMalloc(&d_z, N * sizeof(double));
     cudaMalloc(&d_p, N * sizeof(double));
     cudaMalloc(&d_Ap, N * sizeof(double));
+    cudaMalloc(&d_xt, N * sizeof(double)); // tile-native solution accumulator
     int max_blocks = (N + 255) / 256 + 1;
     cudaMalloc(&d_dot_buf, max_blocks * sizeof(double));
     cudaMalloc(&d_count_buf, max_blocks * sizeof(int));
@@ -215,14 +276,16 @@ void CudaPCG3D::free_buffers() {
         cudaFree(d_p);
     if (d_Ap)
         cudaFree(d_Ap);
+    if (d_xt)
+        cudaFree(d_xt);
     if (d_dot_buf)
         cudaFree(d_dot_buf);
     if (d_scalar)
         cudaFree(d_scalar);
     if (d_count_buf)
         cudaFree(d_count_buf);
-    d_r = d_z = d_p = d_Ap = d_dot_buf = nullptr;
-    d_count_buf                        = nullptr;
+    d_r = d_z = d_p = d_Ap = d_xt = d_dot_buf = nullptr;
+    d_count_buf                               = nullptr;
     d_scalar                           = nullptr;
     dot_buf_size_                      = 0;
     N_                                 = 0;
@@ -247,75 +310,78 @@ void CudaPCG3D::solve(CudaGrid3D& g, double* p, double* rhs, int max_iter, doubl
 
     precond_->setupLevels(g); // solid + Galerkin coeffs + §5.4 trimming — once per solve
 
-    // r = rhs, p = 0
-    cudaMemcpy(d_r, rhs, N * sizeof(double), cudaMemcpyDeviceToDevice);
-    cudaMemset(p, 0, N * sizeof(double));
+    // ── Tile-native PCG: r/z/p/Ap/x live in the preconditioner's 8³ tile layout, so
+    //    the V-cycle no longer scatters/gathers every iteration. Only the RHS (in)
+    //    and the solution (out) cross the pitched↔tile boundary, once per solve. ──
+    const long Nt    = precond_->level0_count(); // == nx*ny*nz (dims are ×8)
+    const bool* tsol = precond_->level0_solid();
+    int nbe          = (int)((Nt + 255) / 256); // one-thread-per-cell launches
+    // r and z ALIAS the preconditioner's finest tile b and x → the V-cycle reads r
+    // and writes z in place, so the solve never copies r/z anywhere (no scatter,
+    // gather, or memcpy per iteration). Only rhs (in) and the solution (out) cross
+    // the pitched↔tile boundary, once each per solve.
+    double* rt = precond_->level0_b(); // r
+    double* zt = precond_->level0_x(); // z
+    precond_->to_tile(rhs, rt, g);     // r = scatter(rhs)
+    auto tile_mean = [&](const double* v) -> double {
+        sum_flat_kernel<<<nblocks1d, 256>>>(v, tsol, Nt, d_dot_buf);
+        cudaDeviceSynchronize();
+        double s = host_reduce_3d(d_dot_buf, nblocks1d);
+        count_flat_kernel<<<nblocks1d, 256>>>(tsol, Nt, d_count_buf);
+        cudaDeviceSynchronize();
+        int c = host_reduce_int_3d(d_count_buf, nblocks1d);
+        return c > 0 ? s / c : 0.0;
+    };
+    auto tile_dot = [&](const double* a, const double* b) -> double {
+        dot_partial_kernel_3d<<<nblocks1d, 256>>>(a, b, tsol, (int)Nt, d_dot_buf);
+        cudaDeviceSynchronize();
+        return host_reduce_3d(d_dot_buf, nblocks1d);
+    };
+    double mr = tile_mean(rt); // r = -(r - mean)
+    subtract_mean_flat_kernel<<<nbe, 256>>>(rt, mr, tsol, Nt);
+    negate_flat_kernel<<<nbe, 256>>>(rt, tsol, Nt);
 
-    // Zero-mean + negate RHS (match CPU PCG: rhs = -(rhs - mean))
-    double mr = compute_mean_3d(d_r, g.solid, nx, ny, nz, pitch, d_dot_buf, d_count_buf, nblocks1d);
-    subtract_mean_kernel_3d<<<grid3d, block3d>>>(d_r, mr, g.solid, nx, ny, nz, pitch);
-    negate_kernel_3d<<<grid3d, block3d>>>(d_r, g.solid, nx, ny, nz, pitch);
+    // z = M^{-1} r (in place) ; subtract mean ; p = z ; x = 0
+    precond_->vcycle_inplace();
+    zt        = precond_->level0_x(); // up-leg ping-pong swaps the x buffer → re-fetch
+    double mz = tile_mean(zt);
+    subtract_mean_flat_kernel<<<nbe, 256>>>(zt, mz, tsol, Nt);
+    cudaMemcpy(d_p, zt, Nt * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemset(d_xt, 0, Nt * sizeof(double));
 
-    // z = M^{-1} * r
-    precond_->vcycle_apply(g, d_r, d_z);
-
-    // Subtract mean from z, copy to p
-    double mz = compute_mean_3d(d_z, g.solid, nx, ny, nz, pitch, d_dot_buf, d_count_buf, nblocks1d);
-    subtract_mean_kernel_3d<<<grid3d, block3d>>>(d_z, mz, g.solid, nx, ny, nz, pitch);
-    cudaMemcpy(d_p, d_z, N * sizeof(double), cudaMemcpyDeviceToDevice);
-
-    // rsold = dot(r, z)
-    dot_partial_kernel_3d<<<nblocks1d, 256>>>(d_r, d_z, g.solid, N, d_dot_buf);
-    CUDA_CHECK_3D(cudaGetLastError());
-    cudaDeviceSynchronize();
-    double rsold = host_reduce_3d(d_dot_buf, nblocks1d);
+    double rsold = tile_dot(rt, zt);
     if (rsold < 1e-30) {
         cudaMemset(p, 0, N * sizeof(double));
         return;
     }
 
     for (int k = 0; k < max_iter; k++) {
-        matvec_kernel_3d<<<grid3d, block3d>>>(d_p, d_Ap, g.solid, nx, ny, nz, pitch, g.idx2, g.idy2,
-                                              g.idz2, g.diag);
-
-        dot_partial_kernel_3d<<<nblocks1d, 256>>>(d_p, d_Ap, g.solid, N, d_dot_buf);
-        CUDA_CHECK_3D(cudaDeviceSynchronize());
-        double pAp = host_reduce_3d(d_dot_buf, nblocks1d);
+        precond_->matvec_tiled(d_p, d_Ap);
+        double pAp = tile_dot(d_p, d_Ap);
         if (pAp < 1e-15)
             break;
-
         double alpha = rsold / pAp;
 
-        axpy_kernel_3d<<<grid3d, block3d>>>(p, d_p, alpha, g.solid, nx, ny, nz, pitch);
-        axpy_kernel_3d<<<grid3d, block3d>>>(d_r, d_Ap, -alpha, g.solid, nx, ny, nz, pitch);
+        axpy_flat_kernel<<<nbe, 256>>>(d_xt, d_p, alpha, tsol, Nt);  // x += alpha p
+        axpy_flat_kernel<<<nbe, 256>>>(rt, d_Ap, -alpha, tsol, Nt);  // r -= alpha Ap
         CUDA_CHECK_3D(cudaDeviceSynchronize());
 
-        dot_partial_kernel_3d<<<nblocks1d, 256>>>(d_r, d_r, g.solid, N, d_dot_buf);
-        CUDA_CHECK_3D(cudaDeviceSynchronize());
-        double rsnew = host_reduce_3d(d_dot_buf, nblocks1d);
-
+        double rsnew = tile_dot(rt, rt);
         if (std::sqrt(rsnew) < tol)
             break;
 
-        precond_->vcycle_apply(g, d_r, d_z);
+        precond_->vcycle_inplace(); // z = M^{-1} r (r in level0 b, z in level0 x)
+        zt         = precond_->level0_x(); // re-fetch after the ping-pong swap
+        double mz2 = tile_mean(zt);
+        subtract_mean_flat_kernel<<<nbe, 256>>>(zt, mz2, tsol, Nt);
 
-        double mz2 =
-            compute_mean_3d(d_z, g.solid, nx, ny, nz, pitch, d_dot_buf, d_count_buf, nblocks1d);
-        subtract_mean_kernel_3d<<<grid3d, block3d>>>(d_z, mz2, g.solid, nx, ny, nz, pitch);
-        CUDA_CHECK_3D(cudaDeviceSynchronize());
-
-        dot_partial_kernel_3d<<<nblocks1d, 256>>>(d_r, d_z, g.solid, N, d_dot_buf);
-        CUDA_CHECK_3D(cudaDeviceSynchronize());
-        double rz = host_reduce_3d(d_dot_buf, nblocks1d);
-
+        double rz   = tile_dot(rt, zt);
         double beta = rz / rsold;
         rsold       = rz;
-
-        // p = z + beta * p
-        cudaMemcpy(d_Ap, d_p, N * sizeof(double), cudaMemcpyDeviceToDevice);
-        cudaMemcpy(d_p, d_z, N * sizeof(double), cudaMemcpyDeviceToDevice);
-        axpy_kernel_3d<<<grid3d, block3d>>>(d_p, d_Ap, beta, g.solid, nx, ny, nz, pitch);
+        xpby_flat_kernel<<<nbe, 256>>>(d_p, zt, beta, tsol, Nt); // p = z + beta p
         CUDA_CHECK_3D(cudaDeviceSynchronize());
     }
+    // solution (tile) → pitched output
+    precond_->from_tile(d_xt, p, g);
     CUDA_CHECK_3D(cudaDeviceSynchronize());
 }

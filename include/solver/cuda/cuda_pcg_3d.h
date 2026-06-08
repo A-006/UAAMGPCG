@@ -38,6 +38,7 @@ private:
     void mixed_apply(int N, const double* dr, double* dz);
 
     double *d_r = nullptr, *d_z = nullptr, *d_p = nullptr, *d_Ap = nullptr;
+    double* d_xt      = nullptr; // tile-layout solution accumulator (tile-native solve)
     double *d_dot_buf = nullptr, *d_scalar = nullptr;
     int* d_count_buf     = nullptr;
     size_t dot_buf_size_ = 0;
