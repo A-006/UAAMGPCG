@@ -1043,6 +1043,176 @@ __global__ void __launch_bounds__(128) smooth_restrict_trivial_3d(
     }
 }
 
+// ── WARP-SPECIALIZED non-trivial down-leg (per-cell coeffs + solids) ──
+// Same MLP recipe as smooth_restrict_trivial_3d but reads diag/cx/cy/cz/solid per
+// cell (boundary tiles: reduced diag at the domain edge; with solids: blocked
+// couplings). Couplings via axis map: vx-dir(k)=cz, vy-dir(j)=cy, vz-dir(i)=cx; a
+// coupling to a solid/out-of-domain neighbour is already 0 in the arrays, so no
+// special casing. Solid cells carry x=0. Handles the ~18% boundary tiles the
+// trivial kernel early-returns on. Replaces smooth_from_zero+restrict_residual.
+template <typename T>
+__global__ void __launch_bounds__(128) smooth_restrict_nontrivial_3d(
+    const T* __restrict b, T* __restrict x, T* __restrict bc, const bool* __restrict csolid,
+    const bool* __restrict solid, const T* __restrict diag, const T* __restrict cx,
+    const T* __restrict cy, const T* __restrict cz, int nx, int ny, int nz, int cnx, int cny,
+    int cnz, const bool* __restrict trimmed) {
+    int tileid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    if (trimmed[tileid])
+        return; // trivial → handled by the warp trivial kernel
+    __shared__ T sx[10][10][10];
+    __shared__ T sb[8][8][8];
+    int bx = blockIdx.x * 8, by = blockIdx.y * 8, bz = blockIdx.z * 8;
+    int tid = threadIdx.x;
+    auto idxv = [&](int vx, int vy, int vz) -> int {
+        return dev_idx3d(bx + vz + 1, by + vy + 1, bz + vx + 1, ny, nz);
+    };
+    // Guarded global read: out-of-domain (boundary tiles' 2-ring) → 0 (Neumann: the
+    // coupling there is absent anyway). Interior cells are always in range.
+    auto gget = [&](const T* arr, int vx, int vy, int vz) -> T {
+        int gi = bx + vz + 1, gj = by + vy + 1, gk = bz + vx + 1;
+        if (gi < 1 || gi > nx || gj < 1 || gj > ny || gk < 1 || gk > nz)
+            return T(0);
+        return arr[dev_idx3d(gi, gj, gk, ny, nz)];
+    };
+    auto redv = [&](int vx, int vy, int vz) -> T { // red cell value b/diag (0 if solid/oob)
+        T d = gget(diag, vx, vy, vz);
+        return d > T(1e-30) ? gget(b, vx, vy, vz) / d : T(0);
+    };
+    // ── phase 0: interior b + red(voxel-even)=b/diag (per-cell), coalesced ──
+    for (int i = 0; i < 4; i++) {
+        int vid = i * 128 + tid;
+        int vx = vid / 64, vy = (vid / 8) % 8, vz = vid % 8;
+        int c          = idxv(vx, vy, vz);
+        T bv           = b[c];
+        sb[vx][vy][vz] = bv;
+        T d            = diag[c];
+        if (((vx + vy + vz) & 1) == 0)
+            sx[vx + 1][vy + 1][vz + 1] = d > T(1e-30) ? bv / d : T(0); // red
+        else
+            sx[vx + 1][vy + 1][vz + 1] = T(0); // black (computed phase 1; solid stays 0)
+    }
+    int warp = tid / 32, lane = tid % 32;
+    // ── phase 0 halo: red(voxel-even) faces = b/diag (warp per face) ──
+    if (warp == 0) {
+        int vy = lane / 4, vz = 2 * (lane % 4) + !((lane / 4) & 1);
+        sx[0][vy + 1][vz + 1] = redv(-1, vy, vz);
+        vz                    = 2 * (lane % 4) + ((lane / 4) & 1);
+        sx[9][vy + 1][vz + 1] = redv(8, vy, vz);
+    } else if (warp == 1) {
+        int vx = lane / 4, vz = 2 * (lane % 4) + !((lane / 4) & 1);
+        sx[vx + 1][0][vz + 1] = redv(vx, -1, vz);
+        vz                    = 2 * (lane % 4) + ((lane / 4) & 1);
+        sx[vx + 1][9][vz + 1] = redv(vx, 8, vz);
+    } else if (warp == 2) {
+        int vx = lane / 4, vy = 2 * (lane % 4) + !((lane / 4) & 1);
+        sx[vx + 1][vy + 1][0] = redv(vx, vy, -1);
+        vy                    = 2 * (lane % 4) + ((lane / 4) & 1);
+        sx[vx + 1][vy + 1][9] = redv(vx, vy, 8);
+    }
+    auto edge_red = [&](int vx, int vy, int vz, int sxx, int sxy, int sxz) {
+        if (((vx + vy + vz) & 1) == 0)
+            sx[sxx][sxy][sxz] = redv(vx, vy, vz);
+    };
+    if (warp == 0 && lane < 8) {
+        edge_red(-1, -1, lane, 0, 0, lane + 1);
+        edge_red(-1, 8, lane, 0, 9, lane + 1);
+        edge_red(-1, lane, -1, 0, lane + 1, 0);
+        edge_red(-1, lane, 8, 0, lane + 1, 9);
+    } else if (warp == 1 && lane < 8) {
+        edge_red(8, -1, lane, 9, 0, lane + 1);
+        edge_red(8, 8, lane, 9, 9, lane + 1);
+        edge_red(8, lane, -1, 9, lane + 1, 0);
+        edge_red(8, lane, 8, 9, lane + 1, 9);
+    } else if (warp == 2 && lane < 8) {
+        edge_red(lane, -1, -1, lane + 1, 0, 0);
+        edge_red(lane, -1, 8, lane + 1, 0, 9);
+        edge_red(lane, 8, -1, lane + 1, 9, 0);
+        edge_red(lane, 8, 8, lane + 1, 9, 9);
+    }
+    __syncthreads();
+    // red neighbour value: in the [0..9]³ shared region → sx; else (the outward
+    // 2-ring of a halo black cell) → global red b/diag. All neighbours of a black
+    // cell are red, so this is exact.
+    auto rnbr = [&](int nvx, int nvy, int nvz) -> T {
+        int si = nvx + 1, sj = nvy + 1, sk = nvz + 1;
+        if (si >= 0 && si <= 9 && sj >= 0 && sj <= 9 && sk >= 0 && sk <= 9)
+            return sx[si][sj][sk];
+        return redv(nvx, nvy, nvz);
+    };
+    // black smooth helper for cell (vx,vy,vz): (b + Σ coupling·red_nbr)/diag, per-cell.
+    auto black = [&](int vx, int vy, int vz, T bv) -> T {
+        T d = gget(diag, vx, vy, vz);
+        if (!(d > T(1e-30)))
+            return T(0); // solid / out-of-domain
+        T nb = gget(cz, vx, vy, vz) * rnbr(vx + 1, vy, vz) +
+               gget(cz, vx - 1, vy, vz) * rnbr(vx - 1, vy, vz) +
+               gget(cy, vx, vy, vz) * rnbr(vx, vy + 1, vz) +
+               gget(cy, vx, vy - 1, vz) * rnbr(vx, vy - 1, vz) +
+               gget(cx, vx, vy, vz) * rnbr(vx, vy, vz + 1) +
+               gget(cx, vx, vy, vz - 1) * rnbr(vx, vy, vz - 1);
+        return (bv + nb) / d;
+    };
+    // ── phase 1: black(voxel-odd) interior, compacted ──
+    for (int i = 0; i < 2; i++) {
+        int id = i * 128 + tid, a = id / 32, b2 = id % 32;
+        int vx = a, vy = b2 / 4, vz = 2 * (b2 % 4) + !(((b2 / 4) + a) & 1);
+        sx[vx + 1][vy + 1][vz + 1] = black(vx, vy, vz, sb[vx][vy][vz]);
+    }
+    // ── phase 1 halo: reconstruct black face cells (per-cell coeffs) ──
+    if (warp == 0) {
+        int vy = lane / 4, vz = 2 * (lane % 4) + ((lane / 4) & 1);
+        sx[0][vy + 1][vz + 1] = black(-1, vy, vz, gget(b, -1, vy, vz));
+        vz                    = 2 * (lane % 4) + !((lane / 4) & 1);
+        sx[9][vy + 1][vz + 1] = black(8, vy, vz, gget(b, 8, vy, vz));
+    } else if (warp == 1) {
+        int vx = lane / 4, vz = 2 * (lane % 4) + ((lane / 4) & 1);
+        sx[vx + 1][0][vz + 1] = black(vx, -1, vz, gget(b, vx, -1, vz));
+        vz                    = 2 * (lane % 4) + !((lane / 4) & 1);
+        sx[vx + 1][9][vz + 1] = black(vx, 8, vz, gget(b, vx, 8, vz));
+    } else if (warp == 2) {
+        int vx = lane / 4, vy = 2 * (lane % 4) + ((lane / 4) & 1);
+        sx[vx + 1][vy + 1][0] = black(vx, vy, -1, gget(b, vx, vy, -1));
+        vy                    = 2 * (lane % 4) + !((lane / 4) & 1);
+        sx[vx + 1][vy + 1][9] = black(vx, vy, 8, gget(b, vx, vy, 8));
+    }
+    __syncthreads();
+    // ── write x + residual into shared_b (per-cell), then restrict ──
+    for (int i = 0; i < 4; i++) {
+        int vid = i * 128 + tid;
+        int vx = vid / 64, vy = (vid / 8) % 8, vz = vid % 8;
+        int c   = idxv(vx, vy, vz);
+        T xc    = sx[vx + 1][vy + 1][vz + 1];
+        x[c]    = xc;
+        T d     = diag[c];
+        if (d > T(1e-30)) {
+            T nb = gget(cz, vx, vy, vz) * sx[vx + 2][vy + 1][vz + 1] +
+                   gget(cz, vx - 1, vy, vz) * sx[vx][vy + 1][vz + 1] +
+                   gget(cy, vx, vy, vz) * sx[vx + 1][vy + 2][vz + 1] +
+                   gget(cy, vx, vy - 1, vz) * sx[vx + 1][vy][vz + 1] +
+                   gget(cx, vx, vy, vz) * sx[vx + 1][vy + 1][vz + 2] +
+                   gget(cx, vx, vy, vz - 1) * sx[vx + 1][vy + 1][vz];
+            sb[vx][vy][vz] = b[c] - d * xc + nb;
+        } else
+            sb[vx][vy][vz] = T(0); // solid → no residual
+    }
+    __syncthreads();
+    if (tid < 64) {
+        int rx = tid / 16, ry = (tid / 4) % 4, rz = tid % 4;
+        int cic = blockIdx.x * 4 + rz + 1, cjc = blockIdx.y * 4 + ry + 1, cck = blockIdx.z * 4 + rx + 1;
+        if (cic <= cnx && cjc <= cny && cck <= cnz) {
+            int cid = dev_idx3d(cic, cjc, cck, cny, cnz);
+            if (!csolid[cid]) {
+                T s = T(0);
+                for (int a = 0; a < 2; a++)
+                    for (int b2 = 0; b2 < 2; b2++)
+                        for (int c2 = 0; c2 < 2; c2++)
+                            s += sb[rx * 2 + a][ry * 2 + b2][rz * 2 + c2];
+                bc[cid] = s;
+            }
+        }
+    }
+}
+
 // ── Prolongation: constant injection with ×2 scaling (paper Eq. 11) ──
 template <typename T>
 __global__ void prolong_kernel_3d(T* x_fine, const T* x_coarse, const bool* solid_fine, int fnx,
@@ -1254,12 +1424,10 @@ static void vCycle3D(typename CudaUAAMGPreconditioner3DT<T>::Level* levels, int 
         smooth_restrict_trivial_3d<T><<<grid128, 128, 0, stream>>>(
             L.g.b, L.g.x, coarse.g.b, coarse.g.solid, nx, ny, nz, cnx, cny, cnz, L.trimmed, L.cxd,
             L.cyd, L.czd, L.diagd);
-        smooth_from_zero_3d<T><<<grid, block, 0, stream>>>(L.g.x, L.g.b, L.g.solid, L.diag, L.cx,
-                                                           L.cy, L.cz, nx, ny, nz, L.trimmed, L.cxd,
-                                                           L.cyd, L.czd, L.diagd);
-        restrict_residual_tiled_3d<T><<<grid, block, 0, stream>>>(
-            L.g.x, L.g.b, L.g.solid, L.diag, L.cx, L.cy, L.cz, coarse.g.b, coarse.g.solid, nx, ny,
-            nz, cnx, cny, cnz, L.trimmed, L.cxd, L.cyd, L.czd, L.diagd);
+        (void)block;
+        smooth_restrict_nontrivial_3d<T><<<grid128, 128, 0, stream>>>(
+            L.g.b, L.g.x, coarse.g.b, coarse.g.solid, L.g.solid, L.diag, L.cx, L.cy, L.cz, nx, ny, nz,
+            cnx, cny, cnz, L.trimmed);
     } else {
         rbgs_sweep_3d<T>(L, stream, false); // pre-smooth (forward)
         dim3 cblock(8, 8, 8), cgrid((cnx + 7) / 8, (cny + 7) / 8, (cnz + 7) / 8);
