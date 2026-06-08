@@ -716,6 +716,160 @@ __global__ void __launch_bounds__(128) prolong_smooth_trivial_3d(
     }
 }
 
+// ── WARP-SPECIALIZED non-trivial up-leg (per-cell coeffs + solids) ──
+// Boundary/solid version of prolong_smooth_trivial_3d. Reads diag/cx/cy/cz/solid
+// per cell; guarded reads for the boundary 2-ring; solid cells carry the prolonged
+// value through (dst = x for solids, like prolong_black_fused_3d). Replaces the
+// strided prolong_black_fused + rbgs_tiled red pass on the non-trivial up-leg.
+template <typename T>
+__global__ void __launch_bounds__(128) prolong_smooth_nontrivial_3d(
+    T* __restrict dst, const T* __restrict x, const T* __restrict xc, const T* __restrict b,
+    const bool* __restrict solid, const T* __restrict diag, const T* __restrict cx,
+    const T* __restrict cy, const T* __restrict cz, int nx, int ny, int nz,
+    const bool* __restrict trimmed) {
+    int tileid = blockIdx.x + blockIdx.y * gridDim.x + blockIdx.z * gridDim.x * gridDim.y;
+    if (trimmed[tileid])
+        return; // trivial → warp trivial up-leg
+    __shared__ T sx[10][10][10];
+    __shared__ T sb[8][8][8];
+    int bx = blockIdx.x * 8, by = blockIdx.y * 8, bz = blockIdx.z * 8;
+    int tid = threadIdx.x;
+    int cny = ny / 2, cnz = nz / 2;
+    auto idxv = [&](int vx, int vy, int vz) -> int {
+        return dev_idx3d(bx + vz + 1, by + vy + 1, bz + vx + 1, ny, nz);
+    };
+    auto gget = [&](const T* arr, int vx, int vy, int vz) -> T {
+        int gi = bx + vz + 1, gj = by + vy + 1, gk = bz + vx + 1;
+        if (gi < 1 || gi > nx || gj < 1 || gj > ny || gk < 1 || gk > nz)
+            return T(0);
+        return arr[dev_idx3d(gi, gj, gk, ny, nz)];
+    };
+    // prolonged fine value (solid → x, dof → x+2·xc, out-of-domain → 0)
+    auto prol = [&](int vx, int vy, int vz) -> T {
+        int gi = bx + vz + 1, gj = by + vy + 1, gk = bz + vx + 1;
+        if (gi < 1 || gi > nx || gj < 1 || gj > ny || gk < 1 || gk > nz)
+            return T(0);
+        int c = dev_idx3d(gi, gj, gk, ny, nz);
+        if (solid[c])
+            return x[c];
+        return x[c] + T(2) * xc[dev_idx3d((gi + 1) / 2, (gj + 1) / 2, (gk + 1) / 2, cny, cnz)];
+    };
+    // ── phase 0: interior b + prolonged x (ALL), coalesced ──
+    for (int i = 0; i < 4; i++) {
+        int vid = i * 128 + tid;
+        int vx = vid / 64, vy = (vid / 8) % 8, vz = vid % 8;
+        sb[vx][vy][vz]             = b[idxv(vx, vy, vz)];
+        sx[vx + 1][vy + 1][vz + 1] = prol(vx, vy, vz);
+    }
+    int warp = tid / 32, lane = tid % 32;
+    // ── phase 0 halo: prolonged RED(voxel-even) faces+edges ──
+    if (warp == 0) {
+        int vy = lane / 4, vz = 2 * (lane % 4) + !((lane / 4) & 1);
+        sx[0][vy + 1][vz + 1] = prol(-1, vy, vz);
+        vz                    = 2 * (lane % 4) + ((lane / 4) & 1);
+        sx[9][vy + 1][vz + 1] = prol(8, vy, vz);
+    } else if (warp == 1) {
+        int vx = lane / 4, vz = 2 * (lane % 4) + !((lane / 4) & 1);
+        sx[vx + 1][0][vz + 1] = prol(vx, -1, vz);
+        vz                    = 2 * (lane % 4) + ((lane / 4) & 1);
+        sx[vx + 1][9][vz + 1] = prol(vx, 8, vz);
+    } else if (warp == 2) {
+        int vx = lane / 4, vy = 2 * (lane % 4) + !((lane / 4) & 1);
+        sx[vx + 1][vy + 1][0] = prol(vx, vy, -1);
+        vy                    = 2 * (lane % 4) + ((lane / 4) & 1);
+        sx[vx + 1][vy + 1][9] = prol(vx, vy, 8);
+    }
+    auto edge_red = [&](int vx, int vy, int vz, int sxx, int sxy, int sxz) {
+        if (((vx + vy + vz) & 1) == 0)
+            sx[sxx][sxy][sxz] = prol(vx, vy, vz);
+    };
+    if (warp == 0 && lane < 8) {
+        edge_red(-1, -1, lane, 0, 0, lane + 1);
+        edge_red(-1, 8, lane, 0, 9, lane + 1);
+        edge_red(-1, lane, -1, 0, lane + 1, 0);
+        edge_red(-1, lane, 8, 0, lane + 1, 9);
+    } else if (warp == 1 && lane < 8) {
+        edge_red(8, -1, lane, 9, 0, lane + 1);
+        edge_red(8, 8, lane, 9, 9, lane + 1);
+        edge_red(8, lane, -1, 9, lane + 1, 0);
+        edge_red(8, lane, 8, 9, lane + 1, 9);
+    } else if (warp == 2 && lane < 8) {
+        edge_red(lane, -1, -1, lane + 1, 0, 0);
+        edge_red(lane, -1, 8, lane + 1, 0, 9);
+        edge_red(lane, 8, -1, lane + 1, 9, 0);
+        edge_red(lane, 8, 8, lane + 1, 9, 9);
+    }
+    __syncthreads();
+    // red prolonged neighbour: shared if in [0..9]³, else 2-ring prolonged.
+    auto pnbr = [&](int nvx, int nvy, int nvz) -> T {
+        int si = nvx + 1, sj = nvy + 1, sk = nvz + 1;
+        if (si >= 0 && si <= 9 && sj >= 0 && sj <= 9 && sk >= 0 && sk <= 9)
+            return sx[si][sj][sk];
+        return prol(nvx, nvy, nvz);
+    };
+    auto blacksm = [&](int vx, int vy, int vz, T d) -> T { // (b + Σ coupling·red_nbr)/diag
+        T nb = gget(cz, vx, vy, vz) * pnbr(vx + 1, vy, vz) +
+               gget(cz, vx - 1, vy, vz) * pnbr(vx - 1, vy, vz) +
+               gget(cy, vx, vy, vz) * pnbr(vx, vy + 1, vz) +
+               gget(cy, vx, vy - 1, vz) * pnbr(vx, vy - 1, vz) +
+               gget(cx, vx, vy, vz) * pnbr(vx, vy, vz + 1) +
+               gget(cx, vx, vy, vz - 1) * pnbr(vx, vy, vz - 1);
+        return (gget(b, vx, vy, vz) + nb) / d;
+    };
+    // ── phase 1: BLACK(voxel-odd) post-smooth, compacted (solid keeps prolonged) ──
+    for (int i = 0; i < 2; i++) {
+        int id = i * 128 + tid, a = id / 32, b2 = id % 32;
+        int vx = a, vy = b2 / 4, vz = 2 * (b2 % 4) + !(((b2 / 4) + a) & 1);
+        T d    = gget(diag, vx, vy, vz);
+        if (d > T(1e-30))
+            sx[vx + 1][vy + 1][vz + 1] = blacksm(vx, vy, vz, d);
+    }
+    // ── phase 1 halo: reconstruct BLACK face cells ──
+    auto half_black = [&](int vx, int vy, int vz, int sxx, int sxy, int sxz) {
+        T d = gget(diag, vx, vy, vz);
+        if (d > T(1e-30))
+            sx[sxx][sxy][sxz] = blacksm(vx, vy, vz, d);
+    };
+    if (warp == 0) {
+        int vy = lane / 4, vz = 2 * (lane % 4) + ((lane / 4) & 1);
+        half_black(-1, vy, vz, 0, vy + 1, vz + 1);
+        vz = 2 * (lane % 4) + !((lane / 4) & 1);
+        half_black(8, vy, vz, 9, vy + 1, vz + 1);
+    } else if (warp == 1) {
+        int vx = lane / 4, vz = 2 * (lane % 4) + ((lane / 4) & 1);
+        half_black(vx, -1, vz, vx + 1, 0, vz + 1);
+        vz = 2 * (lane % 4) + !((lane / 4) & 1);
+        half_black(vx, 8, vz, vx + 1, 9, vz + 1);
+    } else if (warp == 2) {
+        int vx = lane / 4, vy = 2 * (lane % 4) + ((lane / 4) & 1);
+        half_black(vx, vy, -1, vx + 1, vy + 1, 0);
+        vy = 2 * (lane % 4) + !((lane / 4) & 1);
+        half_black(vx, vy, 8, vx + 1, vy + 1, 9);
+    }
+    __syncthreads();
+    // ── phase 2: RED post-smooth (black nbrs in shared) + write; black: write sx ──
+    for (int i = 0; i < 2; i++) {
+        int id = i * 128 + tid, a = id / 32, b2 = id % 32;
+        int vx = a, vy = b2 / 4, vz = 2 * (b2 % 4) + (((b2 / 4) + a) & 1); // red (even)
+        T d    = gget(diag, vx, vy, vz);
+        if (d > T(1e-30)) {
+            T nb = gget(cz, vx, vy, vz) * sx[vx + 2][vy + 1][vz + 1] +
+                   gget(cz, vx - 1, vy, vz) * sx[vx][vy + 1][vz + 1] +
+                   gget(cy, vx, vy, vz) * sx[vx + 1][vy + 2][vz + 1] +
+                   gget(cy, vx, vy - 1, vz) * sx[vx + 1][vy][vz + 1] +
+                   gget(cx, vx, vy, vz) * sx[vx + 1][vy + 1][vz + 2] +
+                   gget(cx, vx, vy, vz - 1) * sx[vx + 1][vy + 1][vz];
+            dst[idxv(vx, vy, vz)] = (sb[vx][vy][vz] + nb) / d;
+        } else
+            dst[idxv(vx, vy, vz)] = sx[vx + 1][vy + 1][vz + 1]; // solid → carry prolonged
+    }
+    for (int i = 0; i < 2; i++) { // black cells (final in sx)
+        int id = i * 128 + tid, a = id / 32, b2 = id % 32;
+        int vx = a, vy = b2 / 4, vz = 2 * (b2 % 4) + !(((b2 / 4) + a) & 1);
+        dst[idxv(vx, vy, vz)] = sx[vx + 1][vy + 1][vz + 1];
+    }
+}
+
 // ── FUSED prolong + post-smooth first colour (black), PING-PONG (x_in→dst) ──
 // Reads x_in (const) + coarse, writes a SEPARATE dst buffer → no read/write race
 // (the author's _x→_dst_x trick). Loads the prolonged x for self+halo from x_in,
@@ -1447,15 +1601,14 @@ static void vCycle3D(typename CudaUAAMGPreconditioner3DT<T>::Level* levels, int 
         //   2) prolong_black_fused_3d + rbgs_tiled red: only the non-trivial boundary
         //      tiles (both early-return on trivial). Writes are tile-disjoint.
         dim3 grid128((nx + 7) / 8, (ny + 7) / 8, (nz + 7) / 8);
+        (void)fblock;
+        (void)fgrid;
         prolong_smooth_trivial_3d<T><<<grid128, 128, 0, stream>>>(
             L.scratch, L.g.x, coarse.g.x, L.g.b, nx, ny, nz, L.trimmed, L.cxd, L.cyd, L.czd,
             L.diagd);
-        prolong_black_fused_3d<T><<<fgrid, fblock, 0, stream>>>(
+        prolong_smooth_nontrivial_3d<T><<<grid128, 128, 0, stream>>>(
             L.scratch, L.g.x, coarse.g.x, L.g.b, L.g.solid, L.diag, L.cx, L.cy, L.cz, nx, ny, nz,
-            L.trimmed, L.cxd, L.cyd, L.czd, L.diagd);
-        rbgs_tiled_pass_kernel_3d<T><<<fgrid, fblock, 0, stream>>>(
-            L.scratch, L.g.b, L.g.solid, L.diag, L.cx, L.cy, L.cz, nx, ny, nz, 1, L.trimmed, L.cxd,
-            L.cyd, L.czd, L.diagd); // red pass (parity 1) on scratch, non-trivial only
+            L.trimmed);
         std::swap(L.g.x, L.scratch); // result now in L.g.x
     } else {
         prolong_kernel_3d<T><<<fgrid, fblock, 0, stream>>>(L.g.x, coarse.g.x, L.g.solid, nx, ny, nz);
