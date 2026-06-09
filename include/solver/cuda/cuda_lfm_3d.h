@@ -75,6 +75,21 @@ struct CudaLFMState3D {
     double *e_x = nullptr, *e_y = nullptr, *e_z = nullptr;       // error-correction (interior)
     double *uhat_x = nullptr, *uhat_y = nullptr, *uhat_z = nullptr;
 
+    // ── FIX①: per-axis (staggered-face) flow maps + face impulse ──
+    // Per face axis a∈{u,v,w}: backward pos ψ_a (3) + covector row T_a (3), and
+    // forward pos φ_a (3) + covector row F_a (3), all on that axis' MAC face grid.
+    // Mirrors the CPU FaceFlowMap; bp/fp = positions, T/F = covector rows.
+    struct CudaFaceFlowMap {
+        double *bx = nullptr, *by = nullptr, *bz = nullptr; // backward ψ
+        double *t0 = nullptr, *t1 = nullptr, *t2 = nullptr; // covector T
+        double *fx = nullptr, *fy = nullptr, *fz = nullptr; // forward φ
+        double *f0 = nullptr, *f1 = nullptr, *f2 = nullptr; // covector F
+    };
+    CudaFaceFlowMap fmu{}, fmv{}, fmw{};
+    CudaVel3D mface{}; // impulse on faces (u_size/v_size/w_size)
+    CudaVel3D mhat{};  // forward-pullback scratch û0 (face-sized)
+    CudaVel3D merr{};  // error / correction scratch (face-sized)
+
     void allocate(int nx_, int ny_, int nz_, double dx_, double dy_, double dz_, int n_steps_);
     void free();
 
@@ -120,3 +135,13 @@ void lfm_error_correction(CudaLFMState3D& s, CudaVel3D u0,
 void lfm_gauge_writeback(CudaLFMState3D& s, CudaVel3D vel); // vel ← face-avg(s.m_*)
 // Device-to-device velocity copy (dst ← src).
 void lfm_copy_vel(CudaLFMState3D& s, CudaVel3D dst, CudaVel3D src);
+
+// ── FIX① per-axis (staggered-face) flow-map launch API ──
+void lfm_face_set_forward_identity(CudaLFMState3D& s);
+void lfm_face_set_backward_identity(CudaLFMState3D& s);
+void lfm_face_march_forward(CudaLFMState3D& s, CudaVel3D vel, double dt_march);
+void lfm_face_march_backward(CudaLFMState3D& s, CudaVel3D vel, double dt_march);
+// Per-face pullback dst_a = T_a·src(ψ_a) (fwd=false: backward map; fwd=true: forward map).
+void lfm_face_pullback(CudaLFMState3D& s, CudaVel3D src, CudaVel3D dst, bool fwd);
+// Face BFECC error correction; writes s.mface and then vel ← mface (no gauge avg).
+void lfm_face_error_correction(CudaLFMState3D& s, CudaVel3D u0, CudaVel3D vel, bool clamp);
