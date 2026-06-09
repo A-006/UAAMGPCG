@@ -98,6 +98,14 @@ private:
                          const std::vector<double>& v, const std::vector<double>& w, double& vu,
                          double& vv, double& vw) const;
 
+    // Velocity AND its 3x3 gradient from the SAME quadratic B-spline (analytic spline
+    // derivative). g[3a+b]=∂u_a/∂x_b. Mirrors GPU d_sample_velocity_grad bit-for-bit;
+    // replaces the nearest-cell finite-difference velocity_gradient_at in the flow-map
+    // march so dF/dt=∇u·F is evolved consistently (FIX②, the author's InterpMacN2Grad).
+    void sample_velocity_gradient(double x, double y, double z, const std::vector<double>& u,
+                                  const std::vector<double>& v, const std::vector<double>& w,
+                                  double& vu, double& vv, double& vw, double g[9]) const;
+
     void velocity_gradient_at(double x, double y, double z, const std::vector<double>& ug,
                               const std::vector<double>& vg, const std::vector<double>& wg,
                               double g[9]) const;

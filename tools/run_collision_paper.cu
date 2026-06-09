@@ -20,8 +20,12 @@
 #include "numerics/ops/operators_3d.h"
 #include "simulator/cuda_lfm_simulator_3d.h"
 #include "simulator/scenarios/3d/vortex_ring.h"
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <vector>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -46,6 +50,69 @@ static void write_vort_vtk(const Grid3D& g, int frame, const std::string& dir) {
                 int ck = k < 1 ? 1 : (k > g.nz ? g.nz : k);
                 f << (float)fvc::vorticity_magnitude(g, ci, cj, ck) << "\n";
             }
+}
+
+// Load a shared staggered IC (ic{x,y,z}.raw, float32) into the grid's MAC faces —
+// the SAME layout dump_collision_ic.cpp writes (icx[ix,iy,iz]=u_at(ix,iy+1,iz+1)).
+// Lets us run our solver on the EXACT field the author's reference run loaded, so
+// the cross-check is apples-to-apples at the initial condition.
+static bool load_raw_ic(Grid3D& g, const std::string& dir) {
+    int nx = g.nx, ny = g.ny, nz = g.nz;
+    auto rd = [](const std::string& p, long n) {
+        std::vector<float> buf(n);
+        std::ifstream f(p, std::ios::binary);
+        if (!f)
+            return std::vector<float>();
+        f.read((char*)buf.data(), n * sizeof(float));
+        return buf;
+    };
+    auto bx = rd(dir + "/icx.raw", (long)(nx + 1) * ny * nz);
+    auto by = rd(dir + "/icy.raw", (long)nx * (ny + 1) * nz);
+    auto bz = rd(dir + "/icz.raw", (long)nx * ny * (nz + 1));
+    if (bx.empty() || by.empty() || bz.empty())
+        return false;
+    long c = 0;
+    for (int ix = 0; ix <= nx; ix++)
+        for (int iy = 0; iy < ny; iy++)
+            for (int iz = 0; iz < nz; iz++)
+                g.u_at(ix, iy + 1, iz + 1) = bx[c++];
+    c = 0;
+    for (int ix = 0; ix < nx; ix++)
+        for (int iy = 0; iy <= ny; iy++)
+            for (int iz = 0; iz < nz; iz++)
+                g.v_at(ix + 1, iy, iz + 1) = by[c++];
+    c = 0;
+    for (int ix = 0; ix < nx; ix++)
+        for (int iy = 0; iy < ny; iy++)
+            for (int iz = 0; iz <= nz; iz++)
+                g.w_at(ix + 1, iy + 1, iz) = bz[c++];
+    return true;
+}
+
+// Dump cell-centered velocity (float32, C-order i-slowest, nx*ny*nz) so vorticity can
+// be computed with the SAME np.gradient operator as the author's vx_*.npy — the only
+// apples-to-apples way to compare |omega| trajectories across the two codes.
+static void write_vel_raw(const Grid3D& g, int frame, const std::string& dir) {
+    long n = (long)g.nx * g.ny * g.nz;
+    std::vector<float> ux(n), uy(n), uz(n);
+    long c = 0;
+    for (int i = 1; i <= g.nx; i++)
+        for (int j = 1; j <= g.ny; j++)
+            for (int k = 1; k <= g.nz; k++) {
+                ux[c] = (float)(0.5 * (g.u_at(i, j, k) + g.u_at(i - 1, j, k)));
+                uy[c] = (float)(0.5 * (g.v_at(i, j, k) + g.v_at(i, j - 1, k)));
+                uz[c] = (float)(0.5 * (g.w_at(i, j, k) + g.w_at(i, j, k - 1)));
+                c++;
+            }
+    char p[512];
+    auto wr = [&](const char* nm, const std::vector<float>& b) {
+        std::snprintf(p, sizeof(p), "%s/%s_%05d.raw", dir.c_str(), nm, frame);
+        std::ofstream f(p, std::ios::binary);
+        f.write((const char*)b.data(), b.size() * sizeof(float));
+    };
+    wr("vx", ux);
+    wr("vy", uy);
+    wr("vz", uz);
 }
 
 int main(int argc, char** argv) {
@@ -108,17 +175,49 @@ int main(int argc, char** argv) {
     scenarios::VortexRing right = left;
     right.center                = {0.65 * cfg.Lx, 0.5 * cfg.Ly, 0.5 * cfg.Lz};
     right.circulation           = -1.0;
-    scenarios::add_vortex_ring(sim.mutable_grid(), left);
-    scenarios::add_vortex_ring(sim.mutable_grid(), right);
-    sim.commit();
+    const char* ic_dir = std::getenv("COLL_IC_DIR");
+    if (ic_dir && load_raw_ic(sim.mutable_grid(), ic_dir)) {
+        std::printf("  loaded shared IC from %s/ (author cross-check field)\n", ic_dir);
+    } else {
+        scenarios::add_vortex_ring(sim.mutable_grid(), left);
+        scenarios::add_vortex_ring(sim.mutable_grid(), right);
+    }
 
+    // ── one-shot IC diagnostic: max|u| and real fvc max|omega|, pre/post commit ──
+    {
+        auto diag = [](const Grid3D& g, const char* tag) {
+            double umax = 0, wmax = 0;
+            for (int k = 1; k <= g.nz; k++)
+                for (int j = 1; j <= g.ny; j++)
+                    for (int i = 1; i <= g.nx; i++) {
+                        double uc = 0.5 * (g.u_at(i, j, k) + g.u_at(i - 1, j, k));
+                        double vc = 0.5 * (g.v_at(i, j, k) + g.v_at(i, j - 1, k));
+                        double wc = 0.5 * (g.w_at(i, j, k) + g.w_at(i, j, k - 1));
+                        umax = std::max(umax, std::sqrt(uc * uc + vc * vc + wc * wc));
+                        wmax = std::max(wmax, fvc::vorticity_magnitude(g, i, j, k));
+                    }
+            std::printf("  [diag %-12s] max|u|=%.4f  fvc max|omega|=%.2f\n", tag, umax, wmax);
+        };
+        diag(sim.grid(), "pre-commit");
+        sim.commit();
+        diag(sim.grid(), "post-commit");
+    }
+
+    bool dump_vel = std::getenv("DUMP_VEL") != nullptr;
     int frame = 0;
-    write_vort_vtk(sim.grid(), frame++, cfg.out_dir);
+    write_vort_vtk(sim.grid(), frame, cfg.out_dir);
+    if (dump_vel)
+        write_vel_raw(sim.grid(), frame, cfg.out_dir);
+    frame++;
     auto t0 = std::chrono::high_resolution_clock::now();
     for (int c = 1; c <= n_cycles; c++) {
         sim.step();
-        if (c % frame_skip == 0 || c == n_cycles)
-            write_vort_vtk(sim.grid(), frame++, cfg.out_dir);
+        if (c % frame_skip == 0 || c == n_cycles) {
+            write_vort_vtk(sim.grid(), frame, cfg.out_dir);
+            if (dump_vel)
+                write_vel_raw(sim.grid(), frame, cfg.out_dir);
+            frame++;
+        }
         if (c % 5 == 0 || c == n_cycles)
             VtkWriter3D::printStatus(c, sim.time(), sim.grid());
     }

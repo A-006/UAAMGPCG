@@ -399,14 +399,22 @@ void LFMSimulator3D::march_cell(double& px, double& py, double& pz, double F[9],
                                 const std::vector<double>& w, double dt_march) const {
     double s0[12] = {px, py, pz, F[0], F[1], F[2], F[3], F[4], F[5], F[6], F[7], F[8]};
 
+    // FIX②: ∇u from the same B-spline as u (analytic spline derivative, consistent with
+    // the sampled velocity), default on. LFM_OLD_GRAD=1 restores the nearest-cell finite
+    // difference for A/B. Read once; static is fine (env is constant for the process).
+    static const bool old_grad = (std::getenv("LFM_OLD_GRAD") != nullptr);
     auto rhs = [&](const double s[12], double d[12]) {
         double vu, vv, vw;
-        sample_velocity(s[0], s[1], s[2], u, v, w, vu, vv, vw);
+        double g[9];
+        if (old_grad) {
+            sample_velocity(s[0], s[1], s[2], u, v, w, vu, vv, vw);
+            velocity_gradient_at(s[0], s[1], s[2], u, v, w, g);
+        } else {
+            sample_velocity_gradient(s[0], s[1], s[2], u, v, w, vu, vv, vw, g);
+        }
         d[0] = vu;
         d[1] = vv;
         d[2] = vw;
-        double g[9];
-        velocity_gradient_at(s[0], s[1], s[2], u, v, w, g);
         // dF[a][b] = Σ_c (∂u_a/∂x_c) · F[c][b]
         for (int a = 0; a < 3; a++)
             for (int b = 0; b < 3; b++)
@@ -561,6 +569,92 @@ void LFMSimulator3D::sample_velocity(double x, double y, double z, const std::ve
         kk = std::max(0, std::min(nz, kk));
         return w_vec[grid_.iw(ii, jj, kk)];
     });
+}
+
+// d/dr of the quadratic B-spline weights (analytic spline derivative ≡ author dN2).
+static inline void dbspline_weights(double r, double dw[3]) {
+    dw[0] = r - 0.5;  // d/dr[0.5(0.5-r)^2]
+    dw[1] = -2.0 * r; // d/dr[0.75-r^2]
+    dw[2] = r + 0.5;  // d/dr[0.5(0.5+r)^2]
+}
+
+// Velocity + analytic 3x3 B-spline gradient. Mirrors GPU d_sample_velocity_grad: same
+// summation/clamp order so CPU and GPU stay bit-identical (validated by P2/P4).
+void LFMSimulator3D::sample_velocity_gradient(double x, double y, double z,
+                                              const std::vector<double>& u_vec,
+                                              const std::vector<double>& v_vec,
+                                              const std::vector<double>& w_vec, double& vu,
+                                              double& vv, double& vw, double g[9]) const {
+    x = std::max(0.0, std::min(grid_.Lx(), x));
+    y = std::max(0.0, std::min(grid_.Ly(), y));
+    z = std::max(0.0, std::min(grid_.Lz(), z));
+    double dx = grid_.dx, dy = grid_.dy, dz = grid_.dz;
+    int nx = grid_.nx, ny = grid_.ny, nz = grid_.nz;
+
+    // gather value + 3 partials (d/dx,d/dy,d/dz, pre-1/dx scaling) for one face field.
+    auto gather = [&](double cx, double cy, double cz, auto at, double& val, double& gx, double& gy,
+                      double& gz) {
+        int ic = (int)std::floor(cx + 0.5);
+        int jc = (int)std::floor(cy + 0.5);
+        int kc = (int)std::floor(cz + 0.5);
+        double wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
+        bspline_weights(cx - ic, wx);
+        dbspline_weights(cx - ic, dwx);
+        bspline_weights(cy - jc, wy);
+        dbspline_weights(cy - jc, dwy);
+        bspline_weights(cz - kc, wz);
+        dbspline_weights(cz - kc, dwz);
+        val = gx = gy = gz = 0.0;
+        for (int dk = -1; dk <= 1; dk++)
+            for (int dj = -1; dj <= 1; dj++)
+                for (int di = -1; di <= 1; di++) {
+                    double f = at(ic + di, jc + dj, kc + dk);
+                    val += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * f;
+                    gx += dwx[di + 1] * wy[dj + 1] * wz[dk + 1] * f;
+                    gy += wx[di + 1] * dwy[dj + 1] * wz[dk + 1] * f;
+                    gz += wx[di + 1] * wy[dj + 1] * dwz[dk + 1] * f;
+                }
+    };
+    double s, sx, sy, sz;
+    // u-face → row a=0
+    gather(x / dx, y / dy + 0.5, z / dz + 0.5,
+           [&](int ii, int jj, int kk) {
+               ii = std::max(0, std::min(nx, ii));
+               jj = std::max(1, std::min(ny, jj));
+               kk = std::max(1, std::min(nz, kk));
+               return u_vec[grid_.iu(ii, jj, kk)];
+           },
+           s, sx, sy, sz);
+    vu = s;
+    g[0] = sx / dx;
+    g[1] = sy / dy;
+    g[2] = sz / dz;
+    // v-face → row a=1
+    gather(x / dx + 0.5, y / dy, z / dz + 0.5,
+           [&](int ii, int jj, int kk) {
+               ii = std::max(1, std::min(nx, ii));
+               jj = std::max(0, std::min(ny, jj));
+               kk = std::max(1, std::min(nz, kk));
+               return v_vec[grid_.iv(ii, jj, kk)];
+           },
+           s, sx, sy, sz);
+    vv = s;
+    g[3] = sx / dx;
+    g[4] = sy / dy;
+    g[5] = sz / dz;
+    // w-face → row a=2
+    gather(x / dx + 0.5, y / dy + 0.5, z / dz,
+           [&](int ii, int jj, int kk) {
+               ii = std::max(1, std::min(nx, ii));
+               jj = std::max(1, std::min(ny, jj));
+               kk = std::max(0, std::min(nz, kk));
+               return w_vec[grid_.iw(ii, jj, kk)];
+           },
+           s, sx, sy, sz);
+    vw = s;
+    g[6] = sx / dx;
+    g[7] = sy / dy;
+    g[8] = sz / dz;
 }
 
 // Quadratic B-spline at cell centers ((i-0.5)·dx, (j-0.5)·dy, (k-0.5)·dz).

@@ -46,6 +46,14 @@ __device__ inline void d_bspline(double r, double w[3]) {
     w[1]     = 0.75 - r * r;
     w[2]     = 0.5 * b * b;
 }
+// d/dr of the quadratic B-spline weights (the analytic spline derivative, ≡ author's dN2).
+// Used by d_sample_velocity_grad so ∇u is the exact derivative of the SAME interpolant
+// that produces u — matching InterpMacN2Grad instead of a nearest-cell finite difference.
+__device__ inline void d_bspline_d(double r, double dw[3]) {
+    dw[0] = r - 0.5;       // d/dr [0.5(0.5-r)^2]
+    dw[1] = -2.0 * r;      // d/dr [0.75 - r^2]
+    dw[2] = r + 0.5;       // d/dr [0.5(0.5+r)^2]
+}
 
 // 27-point quadratic B-spline velocity interpolation (MAC-aware).
 __device__ inline void d_sample_velocity(const double* uu, const double* vv, const double* ww,
@@ -109,6 +117,90 @@ __device__ inline void d_sample_velocity(const double* uu, const double* vv, con
                     s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * ww[lfm_iw(ii, jj, kk, nx, ny)];
                 }
         vw = s;
+    }
+}
+
+// Velocity AND its 3x3 spatial gradient from the SAME 27-point quadratic B-spline as
+// d_sample_velocity. g[3a+b] = ∂u_a/∂x_b, the analytic spline derivative at the exact
+// off-grid position (≡ author's InterpMacN2Grad). Replaces the nearest-cell finite
+// difference so the flow-map Jacobian dF/dt=∇u·F is evolved consistently — this is the
+// circulation-preserving term, and the FD/snap version was the dominant dissipation source.
+__device__ inline void d_sample_velocity_grad(const double* uu, const double* vv, const double* ww,
+                                              double x, double y, double z, int nx, int ny, int nz,
+                                              double dx, double dy, double dz, double Lx, double Ly,
+                                              double Lz, double& vu, double& vvel, double& vw,
+                                              double g[9]) {
+    x = dclamp(x, 0.0, Lx);
+    y = dclamp(y, 0.0, Ly);
+    z = dclamp(z, 0.0, Lz);
+    // u-face at (i·dx,(j-0.5)·dy,(k-0.5)·dz)  → row a=0
+    {
+        double cx = x / dx, cy = y / dy + 0.5, cz = z / dz + 0.5;
+        int ic = (int)floor(cx + 0.5), jc = (int)floor(cy + 0.5), kc = (int)floor(cz + 0.5);
+        double wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
+        d_bspline(cx - ic, wx);   d_bspline_d(cx - ic, dwx);
+        d_bspline(cy - jc, wy);   d_bspline_d(cy - jc, dwy);
+        d_bspline(cz - kc, wz);   d_bspline_d(cz - kc, dwz);
+        double s = 0, sx = 0, sy = 0, sz = 0;
+        for (int dk = -1; dk <= 1; dk++)
+            for (int dj = -1; dj <= 1; dj++)
+                for (int di = -1; di <= 1; di++) {
+                    int ii = iclamp(ic + di, 0, nx), jj = iclamp(jc + dj, 1, ny),
+                        kk = iclamp(kc + dk, 1, nz);
+                    double val = uu[lfm_iu(ii, jj, kk, nx, ny)];
+                    s  += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
+                    sx += dwx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
+                    sy += wx[di + 1] * dwy[dj + 1] * wz[dk + 1] * val;
+                    sz += wx[di + 1] * wy[dj + 1] * dwz[dk + 1] * val;
+                }
+        vu   = s;
+        g[0] = sx / dx;  g[1] = sy / dy;  g[2] = sz / dz;
+    }
+    // v-face at ((i-0.5)·dx, j·dy, (k-0.5)·dz)  → row a=1
+    {
+        double cx = x / dx + 0.5, cy = y / dy, cz = z / dz + 0.5;
+        int ic = (int)floor(cx + 0.5), jc = (int)floor(cy + 0.5), kc = (int)floor(cz + 0.5);
+        double wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
+        d_bspline(cx - ic, wx);   d_bspline_d(cx - ic, dwx);
+        d_bspline(cy - jc, wy);   d_bspline_d(cy - jc, dwy);
+        d_bspline(cz - kc, wz);   d_bspline_d(cz - kc, dwz);
+        double s = 0, sx = 0, sy = 0, sz = 0;
+        for (int dk = -1; dk <= 1; dk++)
+            for (int dj = -1; dj <= 1; dj++)
+                for (int di = -1; di <= 1; di++) {
+                    int ii = iclamp(ic + di, 1, nx), jj = iclamp(jc + dj, 0, ny),
+                        kk = iclamp(kc + dk, 1, nz);
+                    double val = vv[lfm_iv(ii, jj, kk, nx, ny)];
+                    s  += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
+                    sx += dwx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
+                    sy += wx[di + 1] * dwy[dj + 1] * wz[dk + 1] * val;
+                    sz += wx[di + 1] * wy[dj + 1] * dwz[dk + 1] * val;
+                }
+        vvel = s;
+        g[3] = sx / dx;  g[4] = sy / dy;  g[5] = sz / dz;
+    }
+    // w-face at ((i-0.5)·dx,(j-0.5)·dy, k·dz)  → row a=2
+    {
+        double cx = x / dx + 0.5, cy = y / dy + 0.5, cz = z / dz;
+        int ic = (int)floor(cx + 0.5), jc = (int)floor(cy + 0.5), kc = (int)floor(cz + 0.5);
+        double wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
+        d_bspline(cx - ic, wx);   d_bspline_d(cx - ic, dwx);
+        d_bspline(cy - jc, wy);   d_bspline_d(cy - jc, dwy);
+        d_bspline(cz - kc, wz);   d_bspline_d(cz - kc, dwz);
+        double s = 0, sx = 0, sy = 0, sz = 0;
+        for (int dk = -1; dk <= 1; dk++)
+            for (int dj = -1; dj <= 1; dj++)
+                for (int di = -1; di <= 1; di++) {
+                    int ii = iclamp(ic + di, 1, nx), jj = iclamp(jc + dj, 1, ny),
+                        kk = iclamp(kc + dk, 0, nz);
+                    double val = ww[lfm_iw(ii, jj, kk, nx, ny)];
+                    s  += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
+                    sx += dwx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
+                    sy += wx[di + 1] * dwy[dj + 1] * wz[dk + 1] * val;
+                    sz += wx[di + 1] * wy[dj + 1] * dwz[dk + 1] * val;
+                }
+        vw   = s;
+        g[6] = sx / dx;  g[7] = sy / dy;  g[8] = sz / dz;
     }
 }
 
@@ -656,14 +748,15 @@ __device__ inline void d_march_cell(double& px, double& py, double& pz, double F
                                     const bool* solid, double dt_march, GeomParams G) {
     double s0[12] = {px, py, pz, F[0], F[1], F[2], F[3], F[4], F[5], F[6], F[7], F[8]};
     auto rhs = [&](const double s[12], double d[12]) {
-        double vu, vvel, vw;
-        d_sample_velocity(uu, vv, ww, s[0], s[1], s[2], G.nx, G.ny, G.nz, G.dx, G.dy, G.dz, G.Lx,
-                          G.Ly, G.Lz, vu, vvel, vw);
+        double vu, vvel, vw, g[9];
+        // Velocity and ∇u from the SAME B-spline (analytic spline derivative), matching the
+        // author's InterpMacN2Grad. The old path snapped to the nearest cell and finite-
+        // differenced ∇u — inconsistent with the sampled u and over-dissipative.
+        d_sample_velocity_grad(uu, vv, ww, s[0], s[1], s[2], G.nx, G.ny, G.nz, G.dx, G.dy, G.dz,
+                               G.Lx, G.Ly, G.Lz, vu, vvel, vw, g);
         d[0] = vu;
         d[1] = vvel;
         d[2] = vw;
-        double g[9];
-        d_velocity_gradient_at(s[0], s[1], s[2], uu, vv, ww, solid, G, g);
         for (int a = 0; a < 3; a++)
             for (int b = 0; b < 3; b++)
                 d[3 + 3 * a + b] = g[3 * a + 0] * s[3 + 0 * 3 + b] +
