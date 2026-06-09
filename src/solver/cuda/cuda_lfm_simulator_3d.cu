@@ -107,7 +107,12 @@ void CudaLFMSimulator3D::run_cycle(int n_steps) {
         P("accum", lfm_accumulate_to_u0(s_, u0, s_.visc_x, s_.visc_y, s_.visc_z, dt / (2.0 * rho)));
     }
 
-    P("set_identity", lfm_set_identity(s_));
+    // Cell-centered forward map (phi/F) + midpoints feed ONLY the viscous path
+    // integral (lfm_accumulate_path_integral, mu>0). The FIX① per-face maps below
+    // are independent. So for inviscid runs (collision) this whole chain is dead
+    // work — skip it (saves ~12% of the cycle; the impulse pullback is unaffected).
+    if (mu > 0)
+        P("set_identity", lfm_set_identity(s_));
 
     // ── Steps 2-5: first midpoint u_{1/2} (= A) ──
     P("copy", lfm_copy_vel(s_, A, cur));
@@ -116,10 +121,10 @@ void CudaLFMSimulator3D::run_cycle(int n_steps) {
     P("project", lfm_project(s_, A, dt, iters, tol));
     P("bc", apply_bc(A));
     P("copy", lfm_copy_vel(s_, s_.vb[0], A));
-    P("save_fm", lfm_save_flow_map_state(s_));
-    P("march_fwd", lfm_rk4_march_forward(s_, s_.vb[0], dt));
-    P("midpoints", lfm_compute_midpoints(s_));
     if (mu > 0) {
+        P("save_fm", lfm_save_flow_map_state(s_));
+        P("march_fwd", lfm_rk4_march_forward(s_, s_.vb[0], dt));
+        P("midpoints", lfm_compute_midpoints(s_));
         P("viscous", lfm_compute_viscous(s_, A, mu));
         P("path_int", lfm_accumulate_path_integral(s_, u0, dt / rho));
     }
@@ -136,10 +141,10 @@ void CudaLFMSimulator3D::run_cycle(int n_steps) {
         P("project", lfm_project(s_, B, dt, iters, tol));
         P("bc", apply_bc(B));
         P("copy", lfm_copy_vel(s_, s_.vb[1], B));
-        P("save_fm", lfm_save_flow_map_state(s_));
-        P("march_fwd", lfm_rk4_march_forward(s_, s_.vb[1], dt));
-        P("midpoints", lfm_compute_midpoints(s_));
         if (mu > 0) {
+            P("save_fm", lfm_save_flow_map_state(s_));
+            P("march_fwd", lfm_rk4_march_forward(s_, s_.vb[1], dt));
+            P("midpoints", lfm_compute_midpoints(s_));
             P("viscous", lfm_compute_viscous(s_, B, mu));
             P("path_int", lfm_accumulate_path_integral(s_, u0, dt / rho));
         }
@@ -161,10 +166,10 @@ void CudaLFMSimulator3D::run_cycle(int n_steps) {
         P("project", lfm_project(s_, nxt, dt, iters, tol));
         P("bc", apply_bc(nxt));
         P("copy", lfm_copy_vel(s_, s_.vb[i_step], nxt));
-        P("save_fm", lfm_save_flow_map_state(s_));
-        P("march_fwd", lfm_rk4_march_forward(s_, s_.vb[i_step], dt));
-        P("midpoints", lfm_compute_midpoints(s_));
         if (mu > 0) {
+            P("save_fm", lfm_save_flow_map_state(s_));
+            P("march_fwd", lfm_rk4_march_forward(s_, s_.vb[i_step], dt));
+            P("midpoints", lfm_compute_midpoints(s_));
             P("viscous", lfm_compute_viscous(s_, nxt, mu));
             P("path_int", lfm_accumulate_path_integral(s_, u0, dt / rho));
         }
