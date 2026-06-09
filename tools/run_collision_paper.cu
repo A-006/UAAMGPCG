@@ -118,10 +118,15 @@ static void write_vel_raw(const Grid3D& g, int frame, const std::string& dir) {
 int main(int argc, char** argv) {
     Config cfg;
     cfg.dim = 3;
-    // Paper aspect: collision axis x is the SHORT 128; rings expand into 256x256.
-    cfg.NX = 128;
-    cfg.NY = 256;
-    cfg.NZ = 256;
+    // Paper aspect: collision axis x is the SHORT NX; rings expand into 2NX×2NX.
+    // COLL_NX env overrides resolution for convergence studies (physical rings
+    // via add_vortex_ring auto-scale, so finer grids resolve the core better).
+    int base_nx = 128;
+    if (const char* e = std::getenv("COLL_NX"))
+        base_nx = std::atoi(e);
+    cfg.NX = base_nx;
+    cfg.NY = 2 * base_nx;
+    cfg.NZ = 2 * base_nx;
     cfg.Lx = 0.5; // 128/256 → dx = dy = dz = 1/256 (uniform)
     cfg.Ly = 1.0;
     cfg.Lz = 1.0;
