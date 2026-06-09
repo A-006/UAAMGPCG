@@ -53,7 +53,7 @@ class KarmanParams:
 # ── Paths (relative to this directory) ──
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, "../.."))
-LFM_EXE = os.path.join(PROJECT_ROOT, "build/src/2d/lfm_2d")
+LFM_EXE = os.path.join(PROJECT_ROOT, "cfdsim")
 INPUTS_DIR = os.path.join(BASE_DIR, "inputs")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 FIGURES_DIR = os.path.join(BASE_DIR, "figures")

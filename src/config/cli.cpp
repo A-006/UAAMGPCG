@@ -24,8 +24,10 @@ int default_solve_iters(const std::string& solver) {
 }
 
 // One row per Config field: how to parse its string value. Adding a field is
-// one line here — the same open/closed shape as the scenario registry.
-void set_field(Config& cfg, const std::string& key, const std::string& value) {
+// one line here — the same open/closed shape as the scenario registry. Any key
+// NOT listed here is treated as a scenario-specific knob and stored in
+// cfg.extra (read later via Config::dget / iget / sget).
+void apply_kv(Config& cfg, const std::string& key, const std::string& value) {
     static const std::unordered_map<std::string, std::function<void(Config&, const std::string&)>>
         kSetters = {
             {"dim", [](Config& c, const std::string& v) { c.dim = std::stoi(v); }},
@@ -48,6 +50,12 @@ void set_field(Config& cfg, const std::string& key, const std::string& value) {
             {"t_end", [](Config& c, const std::string& v) { c.t_end = std::stod(v); }},
             {"lfm_cycle_steps",
              [](Config& c, const std::string& v) { c.lfm_cycle_steps = std::stoi(v); }},
+            {"lfm_bfecc_clamp",
+             [](Config& c, const std::string& v) { c.lfm_bfecc_clamp = std::stoi(v) != 0; }},
+            {"lfm_bc", [](Config& c, const std::string& v) { c.lfm_bc = v; }},
+            {"inflow_ux", [](Config& c, const std::string& v) { c.inflow_ux = std::stod(v); }},
+            {"inflow_uy", [](Config& c, const std::string& v) { c.inflow_uy = std::stod(v); }},
+            {"inflow_uz", [](Config& c, const std::string& v) { c.inflow_uz = std::stod(v); }},
             {"solver", [](Config& c, const std::string& v) { c.solver = v; }},
             {"solve_iters", [](Config& c, const std::string& v) { c.solve_iters = std::stoi(v); }},
             {"solve_tol", [](Config& c, const std::string& v) { c.solve_tol = std::stod(v); }},
@@ -56,8 +64,12 @@ void set_field(Config& cfg, const std::string& key, const std::string& value) {
         };
 
     auto it = kSetters.find(key);
-    if (it == kSetters.end())
-        throw std::runtime_error("config: unknown key '" + key + "'");
+    if (it == kSetters.end()) {
+        // Not a core field → scenario-specific knob (see Config::extra). The 3D
+        // scenarios read these via cfg.dget/iget/sget.
+        cfg.extra[key] = value;
+        return;
+    }
     try {
         it->second(cfg, value);
     } catch (const std::logic_error&) { // stoi/stod: invalid_argument / out_of_range
@@ -81,7 +93,7 @@ Config build_config(const Assignments& kv) {
 
     auto apply_all = [&] {
         for (const auto& [key, value] : kv)
-            set_field(cfg, key, value);
+            apply_kv(cfg, key, value);
     };
 
     apply_all(); // pick up scenario / NX / U_inf / solver (inputs to the presets)
@@ -127,9 +139,9 @@ Assignments read_file(const std::string& path) {
 }
 
 std::string usage() {
-    return "Usage: lfm_2d [config.cfg] [key=value]...\n"
-           "  e.g. lfm_2d scenario=karman NX=128 t_end=2 solver=pcg time_integrator=lfm\n"
-           "       lfm_2d run.cfg NX=512        # file as base, CLI overrides\n"
+    return "Usage: cfdsim [config.cfg] [key=value]...\n"
+           "  e.g. cfdsim scenario=karman NX=128 t_end=2 solver=pcg time_integrator=lfm\n"
+           "       cfdsim run.cfg NX=512        # file as base, CLI overrides\n"
            "  scenarios: " +
            join(scenarios::ScenarioRegistry::instance().names()) + "\n";
 }
@@ -140,26 +152,33 @@ Config load_file(const std::string& path) {
     return build_config(read_file(path));
 }
 
+KeyVals collect_assignments(int argc, char* argv[]) {
+    std::string file;
+    KeyVals cli;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        auto eq         = arg.find('=');
+        if (eq == std::string::npos) {
+            if (!file.empty())
+                throw std::runtime_error("config: more than one config file given ('" + file +
+                                         "', '" + arg + "')");
+            file = arg;
+        } else {
+            cli.emplace_back(arg.substr(0, eq), arg.substr(eq + 1));
+        }
+    }
+    KeyVals all = file.empty() ? KeyVals{} : read_file(file);
+    all.insert(all.end(), cli.begin(), cli.end()); // CLI after file ⇒ CLI wins
+    return all;
+}
+
+void set_field(Config& cfg, const std::string& key, const std::string& value) {
+    apply_kv(cfg, key, value);
+}
+
 std::optional<Config> parse_cli(int argc, char* argv[]) {
     try {
-        std::string file;
-        Assignments cli;
-        for (int i = 1; i < argc; ++i) {
-            std::string arg = argv[i];
-            auto eq         = arg.find('=');
-            if (eq == std::string::npos) {
-                if (!file.empty())
-                    throw std::runtime_error("config: more than one config file given ('" + file +
-                                             "', '" + arg + "')");
-                file = arg;
-            } else {
-                cli.emplace_back(arg.substr(0, eq), arg.substr(eq + 1));
-            }
-        }
-
-        Assignments all = file.empty() ? Assignments{} : read_file(file);
-        all.insert(all.end(), cli.begin(), cli.end()); // CLI after file ⇒ CLI wins
-        return build_config(all);
+        return build_config(collect_assignments(argc, argv));
     } catch (const std::exception& e) {
         std::cerr << e.what() << "\n" << usage();
         return std::nullopt;

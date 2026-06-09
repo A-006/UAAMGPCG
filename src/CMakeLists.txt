@@ -58,9 +58,9 @@ if(OpenMP_CXX_FOUND)
     message(STATUS "OpenMP enabled for lfm_lib")
 endif()
 
-# Main executable
-add_executable(lfm_2d main.cpp)
-target_link_libraries(lfm_2d PRIVATE lfm_lib)
+# The single program is `cfdsim` (defined in the top-level CMakeLists.txt). It
+# handles both 2D (CPU) and 3D (GPU/CPU) scenarios, so the former `lfm_2d`
+# entry point (src/main.cpp) has been removed.
 
 # Ax=b solvers (standalone + MAC-grid Poisson solvers)
 add_subdirectory(solver)

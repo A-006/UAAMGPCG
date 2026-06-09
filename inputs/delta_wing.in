@@ -1,0 +1,35 @@
+# ── Delta wing in a freestream box (LFM paper Fig. 9) ──────────────────────
+# Flat triangular plate at angle-of-attack in a uniform freestream; sheds the
+# leading-edge / wingtip vortices. Domain 2x1x1, dx=dy=dz uniform.
+# Run: ./build/cfdsim inputs/delta_wing.in
+#
+# The freestream is derived from U_inf at aoa_deg unless you set inflow_* below.
+
+scenario   = delta_wing
+
+backend    = auto       # auto: 有GPU就用GPU，没有自动保底CPU。也可写死 gpu / cpu
+
+NX         = 256          # NY, NZ are independent here (domain is 2x1x1)
+NY         = 128
+NZ         = 128
+cycles     = 400
+dt         = 2e-3
+
+U_inf      = 0.6          # freestream speed
+aoa_deg    = 20           # angle of attack (degrees)
+lfm_bfecc_clamp = 1
+lfm_bc          = freestream
+solve_iters     = 200     # thin plate normal to AoA blocks more flow → more CG
+
+frame_skip = 4
+vtk_mode   = slim
+out_dir    = output_delta_wing
+# sdf_path = assets/delta_wing_sdf.npy   # authors' exact geometry (cell-for-cell)
+# inflow_ux = 0.5638                      # override the derived freestream directly
+# inflow_uy = 0.2052
+# gpu      = 0
+
+# ── 后处理（pipeline.sh / render/render.py 读取）──────────────────────────
+render_mode  = iso3d       # iso3d | slice | volume | none（可逗号组合，如 iso3d,slice）
+render_level = 0.15        # 等值面 = 此值 × 全程 99.5 分位 |ω|
+render_orbit = 120         # 转台旋转角度（iso3d）；0 = 固定视角

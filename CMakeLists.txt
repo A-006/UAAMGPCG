@@ -67,59 +67,27 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
     target_link_libraries(run_karman_long_gpu PRIVATE lfm_lib cuda_uaamg_lib cuda_cg_lib)
     target_include_directories(run_karman_long_gpu PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
-    # GPU-solver 3D LFM vortex-ring runner (CPU flow-map loop, GPU 3D Poisson)
-    add_executable(run_vortex_ring_lfm_gpu tools/run_vortex_ring_lfm_gpu.cu)
-    set_target_properties(run_vortex_ring_lfm_gpu PROPERTIES
+    # ── Unified INPUT-file-driven launcher for ALL GPU 3D LFM scenes ──
+    # One binary replaces the former per-scene runners (run_vortex_ring_*,
+    # run_*_collision_*, run_delta_wing_*, run_collision_paper, plus the CPU
+    # reconnection/trefoil demos): the scenario + every parameter come from an
+    # INI file (see inputs/*.in). Scenarios: vortex_ring | vortex_collision |
+    # collision_paper | delta_wing | vortex_reconnection | trefoil_knot.
+    #   ./build/cfdsim inputs/vortex_collision.in
+    # collision_paper's author cross-check (raw IC load, velocity dump) lives on
+    # as the ic_dir= / dump_vel= knobs.
+    # CUDA build: compile the .cpp as CUDA (nvcc) so it can drive the GPU-resident
+    # simulator. HAVE_CUDA enables the GPU backend; runs on GPU by default
+    # (backend=auto), with a CPU fallback when no device is present.
+    add_executable(cfdsim src/cfdsim.cpp)
+    set_source_files_properties(src/cfdsim.cpp PROPERTIES LANGUAGE CUDA)
+    set_target_properties(cfdsim PROPERTIES
         LINKER_LANGUAGE CUDA
         CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
     )
-    target_link_libraries(run_vortex_ring_lfm_gpu PRIVATE lfm_lib cuda_uaamg_3d_lib cuda_cg_3d_lib)
-    target_include_directories(run_vortex_ring_lfm_gpu PRIVATE ${CMAKE_SOURCE_DIR}/include)
-
-    # GPU-solver 3D LFM head-on vortex-ring collision (paper Fig. 3)
-    add_executable(run_vortex_ring_collision_lfm_gpu tools/run_vortex_ring_collision_lfm_gpu.cu)
-    set_target_properties(run_vortex_ring_collision_lfm_gpu PROPERTIES
-        LINKER_LANGUAGE CUDA
-        CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
-    )
-    target_link_libraries(run_vortex_ring_collision_lfm_gpu PRIVATE lfm_lib cuda_uaamg_3d_lib cuda_cg_3d_lib)
-    target_include_directories(run_vortex_ring_collision_lfm_gpu PRIVATE ${CMAKE_SOURCE_DIR}/include)
-
-    # Fully GPU-resident 3D LFM vortex-ring runner (whole cycle on device)
-    add_executable(run_vortex_ring_lfm_gpu_resident tools/run_vortex_ring_lfm_gpu_resident.cu)
-    set_target_properties(run_vortex_ring_lfm_gpu_resident PROPERTIES
-        LINKER_LANGUAGE CUDA
-        CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
-    )
-    target_link_libraries(run_vortex_ring_lfm_gpu_resident PRIVATE cuda_lfm_3d_lib cuda_uaamg_3d_lib cuda_cg_3d_lib lfm_lib)
-    target_include_directories(run_vortex_ring_lfm_gpu_resident PRIVATE ${CMAKE_SOURCE_DIR}/include)
-
-    # Fully GPU-resident 3D LFM head-on collision (paper Fig. 3)
-    add_executable(run_vortex_ring_collision_lfm_gpu_resident tools/run_vortex_ring_collision_lfm_gpu_resident.cu)
-    set_target_properties(run_vortex_ring_collision_lfm_gpu_resident PROPERTIES
-        LINKER_LANGUAGE CUDA
-        CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
-    )
-    target_link_libraries(run_vortex_ring_collision_lfm_gpu_resident PRIVATE cuda_lfm_3d_lib cuda_uaamg_3d_lib cuda_cg_3d_lib lfm_lib)
-    target_include_directories(run_vortex_ring_collision_lfm_gpu_resident PRIVATE ${CMAKE_SOURCE_DIR}/include)
-
-    # GPU delta wing at paper resolution (freestream BC + immersed solid)
-    add_executable(run_delta_wing_lfm_gpu tools/run_delta_wing_lfm_gpu.cu)
-    set_target_properties(run_delta_wing_lfm_gpu PROPERTIES
-        LINKER_LANGUAGE CUDA
-        CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
-    )
-    target_link_libraries(run_delta_wing_lfm_gpu PRIVATE cuda_lfm_3d_lib cuda_uaamg_3d_lib cuda_cg_3d_lib lfm_lib)
-    target_include_directories(run_delta_wing_lfm_gpu PRIVATE ${CMAKE_SOURCE_DIR}/include)
-
-    # Paper-faithful collision: 128x256x256, inviscid + BFECC clamp, n=5
-    add_executable(run_collision_paper tools/run_collision_paper.cu)
-    set_target_properties(run_collision_paper PROPERTIES
-        LINKER_LANGUAGE CUDA
-        CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
-    )
-    target_link_libraries(run_collision_paper PRIVATE cuda_lfm_3d_lib cuda_uaamg_3d_lib cuda_cg_3d_lib lfm_lib)
-    target_include_directories(run_collision_paper PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    target_compile_definitions(cfdsim PRIVATE HAVE_CUDA)
+    target_link_libraries(cfdsim PRIVATE cuda_lfm_3d_lib cuda_uaamg_3d_lib cuda_cg_3d_lib lfm_lib)
+    target_include_directories(cfdsim PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
     # GPU Karman validate (Cd/Cl/St)
     add_executable(test_karman_validate_gpu test/integration/test_karman_validate_gpu.cu)
@@ -133,6 +101,13 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
         ${CMAKE_SOURCE_DIR}/test
     )
 else()
-    message(STATUS "CUDA not enabled — skipping GPU solver")
-    message(STATUS "  To build with CUDA: CUDACXX=/usr/local/cuda/bin/nvcc cmake ..")
+    message(STATUS "CUDA not enabled — building cfdsim as a CPU-only binary")
+    message(STATUS "  To build with GPU support: CUDACXX=/usr/local/cuda/bin/nvcc cmake ..")
+
+    # CPU-only cfdsim: the SAME source, compiled by the C++ compiler (no nvcc).
+    # Without HAVE_CUDA the file pulls in no CUDA headers, so backend=auto/gpu
+    # both resolve to the host LFMSimulator3D. One program, GPU optional.
+    add_executable(cfdsim src/cfdsim.cpp)
+    target_link_libraries(cfdsim PRIVATE lfm_lib)
+    target_include_directories(cfdsim PRIVATE ${CMAKE_SOURCE_DIR}/include)
 endif()

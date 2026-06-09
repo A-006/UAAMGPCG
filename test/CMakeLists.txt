@@ -63,18 +63,17 @@ add_executable(run_karman_chorin ../tools/run_karman_chorin.cpp)
 target_link_libraries(run_karman_chorin PRIVATE lfm_lib)
 
 # ── 3D paper scenarios ────────────────────────────────────────────
+# Note: vortex reconnection (Fig. 5) and trefoil knot (Fig. 7) are now scenarios
+# of the unified `cfdsim` launcher (scenario=vortex_reconnection / trefoil_knot).
 add_executable(run_vortex_ring_collision   ../tools/run_vortex_ring_collision.cpp)
-add_executable(run_vortex_ring_connection  ../tools/run_vortex_ring_connection.cpp)
-add_executable(run_trefoil_knot            ../tools/run_trefoil_knot.cpp)
 add_executable(run_delta_wing              ../tools/run_delta_wing.cpp)
 add_executable(run_fire_ball               ../tools/run_fire_ball.cpp)
 add_executable(run_wind_turbine            ../tools/run_wind_turbine.cpp)
-add_executable(test_bfecc_clamp            ../tools/test_bfecc_clamp.cpp)
+add_executable(test_bfecc_clamp            integration/test_bfecc_clamp.cpp)
 add_executable(run_delta_wing_lfm          ../tools/run_delta_wing_lfm.cpp)
 add_executable(dump_collision_ic           ../tools/dump_collision_ic.cpp)
-foreach(_t run_vortex_ring_collision run_vortex_ring_connection
-           run_trefoil_knot run_delta_wing run_fire_ball run_wind_turbine test_bfecc_clamp
-           run_delta_wing_lfm dump_collision_ic)
+foreach(_t run_vortex_ring_collision run_delta_wing run_fire_ball run_wind_turbine
+           test_bfecc_clamp run_delta_wing_lfm dump_collision_ic)
     target_link_libraries(${_t} PRIVATE lfm_lib)
 endforeach()
 
