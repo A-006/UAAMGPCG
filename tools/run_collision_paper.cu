@@ -214,9 +214,13 @@ int main(int argc, char** argv) {
     if (dump_vel)
         write_vel_raw(sim.grid(), frame, cfg.out_dir);
     frame++;
-    auto t0 = std::chrono::high_resolution_clock::now();
+    auto t0          = std::chrono::high_resolution_clock::now();
+    double compute_s = 0.0; // pure sim.step() time, excludes VTK / vel-dump I/O
     for (int c = 1; c <= n_cycles; c++) {
+        auto s0 = std::chrono::high_resolution_clock::now();
         sim.step();
+        auto s1 = std::chrono::high_resolution_clock::now();
+        compute_s += std::chrono::duration<double>(s1 - s0).count();
         if (c % frame_skip == 0 || c == n_cycles) {
             write_vort_vtk(sim.grid(), frame, cfg.out_dir);
             if (dump_vel)
@@ -228,7 +232,11 @@ int main(int argc, char** argv) {
     }
     auto t1   = std::chrono::high_resolution_clock::now();
     double el = std::chrono::duration<double>(t1 - t0).count();
-    std::cout << "\n  Done: " << n_cycles << " cycles in " << std::fixed << std::setprecision(1)
-              << el << " s  (" << el / n_cycles << " s/cycle)\n";
+    std::printf("\n  Done: %d cycles in %.1f s wall (%.2f s/cycle incl. I/O)\n", n_cycles, el,
+                el / n_cycles);
+    std::printf("  TIMING (OURS LFM 3D GPU, %dx%dx%d): compute %.1f s "
+                "(%.2f ms/cycle, %.3f ms/substep) [reinit_every=%d]\n",
+                cfg.NX, cfg.NY, cfg.NZ, compute_s, compute_s * 1e3 / n_cycles,
+                compute_s * 1e3 / n_cycles / (cfg.lfm_cycle_steps + 1), cfg.lfm_cycle_steps);
     return 0;
 }
