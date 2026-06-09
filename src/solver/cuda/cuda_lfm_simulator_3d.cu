@@ -130,17 +130,22 @@ void CudaLFMSimulator3D::run_cycle(int n_steps) {
         nxt         = t; // slide window
     }
 
-    // ── Steps 18-21: backward march ──
-    lfm_set_backward_identity(s_);
+    // ── Steps 18-26 (FIX①): per-axis (staggered-face) flow maps ──
+    // Forward face map integrated forward over the buffer, backward face map
+    // integrated backward over the reversed buffer (mirrors the CPU + author).
+    lfm_face_set_forward_identity(s_);
+    for (int i_step = 1; i_step <= n_steps; i_step++)
+        lfm_face_march_forward(s_, s_.vb[i_step - 1], dt);
+    lfm_face_set_backward_identity(s_);
     for (int i_step = n_steps; i_step >= 1; i_step--)
-        lfm_rk4_march_backward(s_, s_.vb[i_step - 1], -dt);
+        lfm_face_march_backward(s_, s_.vb[i_step - 1], -dt);
 
-    // ── Step 22 + 23-26: pullback + error correction ──
-    lfm_pullback_impulse(s_, u0);
-    lfm_error_correction(s_, u0, cfg_.lfm_bfecc_clamp);
+    // ── Step 22: per-face pullback m_a = T_a · u0(ψ_a) → mface ──
+    lfm_face_pullback(s_, u0, s_.mface, /*fwd=*/false);
 
-    // ── Step 27: gauge projection u_n ← Project(m_n) ──
-    lfm_gauge_writeback(s_, cur);
+    // ── Steps 23-27: face BFECC + write mface → cur directly (no gauge avg) ──
+    lfm_face_error_correction(s_, u0, cur, cfg_.lfm_bfecc_clamp);
+
     double cycle_dt = n_steps * dt;
     lfm_project(s_, cur, cycle_dt, iters * 2, tol);
     apply_bc(cur);

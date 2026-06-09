@@ -16,10 +16,22 @@ LFMSimulator3D::LFMSimulator3D(const Config& cfg, std::unique_ptr<Solver3D> solv
       bcs_(bc::free_slip_box()),
       flow_map_(cfg.NX, cfg.NY, cfg.NZ, cfg.Lx / cfg.NX, cfg.Ly / cfg.NY, cfg.Lz / cfg.NZ) {
     size_t N = (size_t)cfg_.NX * cfg_.NY * cfg_.NZ;
-    for (auto* p : {&m_x_, &m_y_, &m_z_, &phi_mid_x_, &phi_mid_y_, &phi_mid_z_, &F_mid_00_,
-                    &F_mid_01_, &F_mid_02_, &F_mid_10_, &F_mid_11_, &F_mid_12_, &F_mid_20_,
-                    &F_mid_21_, &F_mid_22_})
+    for (auto* p : {&phi_mid_x_, &phi_mid_y_, &phi_mid_z_, &F_mid_00_, &F_mid_01_, &F_mid_02_,
+                    &F_mid_10_, &F_mid_11_, &F_mid_12_, &F_mid_20_, &F_mid_21_, &F_mid_22_})
         p->assign(N, 0.0);
+    // FIX①: impulse + per-face flow maps live on MAC faces (u/v/w sized).
+    size_t us = (size_t)grid_.u_size(), vs = (size_t)grid_.v_size(), ws = (size_t)grid_.w_size();
+    m_x_.assign(us, 0.0);
+    m_y_.assign(vs, 0.0);
+    m_z_.assign(ws, 0.0);
+    auto alloc_face = [](FaceFlowMap& f, size_t n) {
+        for (auto* p : {&f.bx, &f.by, &f.bz, &f.t0, &f.t1, &f.t2, &f.fx, &f.fy, &f.fz, &f.f0, &f.f1,
+                        &f.f2})
+            p->assign(n, 0.0);
+    };
+    alloc_face(fmu_, us);
+    alloc_face(fmv_, vs);
+    alloc_face(fmw_, ws);
     apply_bc();
 }
 
@@ -140,90 +152,25 @@ void LFMSimulator3D::run_cycle(int n_steps) {
         u_im12 = u_next;
     }
 
-    // ── Steps 18-21: backward march ──
-    flow_map_.set_backward_identity();
+    // ── Steps 18-26 (FIX①): per-axis (staggered-face) flow maps ──
+    // Build the forward face map (φ_a, F_a) by integrating forward in time over
+    // the velocity buffer, and the backward face map (ψ_a, T_a) by integrating
+    // backward over the reversed buffer — mirroring the author's per-axis
+    // ReinitAsync. The impulse then lands directly on the MAC faces (no avg).
+    face_set_forward_identity();
+    for (int i_step = 1; i_step <= n_steps; i_step++)
+        face_march_forward(vel_buffer_[i_step - 1].u, vel_buffer_[i_step - 1].v,
+                           vel_buffer_[i_step - 1].w, dt);
+    face_set_backward_identity();
     for (int i_step = n_steps; i_step >= 1; i_step--)
-        rk4_march_backward(vel_buffer_[i_step - 1].u, vel_buffer_[i_step - 1].v,
-                           vel_buffer_[i_step - 1].w, -dt);
+        face_march_backward(vel_buffer_[i_step - 1].u, vel_buffer_[i_step - 1].v,
+                            vel_buffer_[i_step - 1].w, -dt);
 
-    // ── Step 22: pullback m_n = T^T u_0(Ψ) ──
-    pullback_impulse(u0_grid);
+    // ── Step 22: per-face pullback m_a = T_a · u0(ψ_a) ──
+    face_pullback(u0_grid.u, u0_grid.v, u0_grid.w, m_x_, m_y_, m_z_, /*fwd=*/false);
 
-    // ── Steps 23-26: error correction ──
-    {
-        size_t N = (size_t)nx * ny * nz;
-        std::vector<double> u_hat_x(N, 0.0), u_hat_y(N, 0.0), u_hat_z(N, 0.0);
-        forward_pullback(m_x_, m_y_, m_z_, u_hat_x, u_hat_y, u_hat_z);
-
-        std::vector<double> e_x(N, 0.0), e_y(N, 0.0), e_z(N, 0.0);
-        for (int k = 1; k <= nz; k++)
-            for (int j = 1; j <= ny; j++)
-                for (int i = 1; i <= nx; i++) {
-                    size_t m   = flow_map_.idx(i, j, k);
-                    double uc0 = 0.5 * (u0_grid.u_at(i, j, k) + u0_grid.u_at(i - 1, j, k));
-                    double vc0 = 0.5 * (u0_grid.v_at(i, j, k) + u0_grid.v_at(i, j - 1, k));
-                    double wc0 = 0.5 * (u0_grid.w_at(i, j, k) + u0_grid.w_at(i, j, k - 1));
-                    e_x[m]     = (u_hat_x[m] - uc0) * 0.5;
-                    e_y[m]     = (u_hat_y[m] - vc0) * 0.5;
-                    e_z[m]     = (u_hat_z[m] - wc0) * 0.5;
-                }
-
-        // Un-corrected impulse (paper's `u` before BFECC), kept for the clamp below.
-        std::vector<double> m_pre_x, m_pre_y, m_pre_z;
-        if (cfg_.lfm_bfecc_clamp) {
-            m_pre_x = m_x_;
-            m_pre_y = m_y_;
-            m_pre_z = m_z_;
-        }
-
-        for (int k = 1; k <= nz; k++)
-            for (int j = 1; j <= ny; j++)
-                for (int i = 1; i <= nx; i++) {
-                    size_t m = flow_map_.idx(i, j, k);
-                    double X = flow_map_.psi_x[m], Y = flow_map_.psi_y[m], Z = flow_map_.psi_z[m];
-                    double ex_s, ey_s, ez_s;
-                    sample_cell_centered(e_x, e_y, e_z, X, Y, Z, ex_s, ey_s, ez_s);
-                    m_x_[m] -= flow_map_.T00[m] * ex_s + flow_map_.T10[m] * ey_s +
-                               flow_map_.T20[m] * ez_s;
-                    m_y_[m] -= flow_map_.T01[m] * ex_s + flow_map_.T11[m] * ey_s +
-                               flow_map_.T21[m] * ez_s;
-                    m_z_[m] -= flow_map_.T02[m] * ex_s + flow_map_.T12[m] * ey_s +
-                               flow_map_.T22[m] * ez_s;
-                }
-
-        // BFECC clamp (paper's BfeccClampKernel): bound each corrected impulse
-        // component to the [min,max] of its 6 face-neighbours' un-corrected
-        // values. Prevents the second-order correction from creating new extrema
-        // → the cycle stays stable with NO physical viscosity.
-        if (cfg_.lfm_bfecc_clamp)
-            bfecc_clamp_impulse(m_pre_x, m_pre_y, m_pre_z);
-    }
-
-    // ── Step 27: gauge projection u_n ← Project(m_n) ──
-    for (int k = 1; k <= nz; k++)
-        for (int j = 1; j <= ny; j++)
-            for (int i = 1; i < nx; i++) {
-                if (grid_.is_solid(i, j, k) || grid_.is_solid(i + 1, j, k))
-                    continue;
-                grid_.u_at(i, j, k) =
-                    0.5 * (m_x_[flow_map_.idx(i, j, k)] + m_x_[flow_map_.idx(i + 1, j, k)]);
-            }
-    for (int k = 1; k <= nz; k++)
-        for (int j = 1; j < ny; j++)
-            for (int i = 1; i <= nx; i++) {
-                if (grid_.is_solid(i, j, k) || grid_.is_solid(i, j + 1, k))
-                    continue;
-                grid_.v_at(i, j, k) =
-                    0.5 * (m_y_[flow_map_.idx(i, j, k)] + m_y_[flow_map_.idx(i, j + 1, k)]);
-            }
-    for (int k = 1; k < nz; k++)
-        for (int j = 1; j <= ny; j++)
-            for (int i = 1; i <= nx; i++) {
-                if (grid_.is_solid(i, j, k) || grid_.is_solid(i, j, k + 1))
-                    continue;
-                grid_.w_at(i, j, k) =
-                    0.5 * (m_z_[flow_map_.idx(i, j, k)] + m_z_[flow_map_.idx(i, j, k + 1)]);
-            }
+    // ── Steps 23-27: face BFECC error correction + write m → grid (no gauge avg) ──
+    face_error_correction(u0_grid);
 
     double cycle_dt = n_steps * dt;
     PressureProjection3D::project(grid_, cycle_dt, *solver_, cfg_.solve_iters * 2, cfg_.solve_tol);
@@ -878,4 +825,342 @@ void LFMSimulator3D::bfecc_clamp_impulse(const std::vector<double>& pre_x,
     clamp_field(m_x_, pre_x);
     clamp_field(m_y_, pre_y);
     clamp_field(m_z_, pre_z);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// FIX① — per-axis (staggered-face) flow maps. The impulse rides directly on
+// the MAC faces: per-axis position ψ_a + Jacobian covector row T_a, marched
+// with the same RK4/∇u kernel as march_cell but carrying only the 3-component
+// covector (= one column of the full Jacobian). Pullback m_a = T_a·u0(ψ_a)
+// lands straight on faces with ZERO averaging — removing the two ½(a+b) box
+// filters that were the dominant excess dissipation. Mirrors the author's
+// RKAxisKernel / PullbackAxisKernel / ReinitAsync BFECC sequence.
+// ════════════════════════════════════════════════════════════════════
+
+// Physical coordinate of face (i,j,k) for the given axis (0=u,1=v,2=w),
+// matching the MAC offsets used by sample_velocity.
+static inline void face_coord(int axis, int i, int j, int k, double dx, double dy, double dz,
+                              double& x, double& y, double& z) {
+    if (axis == 0) { // u-face at (i·dx,(j-0.5)·dy,(k-0.5)·dz)
+        x = i * dx;
+        y = (j - 0.5) * dy;
+        z = (k - 0.5) * dz;
+    } else if (axis == 1) { // v-face at ((i-0.5)·dx, j·dy,(k-0.5)·dz)
+        x = (i - 0.5) * dx;
+        y = j * dy;
+        z = (k - 0.5) * dz;
+    } else { // w-face at ((i-0.5)·dx,(j-0.5)·dy, k·dz)
+        x = (i - 0.5) * dx;
+        y = (j - 0.5) * dy;
+        z = k * dz;
+    }
+}
+
+void LFMSimulator3D::face_set_forward_identity() {
+    int nx = grid_.nx, ny = grid_.ny, nz = grid_.nz;
+    double dx = grid_.dx, dy = grid_.dy, dz = grid_.dz;
+    auto init = [&](FaceFlowMap& f, int axis, int imax, int jmax, int kmax, auto idx) {
+        for (int k = 1; k <= kmax; k++)
+            for (int j = 1; j <= jmax; j++)
+                for (int i = (axis == 0 ? 1 : 1); i <= imax; i++) {
+                    int m = idx(i, j, k);
+                    double x, y, z;
+                    face_coord(axis, i, j, k, dx, dy, dz, x, y, z);
+                    f.fx[m] = x;
+                    f.fy[m] = y;
+                    f.fz[m] = z;
+                    f.f0[m] = (axis == 0) ? 1.0 : 0.0;
+                    f.f1[m] = (axis == 1) ? 1.0 : 0.0;
+                    f.f2[m] = (axis == 2) ? 1.0 : 0.0;
+                }
+    };
+    init(fmu_, 0, nx - 1, ny, nz, [&](int i, int j, int k) { return grid_.iu(i, j, k); });
+    init(fmv_, 1, nx, ny - 1, nz, [&](int i, int j, int k) { return grid_.iv(i, j, k); });
+    init(fmw_, 2, nx, ny, nz - 1, [&](int i, int j, int k) { return grid_.iw(i, j, k); });
+}
+
+void LFMSimulator3D::face_set_backward_identity() {
+    int nx = grid_.nx, ny = grid_.ny, nz = grid_.nz;
+    double dx = grid_.dx, dy = grid_.dy, dz = grid_.dz;
+    auto init = [&](FaceFlowMap& f, int axis, int imax, int jmax, int kmax, auto idx) {
+        for (int k = 1; k <= kmax; k++)
+            for (int j = 1; j <= jmax; j++)
+                for (int i = 1; i <= imax; i++) {
+                    int m = idx(i, j, k);
+                    double x, y, z;
+                    face_coord(axis, i, j, k, dx, dy, dz, x, y, z);
+                    f.bx[m] = x;
+                    f.by[m] = y;
+                    f.bz[m] = z;
+                    f.t0[m] = (axis == 0) ? 1.0 : 0.0;
+                    f.t1[m] = (axis == 1) ? 1.0 : 0.0;
+                    f.t2[m] = (axis == 2) ? 1.0 : 0.0;
+                }
+    };
+    init(fmu_, 0, nx - 1, ny, nz, [&](int i, int j, int k) { return grid_.iu(i, j, k); });
+    init(fmv_, 1, nx, ny - 1, nz, [&](int i, int j, int k) { return grid_.iv(i, j, k); });
+    init(fmw_, 2, nx, ny, nz - 1, [&](int i, int j, int k) { return grid_.iw(i, j, k); });
+}
+
+// RK4 for one face point. State s[6] = [pos(3), covector T(3)]. dp/dt=u(p),
+// dT[a]/dt = Σ_c g[3a+c]·T[c]. This is exactly the column-b update of march_cell
+// (d[3+3a+b]=Σ_c g[3a+c]·s[3+3c+b]) specialized to the single column T — so the
+// covector equals the matching column of the full 3×3 Jacobian, bit-for-bit.
+void LFMSimulator3D::face_march_point(int /*axis*/, double& px, double& py, double& pz, double T[3],
+                                      const std::vector<double>& u, const std::vector<double>& v,
+                                      const std::vector<double>& w, double dt_march) const {
+    double s0[6] = {px, py, pz, T[0], T[1], T[2]};
+    auto rhs = [&](const double s[6], double d[6]) {
+        double vu, vv, vw, g[9];
+        sample_velocity_gradient(s[0], s[1], s[2], u, v, w, vu, vv, vw, g);
+        d[0] = vu;
+        d[1] = vv;
+        d[2] = vw;
+        for (int a = 0; a < 3; a++)
+            d[3 + a] = g[3 * a + 0] * s[3 + 0] + g[3 * a + 1] * s[3 + 1] + g[3 * a + 2] * s[3 + 2];
+    };
+    double k1[6], k2[6], k3[6], k4[6], tmp[6], out[6];
+    rhs(s0, k1);
+    for (int m = 0; m < 6; m++) {
+        k1[m] *= dt_march;
+        tmp[m] = s0[m] + 0.5 * k1[m];
+    }
+    rhs(tmp, k2);
+    for (int m = 0; m < 6; m++) {
+        k2[m] *= dt_march;
+        tmp[m] = s0[m] + 0.5 * k2[m];
+    }
+    rhs(tmp, k3);
+    for (int m = 0; m < 6; m++) {
+        k3[m] *= dt_march;
+        tmp[m] = s0[m] + k3[m];
+    }
+    rhs(tmp, k4);
+    for (int m = 0; m < 6; m++) {
+        k4[m] *= dt_march;
+        out[m] = s0[m] + (k1[m] + 2 * k2[m] + 2 * k3[m] + k4[m]) / 6.0;
+    }
+    px = std::max(0.0, std::min(grid_.Lx(), out[0]));
+    py = std::max(0.0, std::min(grid_.Ly(), out[1]));
+    pz = std::max(0.0, std::min(grid_.Lz(), out[2]));
+    for (int a = 0; a < 3; a++) {
+        double val = out[3 + a];
+        if (!std::isfinite(val))
+            val = 0.0; // a column of identity that lost finiteness → drop to 0
+        T[a] = val;
+    }
+}
+
+void LFMSimulator3D::face_march_forward(const std::vector<double>& u, const std::vector<double>& v,
+                                        const std::vector<double>& w, double dt_march) {
+    int nx = grid_.nx, ny = grid_.ny, nz = grid_.nz;
+    auto march = [&](FaceFlowMap& f, int axis, int imax, int jmax, int kmax, auto idx) {
+#pragma omp parallel for collapse(2) schedule(static)
+        for (int k = 1; k <= kmax; k++)
+            for (int j = 1; j <= jmax; j++)
+                for (int i = 1; i <= imax; i++) {
+                    int m   = idx(i, j, k);
+                    double T[3] = {f.f0[m], f.f1[m], f.f2[m]};
+                    face_march_point(axis, f.fx[m], f.fy[m], f.fz[m], T, u, v, w, dt_march);
+                    f.f0[m] = T[0];
+                    f.f1[m] = T[1];
+                    f.f2[m] = T[2];
+                }
+    };
+    march(fmu_, 0, nx - 1, ny, nz, [&](int i, int j, int k) { return grid_.iu(i, j, k); });
+    march(fmv_, 1, nx, ny - 1, nz, [&](int i, int j, int k) { return grid_.iv(i, j, k); });
+    march(fmw_, 2, nx, ny, nz - 1, [&](int i, int j, int k) { return grid_.iw(i, j, k); });
+}
+
+void LFMSimulator3D::face_march_backward(const std::vector<double>& u, const std::vector<double>& v,
+                                         const std::vector<double>& w, double dt_march) {
+    int nx = grid_.nx, ny = grid_.ny, nz = grid_.nz;
+    auto march = [&](FaceFlowMap& f, int axis, int imax, int jmax, int kmax, auto idx) {
+#pragma omp parallel for collapse(2) schedule(static)
+        for (int k = 1; k <= kmax; k++)
+            for (int j = 1; j <= jmax; j++)
+                for (int i = 1; i <= imax; i++) {
+                    int m   = idx(i, j, k);
+                    double T[3] = {f.t0[m], f.t1[m], f.t2[m]};
+                    face_march_point(axis, f.bx[m], f.by[m], f.bz[m], T, u, v, w, dt_march);
+                    f.t0[m] = T[0];
+                    f.t1[m] = T[1];
+                    f.t2[m] = T[2];
+                }
+    };
+    march(fmu_, 0, nx - 1, ny, nz, [&](int i, int j, int k) { return grid_.iu(i, j, k); });
+    march(fmv_, 1, nx, ny - 1, nz, [&](int i, int j, int k) { return grid_.iv(i, j, k); });
+    march(fmw_, 2, nx, ny, nz - 1, [&](int i, int j, int k) { return grid_.iw(i, j, k); });
+}
+
+// Per-face pullback m_a = T_a · src(ψ_a): sample the staggered src field at the
+// (backward, default) face position and project onto the covector row. fwd=true
+// uses the forward map (φ_a, F_a) — used by the BFECC forward error pass.
+void LFMSimulator3D::face_pullback(const std::vector<double>& su, const std::vector<double>& sv,
+                                   const std::vector<double>& sw, std::vector<double>& dst_u,
+                                   std::vector<double>& dst_v, std::vector<double>& dst_w,
+                                   bool fwd) const {
+    int nx = grid_.nx, ny = grid_.ny, nz = grid_.nz;
+    auto pull = [&](const FaceFlowMap& f, std::vector<double>& dst, int imax, int jmax, int kmax,
+                    auto idx) {
+#pragma omp parallel for collapse(2) schedule(static)
+        for (int k = 1; k <= kmax; k++)
+            for (int j = 1; j <= jmax; j++)
+                for (int i = 1; i <= imax; i++) {
+                    int m = idx(i, j, k);
+                    double px = fwd ? f.fx[m] : f.bx[m];
+                    double py = fwd ? f.fy[m] : f.by[m];
+                    double pz = fwd ? f.fz[m] : f.bz[m];
+                    double T0 = fwd ? f.f0[m] : f.t0[m];
+                    double T1 = fwd ? f.f1[m] : f.t1[m];
+                    double T2 = fwd ? f.f2[m] : f.t2[m];
+                    double sX, sY, sZ;
+                    sample_velocity(px, py, pz, su, sv, sw, sX, sY, sZ);
+                    dst[m] = T0 * sX + T1 * sY + T2 * sZ;
+                }
+    };
+    pull(fmu_, dst_u, nx - 1, ny, nz, [&](int i, int j, int k) { return grid_.iu(i, j, k); });
+    pull(fmv_, dst_v, nx, ny - 1, nz, [&](int i, int j, int k) { return grid_.iv(i, j, k); });
+    pull(fmw_, dst_w, nx, ny, nz - 1, [&](int i, int j, int k) { return grid_.iw(i, j, k); });
+}
+
+// Clamp each m component to the [min,max] of its 6 same-face-grid neighbours'
+// pre-correction values (author BfeccClamp, per axis grid).
+void LFMSimulator3D::face_bfecc_clamp(const std::vector<double>& pre_u,
+                                      const std::vector<double>& pre_v,
+                                      const std::vector<double>& pre_w) {
+    int nx = grid_.nx, ny = grid_.ny, nz = grid_.nz;
+    auto clamp = [&](std::vector<double>& m, const std::vector<double>& pre, int imax, int jmax,
+                     int kmax, auto idx) {
+#pragma omp parallel for collapse(2) schedule(static)
+        for (int k = 1; k <= kmax; k++)
+            for (int j = 1; j <= jmax; j++)
+                for (int i = 1; i <= imax; i++) {
+                    double lo = 0.0, hi = 0.0;
+                    bool first    = true;
+                    auto consider = [&](int a, int b, int c) {
+                        if (a < 1 || a > imax || b < 1 || b > jmax || c < 1 || c > kmax)
+                            return;
+                        double v = pre[idx(a, b, c)];
+                        if (first) {
+                            lo = hi = v;
+                            first   = false;
+                        } else {
+                            lo = std::min(lo, v);
+                            hi = std::max(hi, v);
+                        }
+                    };
+                    consider(i - 1, j, k);
+                    consider(i + 1, j, k);
+                    consider(i, j - 1, k);
+                    consider(i, j + 1, k);
+                    consider(i, j, k - 1);
+                    consider(i, j, k + 1);
+                    if (first)
+                        continue;
+                    int id = idx(i, j, k);
+                    if (m[id] < lo)
+                        m[id] = lo;
+                    else if (m[id] > hi)
+                        m[id] = hi;
+                }
+    };
+    clamp(m_x_, pre_u, nx - 1, ny, nz, [&](int i, int j, int k) { return grid_.iu(i, j, k); });
+    clamp(m_y_, pre_v, nx, ny - 1, nz, [&](int i, int j, int k) { return grid_.iv(i, j, k); });
+    clamp(m_z_, pre_w, nx, ny, nz - 1, [&](int i, int j, int k) { return grid_.iw(i, j, k); });
+}
+
+// Face BFECC error correction (author ReinitAsync sequence, all on faces):
+//   m   = T·u0(ψ)                    [already in m_{x,y,z}_ from face_pullback]
+//   û0  = F·m(φ)                     [forward pullback, sampling staggered m]
+//   e   = û0 − u0_face
+//   m  -= 0.5 · T·e(ψ)               [error pulled back along the backward map]
+//   clamp m to 6 same-face neighbours of the pre-correction m
+// Then writes grid_.u/v/w ← m directly (NO center↔face gauge averaging).
+void LFMSimulator3D::face_error_correction(const Grid3D& u0_grid) {
+    int nx = grid_.nx, ny = grid_.ny, nz = grid_.nz;
+    size_t us = (size_t)grid_.u_size(), vs = (size_t)grid_.v_size(), ws = (size_t)grid_.w_size();
+
+    // û0 = F·m(φ): forward pullback of the just-built impulse onto faces.
+    std::vector<double> uh_u(us, 0.0), uh_v(vs, 0.0), uh_w(ws, 0.0);
+    face_pullback(m_x_, m_y_, m_z_, uh_u, uh_v, uh_w, /*fwd=*/true);
+
+    // e = û0 − u0_face (per face component, on the same MAC grid as m).
+    std::vector<double> e_u(us, 0.0), e_v(vs, 0.0), e_w(ws, 0.0);
+    for (int k = 1; k <= nz; k++)
+        for (int j = 1; j <= ny; j++)
+            for (int i = 1; i <= nx - 1; i++) {
+                int id  = grid_.iu(i, j, k);
+                e_u[id] = uh_u[id] - u0_grid.u[id];
+            }
+    for (int k = 1; k <= nz; k++)
+        for (int j = 1; j <= ny - 1; j++)
+            for (int i = 1; i <= nx; i++) {
+                int id  = grid_.iv(i, j, k);
+                e_v[id] = uh_v[id] - u0_grid.v[id];
+            }
+    for (int k = 1; k <= nz - 1; k++)
+        for (int j = 1; j <= ny; j++)
+            for (int i = 1; i <= nx; i++) {
+                int id  = grid_.iw(i, j, k);
+                e_w[id] = uh_w[id] - u0_grid.w[id];
+            }
+
+    // corr = T·e(ψ): pull the face error back along the backward map.
+    std::vector<double> c_u(us, 0.0), c_v(vs, 0.0), c_w(ws, 0.0);
+    face_pullback(e_u, e_v, e_w, c_u, c_v, c_w, /*fwd=*/false);
+
+    // Pre-correction impulse for the clamp (paper's `u`).
+    std::vector<double> pre_u, pre_v, pre_w;
+    if (cfg_.lfm_bfecc_clamp) {
+        pre_u = m_x_;
+        pre_v = m_y_;
+        pre_w = m_z_;
+    }
+    // m -= 0.5·corr.
+    for (int k = 1; k <= nz; k++)
+        for (int j = 1; j <= ny; j++)
+            for (int i = 1; i <= nx - 1; i++) {
+                int id = grid_.iu(i, j, k);
+                m_x_[id] -= 0.5 * c_u[id];
+            }
+    for (int k = 1; k <= nz; k++)
+        for (int j = 1; j <= ny - 1; j++)
+            for (int i = 1; i <= nx; i++) {
+                int id = grid_.iv(i, j, k);
+                m_y_[id] -= 0.5 * c_v[id];
+            }
+    for (int k = 1; k <= nz - 1; k++)
+        for (int j = 1; j <= ny; j++)
+            for (int i = 1; i <= nx; i++) {
+                int id = grid_.iw(i, j, k);
+                m_z_[id] -= 0.5 * c_w[id];
+            }
+
+    if (cfg_.lfm_bfecc_clamp)
+        face_bfecc_clamp(pre_u, pre_v, pre_w);
+
+    // Write the corrected impulse straight into the velocity faces — the impulse
+    // IS the velocity (gauge), no averaging. The cycle-end projection follows.
+    for (int k = 1; k <= nz; k++)
+        for (int j = 1; j <= ny; j++)
+            for (int i = 1; i <= nx - 1; i++) {
+                if (grid_.is_solid(i, j, k) || grid_.is_solid(i + 1, j, k))
+                    continue;
+                grid_.u_at(i, j, k) = m_x_[grid_.iu(i, j, k)];
+            }
+    for (int k = 1; k <= nz; k++)
+        for (int j = 1; j <= ny - 1; j++)
+            for (int i = 1; i <= nx; i++) {
+                if (grid_.is_solid(i, j, k) || grid_.is_solid(i, j + 1, k))
+                    continue;
+                grid_.v_at(i, j, k) = m_y_[grid_.iv(i, j, k)];
+            }
+    for (int k = 1; k <= nz - 1; k++)
+        for (int j = 1; j <= ny; j++)
+            for (int i = 1; i <= nx; i++) {
+                if (grid_.is_solid(i, j, k) || grid_.is_solid(i, j, k + 1))
+                    continue;
+                grid_.w_at(i, j, k) = m_z_[grid_.iw(i, j, k)];
+            }
 }

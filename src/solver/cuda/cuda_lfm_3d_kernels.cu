@@ -298,6 +298,19 @@ void CudaLFMState3D::allocate(int nx_, int ny_, int nz_, double dx_, double dy_,
     uhat_x = dmalloc(fs);
     uhat_y = dmalloc(fs);
     uhat_z = dmalloc(fs);
+
+    // FIX①: per-axis face flow maps + face-sized impulse / scratch (MAC sizes).
+    auto alloc_face_map = [&](CudaFaceFlowMap& f, int n) {
+        for (double** p : {&f.bx, &f.by, &f.bz, &f.t0, &f.t1, &f.t2, &f.fx, &f.fy, &f.fz, &f.f0,
+                           &f.f1, &f.f2})
+            *p = dmalloc(n);
+    };
+    alloc_face_map(fmu, us);
+    alloc_face_map(fmv, vs);
+    alloc_face_map(fmw, ws);
+    alloc_vel(mface);
+    alloc_vel(mhat);
+    alloc_vel(merr);
 }
 
 void CudaLFMState3D::free() {
@@ -343,6 +356,17 @@ void CudaLFMState3D::free() {
     dfree(uhat_x);
     dfree(uhat_y);
     dfree(uhat_z);
+    auto free_face_map = [&](CudaFaceFlowMap& f) {
+        for (double** p : {&f.bx, &f.by, &f.bz, &f.t0, &f.t1, &f.t2, &f.fx, &f.fy, &f.fz, &f.f0,
+                           &f.f1, &f.f2})
+            dfree(*p);
+    };
+    free_face_map(fmu);
+    free_face_map(fmv);
+    free_face_map(fmw);
+    free_vel(mface);
+    free_vel(mhat);
+    free_vel(merr);
 }
 
 void CudaLFMState3D::upload_velocity(const std::vector<double>& hu, const std::vector<double>& hv,
@@ -1263,4 +1287,383 @@ void lfm_copy_vel(CudaLFMState3D& s, CudaVel3D dst, CudaVel3D src) {
                cudaMemcpyDeviceToDevice);
     cudaMemcpy(dst.w, src.w, (size_t)lfm_w_size(s.nx, s.ny, s.nz) * sizeof(double),
                cudaMemcpyDeviceToDevice);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// FIX① — per-axis (staggered-face) flow maps (GPU). Device port of the CPU
+// FaceFlowMap routines: per-face identity init, RK4 (pos+covector) march,
+// per-face pullback, and the face BFECC error correction. The impulse rides
+// directly on the MAC faces (zero center↔face averaging). Arithmetic mirrors
+// the CPU face_* functions bit-for-bit (FMA off → GPU==CPU, gated by P2-P4).
+// ══════════════════════════════════════════════════════════════════════
+
+// One face flow-map's device pointers for one axis (mirror of CudaFaceFlowMap).
+struct FaceMapPtrs {
+    double *bx, *by, *bz, *t0, *t1, *t2;
+    double *fx, *fy, *fz, *f0, *f1, *f2;
+};
+
+// Per-axis geometry: index range [1..imax]x[1..jmax]x[1..kmax] and MAC index.
+// axis: 0=u,1=v,2=w. Returns the flat MAC index for (i,j,k).
+__device__ inline int d_face_idx(int axis, int i, int j, int k, int nx, int ny) {
+    return axis == 0 ? lfm_iu(i, j, k, nx, ny)
+                     : (axis == 1 ? lfm_iv(i, j, k, nx, ny) : lfm_iw(i, j, k, nx, ny));
+}
+__device__ inline void d_face_coord(int axis, int i, int j, int k, double dx, double dy, double dz,
+                                    double& x, double& y, double& z) {
+    if (axis == 0) {
+        x = i * dx;
+        y = (j - 0.5) * dy;
+        z = (k - 0.5) * dz;
+    } else if (axis == 1) {
+        x = (i - 0.5) * dx;
+        y = j * dy;
+        z = (k - 0.5) * dz;
+    } else {
+        x = (i - 0.5) * dx;
+        y = (j - 0.5) * dy;
+        z = k * dz;
+    }
+}
+
+// Per-axis face index limits for axis a (interior faces only, matching CPU).
+__host__ __device__ inline void d_face_limits(int axis, int nx, int ny, int nz, int& imax,
+                                              int& jmax, int& kmax) {
+    imax = (axis == 0) ? nx - 1 : nx;
+    jmax = (axis == 1) ? ny - 1 : ny;
+    kmax = (axis == 2) ? nz - 1 : nz;
+}
+
+__global__ void face_identity_kernel(FaceMapPtrs f, int axis, bool fwd, GeomParams G) {
+    int imax, jmax, kmax;
+    d_face_limits(axis, G.nx, G.ny, G.nz, imax, jmax, kmax);
+    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
+    if (i > imax || j > jmax || k > kmax)
+        return;
+    int m = d_face_idx(axis, i, j, k, G.nx, G.ny);
+    double x, y, z;
+    d_face_coord(axis, i, j, k, G.dx, G.dy, G.dz, x, y, z);
+    double e0 = (axis == 0) ? 1.0 : 0.0, e1 = (axis == 1) ? 1.0 : 0.0,
+           e2 = (axis == 2) ? 1.0 : 0.0;
+    if (fwd) {
+        f.fx[m] = x;
+        f.fy[m] = y;
+        f.fz[m] = z;
+        f.f0[m] = e0;
+        f.f1[m] = e1;
+        f.f2[m] = e2;
+    } else {
+        f.bx[m] = x;
+        f.by[m] = y;
+        f.bz[m] = z;
+        f.t0[m] = e0;
+        f.t1[m] = e1;
+        f.t2[m] = e2;
+    }
+}
+
+// RK4 of one face point: state s[6]=[pos(3),covector(3)]. Mirrors the CPU
+// face_march_point (non-incremental k1..k4) so GPU==CPU bit-for-bit.
+__device__ inline void d_face_march_point(double& px, double& py, double& pz, double T[3],
+                                          const double* uu, const double* vv, const double* ww,
+                                          double dt_march, GeomParams G) {
+    double s0[6] = {px, py, pz, T[0], T[1], T[2]};
+    auto rhs = [&](const double s[6], double d[6]) {
+        double vu, vvel, vw, g[9];
+        d_sample_velocity_grad(uu, vv, ww, s[0], s[1], s[2], G.nx, G.ny, G.nz, G.dx, G.dy, G.dz, G.Lx,
+                               G.Ly, G.Lz, vu, vvel, vw, g);
+        d[0] = vu;
+        d[1] = vvel;
+        d[2] = vw;
+        for (int a = 0; a < 3; a++)
+            d[3 + a] = g[3 * a + 0] * s[3 + 0] + g[3 * a + 1] * s[3 + 1] + g[3 * a + 2] * s[3 + 2];
+    };
+    double k1[6], k2[6], k3[6], k4[6], tmp[6], out[6];
+    rhs(s0, k1);
+    for (int m = 0; m < 6; m++) {
+        k1[m] *= dt_march;
+        tmp[m] = s0[m] + 0.5 * k1[m];
+    }
+    rhs(tmp, k2);
+    for (int m = 0; m < 6; m++) {
+        k2[m] *= dt_march;
+        tmp[m] = s0[m] + 0.5 * k2[m];
+    }
+    rhs(tmp, k3);
+    for (int m = 0; m < 6; m++) {
+        k3[m] *= dt_march;
+        tmp[m] = s0[m] + k3[m];
+    }
+    rhs(tmp, k4);
+    for (int m = 0; m < 6; m++) {
+        k4[m] *= dt_march;
+        out[m] = s0[m] + (k1[m] + 2 * k2[m] + 2 * k3[m] + k4[m]) / 6.0;
+    }
+    px = dclamp(out[0], 0.0, G.Lx);
+    py = dclamp(out[1], 0.0, G.Ly);
+    pz = dclamp(out[2], 0.0, G.Lz);
+    for (int a = 0; a < 3; a++) {
+        double val = out[3 + a];
+        if (!isfinite(val))
+            val = 0.0;
+        T[a] = val;
+    }
+}
+
+__global__ void face_march_kernel(FaceMapPtrs f, int axis, bool fwd, const double* uu,
+                                  const double* vv, const double* ww, double dt_march,
+                                  GeomParams G) {
+    int imax, jmax, kmax;
+    d_face_limits(axis, G.nx, G.ny, G.nz, imax, jmax, kmax);
+    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
+    if (i > imax || j > jmax || k > kmax)
+        return;
+    int m = d_face_idx(axis, i, j, k, G.nx, G.ny);
+    if (fwd) {
+        double T[3] = {f.f0[m], f.f1[m], f.f2[m]};
+        double px = f.fx[m], py = f.fy[m], pz = f.fz[m];
+        d_face_march_point(px, py, pz, T, uu, vv, ww, dt_march, G);
+        f.fx[m] = px;
+        f.fy[m] = py;
+        f.fz[m] = pz;
+        f.f0[m] = T[0];
+        f.f1[m] = T[1];
+        f.f2[m] = T[2];
+    } else {
+        double T[3] = {f.t0[m], f.t1[m], f.t2[m]};
+        double px = f.bx[m], py = f.by[m], pz = f.bz[m];
+        d_face_march_point(px, py, pz, T, uu, vv, ww, dt_march, G);
+        f.bx[m] = px;
+        f.by[m] = py;
+        f.bz[m] = pz;
+        f.t0[m] = T[0];
+        f.t1[m] = T[1];
+        f.t2[m] = T[2];
+    }
+}
+
+// Per-face pullback dst_a = T_a · src(ψ_a) (fwd=false: backward map; fwd=true: forward).
+__global__ void face_pullback_kernel(FaceMapPtrs f, int axis, bool fwd, const double* su,
+                                     const double* sv, const double* sw, double* dst, GeomParams G) {
+    int imax, jmax, kmax;
+    d_face_limits(axis, G.nx, G.ny, G.nz, imax, jmax, kmax);
+    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
+    if (i > imax || j > jmax || k > kmax)
+        return;
+    int m     = d_face_idx(axis, i, j, k, G.nx, G.ny);
+    double px = fwd ? f.fx[m] : f.bx[m];
+    double py = fwd ? f.fy[m] : f.by[m];
+    double pz = fwd ? f.fz[m] : f.bz[m];
+    double T0 = fwd ? f.f0[m] : f.t0[m];
+    double T1 = fwd ? f.f1[m] : f.t1[m];
+    double T2 = fwd ? f.f2[m] : f.t2[m];
+    double sX, sY, sZ;
+    d_sample_velocity(su, sv, sw, px, py, pz, G.nx, G.ny, G.nz, G.dx, G.dy, G.dz, G.Lx, G.Ly, G.Lz,
+                      sX, sY, sZ);
+    dst[m] = T0 * sX + T1 * sY + T2 * sZ;
+}
+
+static FaceMapPtrs face_ptrs(CudaLFMState3D::CudaFaceFlowMap& f) {
+    FaceMapPtrs p;
+    p.bx = f.bx;
+    p.by = f.by;
+    p.bz = f.bz;
+    p.t0 = f.t0;
+    p.t1 = f.t1;
+    p.t2 = f.t2;
+    p.fx = f.fx;
+    p.fy = f.fy;
+    p.fz = f.fz;
+    p.f0 = f.f0;
+    p.f1 = f.f1;
+    p.f2 = f.f2;
+    return p;
+}
+
+static dim3 grid_face(int imax, int jmax, int kmax) {
+    return dim3((imax + 7) / 8, (jmax + 7) / 8, (kmax + 7) / 8);
+}
+
+void lfm_face_set_forward_identity(CudaLFMState3D& s) {
+    GeomParams G = geom(s);
+    int im, jm, km;
+    for (int axis = 0; axis < 3; axis++) {
+        d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
+        CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
+        face_identity_kernel<<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, true, G);
+    }
+}
+void lfm_face_set_backward_identity(CudaLFMState3D& s) {
+    GeomParams G = geom(s);
+    int im, jm, km;
+    for (int axis = 0; axis < 3; axis++) {
+        d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
+        CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
+        face_identity_kernel<<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, false, G);
+    }
+}
+// The 6-state RK4 (pos+covector) is register/local-memory heavy; a 512-thread
+// block overflows resources. Use 256 threads (8×8×4) like the cell march.
+void lfm_face_march_forward(CudaLFMState3D& s, CudaVel3D vel, double dt_march) {
+    GeomParams G = geom(s);
+    int im, jm, km;
+    dim3 blk(8, 8, 4);
+    for (int axis = 0; axis < 3; axis++) {
+        d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
+        CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
+        dim3 gr((im + 7) / 8, (jm + 7) / 8, (km + 3) / 4);
+        face_march_kernel<<<gr, blk>>>(face_ptrs(f), axis, true, vel.u, vel.v, vel.w, dt_march, G);
+    }
+}
+void lfm_face_march_backward(CudaLFMState3D& s, CudaVel3D vel, double dt_march) {
+    GeomParams G = geom(s);
+    int im, jm, km;
+    dim3 blk(8, 8, 4);
+    for (int axis = 0; axis < 3; axis++) {
+        d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
+        CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
+        dim3 gr((im + 7) / 8, (jm + 7) / 8, (km + 3) / 4);
+        face_march_kernel<<<gr, blk>>>(face_ptrs(f), axis, false, vel.u, vel.v, vel.w, dt_march, G);
+    }
+}
+void lfm_face_pullback(CudaLFMState3D& s, CudaVel3D src, CudaVel3D dst, bool fwd) {
+    GeomParams G = geom(s);
+    int im, jm, km;
+    for (int axis = 0; axis < 3; axis++) {
+        d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
+        CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
+        double* d = (axis == 0) ? dst.u : (axis == 1 ? dst.v : dst.w);
+        face_pullback_kernel<<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, src.u,
+                                                                  src.v, src.w, d, G);
+    }
+}
+
+// e_a = û0_a − u0_a (per-face, on the same MAC grid). Only interior faces touched.
+__global__ void face_err_kernel(int axis, const double* uh, const double* u0, double* e,
+                                GeomParams G) {
+    int imax, jmax, kmax;
+    d_face_limits(axis, G.nx, G.ny, G.nz, imax, jmax, kmax);
+    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
+    if (i > imax || j > jmax || k > kmax)
+        return;
+    int m = d_face_idx(axis, i, j, k, G.nx, G.ny);
+    e[m]  = uh[m] - u0[m];
+}
+
+// m_a -= 0.5·corr_a (per-face).
+__global__ void face_subcorr_kernel(int axis, double* m, const double* corr, GeomParams G) {
+    int imax, jmax, kmax;
+    d_face_limits(axis, G.nx, G.ny, G.nz, imax, jmax, kmax);
+    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
+    if (i > imax || j > jmax || k > kmax)
+        return;
+    int id = d_face_idx(axis, i, j, k, G.nx, G.ny);
+    m[id] -= 0.5 * corr[id];
+}
+
+// Clamp m_a to the [min,max] of its 6 same-face-grid neighbours' pre values.
+__global__ void face_clamp_kernel(int axis, double* m, const double* pre, GeomParams G) {
+    int imax, jmax, kmax;
+    d_face_limits(axis, G.nx, G.ny, G.nz, imax, jmax, kmax);
+    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
+    if (i > imax || j > jmax || k > kmax)
+        return;
+    const int di[6] = {-1, 1, 0, 0, 0, 0};
+    const int dj[6] = {0, 0, -1, 1, 0, 0};
+    const int dk[6] = {0, 0, 0, 0, -1, 1};
+    double lo = 0.0, hi = 0.0;
+    bool first = true;
+    for (int n = 0; n < 6; n++) {
+        int a = i + di[n], b = j + dj[n], c = k + dk[n];
+        if (a < 1 || a > imax || b < 1 || b > jmax || c < 1 || c > kmax)
+            continue;
+        double v = pre[d_face_idx(axis, a, b, c, G.nx, G.ny)];
+        if (first) {
+            lo = hi = v;
+            first   = false;
+        } else {
+            lo = fmin(lo, v);
+            hi = fmax(hi, v);
+        }
+    }
+    if (first)
+        return;
+    int id = d_face_idx(axis, i, j, k, G.nx, G.ny);
+    if (m[id] < lo)
+        m[id] = lo;
+    else if (m[id] > hi)
+        m[id] = hi;
+}
+
+// Write m_a → vel_a directly (impulse IS velocity), skipping solid-adjacent faces.
+__global__ void face_write_vel_kernel(int axis, double* vel, const double* m, const bool* solid,
+                                      GeomParams G) {
+    int imax, jmax, kmax;
+    d_face_limits(axis, G.nx, G.ny, G.nz, imax, jmax, kmax);
+    int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
+    if (i > imax || j > jmax || k > kmax)
+        return;
+    int sp1 = (axis == 0) ? lfm_ip(i + 1, j, k, G.nx, G.ny)
+                          : (axis == 1 ? lfm_ip(i, j + 1, k, G.nx, G.ny)
+                                       : lfm_ip(i, j, k + 1, G.nx, G.ny));
+    if (solid[lfm_ip(i, j, k, G.nx, G.ny)] || solid[sp1])
+        return;
+    int id  = d_face_idx(axis, i, j, k, G.nx, G.ny);
+    vel[id] = m[id];
+}
+
+void lfm_face_error_correction(CudaLFMState3D& s, CudaVel3D u0, CudaVel3D vel, bool clamp) {
+    GeomParams G = geom(s);
+    int im, jm, km;
+    // û0 = F·m(φ) → mhat.
+    lfm_face_pullback(s, s.mface, s.mhat, /*fwd=*/true);
+    // e = û0 − u0 (per axis) → merr.
+    for (int axis = 0; axis < 3; axis++) {
+        d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
+        const double* uh = (axis == 0) ? s.mhat.u : (axis == 1 ? s.mhat.v : s.mhat.w);
+        const double* u0a = (axis == 0) ? u0.u : (axis == 1 ? u0.v : u0.w);
+        double* e         = (axis == 0) ? s.merr.u : (axis == 1 ? s.merr.v : s.merr.w);
+        face_err_kernel<<<grid_face(im, jm, km), block3()>>>(axis, uh, u0a, e, G);
+    }
+    // corr = T·e(ψ) → mhat (reuse as correction scratch).
+    lfm_face_pullback(s, s.merr, s.mhat, /*fwd=*/false);
+    // Save pre-correction impulse into merr for the clamp.
+    if (clamp)
+        lfm_copy_vel(s, s.merr, s.mface);
+    // m -= 0.5·corr.
+    for (int axis = 0; axis < 3; axis++) {
+        d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
+        double* m         = (axis == 0) ? s.mface.u : (axis == 1 ? s.mface.v : s.mface.w);
+        const double* cor = (axis == 0) ? s.mhat.u : (axis == 1 ? s.mhat.v : s.mhat.w);
+        face_subcorr_kernel<<<grid_face(im, jm, km), block3()>>>(axis, m, cor, G);
+    }
+    if (clamp) {
+        for (int axis = 0; axis < 3; axis++) {
+            d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
+            double* m         = (axis == 0) ? s.mface.u : (axis == 1 ? s.mface.v : s.mface.w);
+            const double* pre = (axis == 0) ? s.merr.u : (axis == 1 ? s.merr.v : s.merr.w);
+            face_clamp_kernel<<<grid_face(im, jm, km), block3()>>>(axis, m, pre, G);
+        }
+    }
+    // Write m → vel directly (no gauge averaging).
+    for (int axis = 0; axis < 3; axis++) {
+        d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
+        double* v       = (axis == 0) ? vel.u : (axis == 1 ? vel.v : vel.w);
+        const double* m = (axis == 0) ? s.mface.u : (axis == 1 ? s.mface.v : s.mface.w);
+        face_write_vel_kernel<<<grid_face(im, jm, km), block3()>>>(axis, v, m, s.g_.solid, G);
+    }
 }

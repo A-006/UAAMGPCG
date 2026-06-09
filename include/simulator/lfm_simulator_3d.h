@@ -47,7 +47,25 @@ private:
     bc::BoundaryManager3D bcs_;
     FlowMap3D flow_map_;
 
-    std::vector<double> m_x_, m_y_, m_z_; // impulse at cell centers
+    std::vector<double> m_x_, m_y_, m_z_; // impulse on staggered MAC faces (FIX①)
+
+    // ── FIX①: per-axis (staggered-face) flow maps ──
+    // Three per-axis flow maps carry the impulse directly on the MAC faces (zero
+    // face↔center averaging). For each face type a∈{u,v,w} we store a backward
+    // position ψ_a + Jacobian COVECTOR ROW T_a=(Ta0,Ta1,Ta2) and a forward
+    // position φ_a + covector row F_a, all on that axis' face grid. dψ/dt=u(ψ),
+    // dT_a/dt=∇u(ψ)·T_a (single 3-vector, ≡ the matching column of the full 3×3
+    // Jacobian). Identity covector: u→(1,0,0), v→(0,1,0), w→(0,0,1). Pullback is
+    // m_a_face = T_a·u0(ψ_a), landing directly on faces (author's PullbackAxis).
+    // Arrays are MAC-sized (u_size/v_size/w_size) so sample_velocity / iu,iv,iw
+    // index them with no extra bookkeeping (ghost rows unused).
+    struct FaceFlowMap {
+        // backward (Ψ, T): pos + covector row
+        std::vector<double> bx, by, bz, t0, t1, t2;
+        // forward (Φ, F): pos + covector row
+        std::vector<double> fx, fy, fz, f0, f1, f2;
+    };
+    FaceFlowMap fmu_, fmv_, fmw_; // u-, v-, w-face flow maps
 
     // Midpoint flow-map state for path-integral quadrature
     std::vector<double> phi_mid_x_, phi_mid_y_, phi_mid_z_;
@@ -84,6 +102,35 @@ private:
     void forward_pullback(const std::vector<double>& mx, const std::vector<double>& my,
                           const std::vector<double>& mz, std::vector<double>& ux,
                           std::vector<double>& uy, std::vector<double>& uz);
+
+    // ── FIX① per-axis (staggered-face) flow-map operations ──
+    // Set each face flow map to identity (position = that face's physical
+    // coordinate, covector row = the corresponding unit row e_a).
+    void face_set_forward_identity();
+    void face_set_backward_identity();
+    // One RK4 step of a single face point's (pos, covector) ODE: dp/dt=u(p),
+    // dT/dt=∇u(p)·T. axis ∈ {0=u,1=v,2=w} selects the face's MAC offset. Mirrors
+    // march_cell's RK4 + ∇u arithmetic but carries only the 3-component covector
+    // (one Jacobian column) → bit-identical to extracting that column of march_cell.
+    void face_march_point(int axis, double& px, double& py, double& pz, double T[3],
+                          const std::vector<double>& u, const std::vector<double>& v,
+                          const std::vector<double>& w, double dt_march) const;
+    void face_march_forward(const std::vector<double>& u, const std::vector<double>& v,
+                            const std::vector<double>& w, double dt_march);
+    void face_march_backward(const std::vector<double>& u, const std::vector<double>& v,
+                             const std::vector<double>& w, double dt_march);
+    // Per-face pullback m_a = T_a·src(ψ_a) on every face (uses backward map by
+    // default; fwd=true uses the forward map φ_a/F_a). Writes into the MAC-shaped
+    // dst_{u,v,w}, sampling the staggered src field via sample_velocity (no averaging).
+    void face_pullback(const std::vector<double>& su, const std::vector<double>& sv,
+                       const std::vector<double>& sw, std::vector<double>& dst_u,
+                       std::vector<double>& dst_v, std::vector<double>& dst_w, bool fwd) const;
+    // Face BFECC error correction + clamp + write m → grid velocity (no gauge avg).
+    void face_error_correction(const Grid3D& u0_grid);
+    // Clamp m_{u,v,w}_ component to the [min,max] of its 6 same-face-grid
+    // neighbours' pre-correction values (author's BfeccClamp, per axis grid).
+    void face_bfecc_clamp(const std::vector<double>& pre_u, const std::vector<double>& pre_v,
+                          const std::vector<double>& pre_w);
 
     // BFECC clamp: bound the corrected impulse m_{x,y,z}_ to the [min,max] of the
     // un-corrected (pre) values over each cell's 6 face-neighbours. Paper's
@@ -175,5 +222,25 @@ public:
     }
     const std::vector<double>& impulse_z() const {
         return m_z_;
+    }
+
+    // ── FIX① per-face flow-map test accessors ──
+    const FaceFlowMap& face_map_u() const { return fmu_; }
+    const FaceFlowMap& face_map_v() const { return fmv_; }
+    const FaceFlowMap& face_map_w() const { return fmw_; }
+    void face_set_forward_identity_public() { face_set_forward_identity(); }
+    void face_set_backward_identity_public() { face_set_backward_identity(); }
+    void face_march_forward_public(const std::vector<double>& u, const std::vector<double>& v,
+                                   const std::vector<double>& w, double dt) {
+        face_march_forward(u, v, w, dt);
+    }
+    void face_march_backward_public(const std::vector<double>& u, const std::vector<double>& v,
+                                    const std::vector<double>& w, double dt) {
+        face_march_backward(u, v, w, dt);
+    }
+    void face_pullback_public(const std::vector<double>& su, const std::vector<double>& sv,
+                              const std::vector<double>& sw, std::vector<double>& du,
+                              std::vector<double>& dv, std::vector<double>& dw, bool fwd) {
+        face_pullback(su, sv, sw, du, dv, dw, fwd);
     }
 };

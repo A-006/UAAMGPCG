@@ -258,6 +258,37 @@ static void test_p2() {
                           cmp(s.T[6], fm.T20), cmp(s.T[7], fm.T21), cmp(s.T[8], fm.T22)});
     check(eb < 1e-10, "backward march Ψ matches CPU", eb);
     check(eT < 1e-10, "backward march T (Jacobian) matches CPU", eT);
+
+    // ── FIX① per-axis (staggered-face) march: forward (φ,F) + backward (ψ,T) ──
+    // Forward face map: 3 steps with +dt; backward: 3 steps with -dt.
+    sim.face_set_forward_identity_public();
+    lfm_face_set_forward_identity(s);
+    for (int n = 0; n < 3; n++) {
+        sim.face_march_forward_public(vu, vv, vw, dt);
+        lfm_face_march_forward(s, s.A, dt);
+    }
+    sim.face_set_backward_identity_public();
+    lfm_face_set_backward_identity(s);
+    for (int n = 0; n < 3; n++) {
+        sim.face_march_backward_public(vu, vv, vw, -dt);
+        lfm_face_march_backward(s, s.A, -dt);
+    }
+    cudaDeviceSynchronize();
+    const auto& cfu = sim.face_map_u();
+    const auto& cfv = sim.face_map_v();
+    const auto& cfw = sim.face_map_w();
+    // Forward map position + covector row across all three axes.
+    double efp = std::max({cmp(s.fmu.fx, cfu.fx), cmp(s.fmu.fy, cfu.fy), cmp(s.fmu.fz, cfu.fz),
+                           cmp(s.fmv.fx, cfv.fx), cmp(s.fmw.fz, cfw.fz)});
+    double efF = std::max({cmp(s.fmu.f0, cfu.f0), cmp(s.fmu.f1, cfu.f1), cmp(s.fmu.f2, cfu.f2),
+                           cmp(s.fmv.f0, cfv.f0), cmp(s.fmv.f1, cfv.f1), cmp(s.fmw.f2, cfw.f2)});
+    double ebp = std::max({cmp(s.fmu.bx, cfu.bx), cmp(s.fmv.by, cfv.by), cmp(s.fmw.bz, cfw.bz)});
+    double ebT = std::max({cmp(s.fmu.t0, cfu.t0), cmp(s.fmu.t1, cfu.t1), cmp(s.fmu.t2, cfu.t2),
+                           cmp(s.fmv.t1, cfv.t1), cmp(s.fmw.t2, cfw.t2)});
+    check(efp < 1e-10, "FIX① forward face map φ matches CPU", efp);
+    check(efF < 1e-10, "FIX① forward face covector F matches CPU", efF);
+    check(ebp < 1e-10, "FIX① backward face map ψ matches CPU", ebp);
+    check(ebT < 1e-10, "FIX① backward face covector T matches CPU", ebT);
     s.free();
 }
 
@@ -311,6 +342,19 @@ static void test_p3() {
         sim.rk4_march_backward_public(sw_u, sw_v, sw_w, -dt);
         lfm_rk4_march_backward(s, s.A, -dt);
     }
+    // FIX① per-face flow maps (same swirl), for the face pullback test below.
+    sim.face_set_forward_identity_public();
+    lfm_face_set_forward_identity(s);
+    for (int n = 0; n < 2; n++) {
+        sim.face_march_forward_public(sw_u, sw_v, sw_w, dt);
+        lfm_face_march_forward(s, s.A, dt);
+    }
+    sim.face_set_backward_identity_public();
+    lfm_face_set_backward_identity(s);
+    for (int n = 0; n < 2; n++) {
+        sim.face_march_backward_public(sw_u, sw_v, sw_w, -dt);
+        lfm_face_march_backward(s, s.A, -dt);
+    }
 
     auto cmp = [&](const double* dptr, const std::vector<double>& cpu) {
         std::vector<double> h(cpu.size());
@@ -333,38 +377,41 @@ static void test_p3() {
     double ev = std::max({cmp(s.visc_x, cvu), cmp(s.visc_y, cvv), cmp(s.visc_z, cvw)});
     check(ev < 1e-13, "viscous force matches CPU", ev);
 
-    // ── (2) pullback m = T^T u0(Ψ) ──
-    Grid3D u0G(nx, ny, nz, L, L, L);
-    u0G.u = fu;
-    u0G.v = fv;
-    u0G.w = fw;
-    sim.pullback_impulse_public(u0G);
-    s.upload_to(s.u0, fu, fv, fw);
-    lfm_pullback_impulse(s, s.u0);
-    cudaDeviceSynchronize();
-    double ep = std::max({cmp(s.m_x, sim.impulse_x()), cmp(s.m_y, sim.impulse_y()),
-                          cmp(s.m_z, sim.impulse_z())});
-    check(ep < 1e-13, "pullback impulse matches CPU", ep);
+    (void)fs;
+    const int us = lfm_u_size(nx, ny, nz), vs = lfm_v_size(nx, ny, nz), ws = lfm_w_size(nx, ny, nz);
 
-    // ── (3) forward pullback û = F^T m(Φ) ──
-    std::vector<double> mfx(fs), mfy(fs), mfz(fs);
+    // ── (2) FIX① per-face pullback m_a = T_a·u0(ψ_a), staggered, backward map ──
+    std::vector<double> cm_u(us, 0.0), cm_v(vs, 0.0), cm_w(ws, 0.0);
+    sim.face_pullback_public(fu, fv, fw, cm_u, cm_v, cm_w, /*fwd=*/false);
+    s.upload_to(s.u0, fu, fv, fw);
+    lfm_face_pullback(s, s.u0, s.mface, /*fwd=*/false);
+    cudaDeviceSynchronize();
+    double ep = std::max(
+        {cmp(s.mface.u, cm_u), cmp(s.mface.v, cm_v), cmp(s.mface.w, cm_w)});
+    check(ep < 1e-13, "FIX① face pullback (backward) matches CPU", ep);
+
+    // ── (3) FIX① forward face pullback û_a = F_a·m(φ_a), staggered ──
+    std::vector<double> mfu(us, 0.0), mfv(vs, 0.0), mfw(ws, 0.0);
     for (int k = 1; k <= nz; k++)
         for (int j = 1; j <= ny; j++)
-            for (int i = 1; i <= nx; i++) {
-                long id = lfm_fm(i, j, k, nx, ny);
-                mfx[id] = std::sin(0.3 * i) + 0.1 * k;
-                mfy[id] = std::cos(0.2 * j);
-                mfz[id] = 0.05 * (i + j);
-            }
-    std::vector<double> cux(fs), cuy(fs), cuz(fs);
-    sim.forward_pullback_public(mfx, mfy, mfz, cux, cuy, cuz);
-    cudaMemcpy(s.m_x, mfx.data(), fs * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(s.m_y, mfy.data(), fs * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(s.m_z, mfz.data(), fs * sizeof(double), cudaMemcpyHostToDevice);
-    lfm_forward_pullback(s, s.m_x, s.m_y, s.m_z, s.uhat_x, s.uhat_y, s.uhat_z);
+            for (int i = 0; i <= nx; i++)
+                mfu[lfm_iu(i, j, k, nx, ny)] = std::sin(0.3 * i) + 0.1 * k;
+    for (int k = 1; k <= nz; k++)
+        for (int j = 0; j <= ny; j++)
+            for (int i = 1; i <= nx; i++)
+                mfv[lfm_iv(i, j, k, nx, ny)] = std::cos(0.2 * j) + 0.05 * i;
+    for (int k = 0; k <= nz; k++)
+        for (int j = 1; j <= ny; j++)
+            for (int i = 1; i <= nx; i++)
+                mfw[lfm_iw(i, j, k, nx, ny)] = 0.05 * (i + j) + 0.02 * k;
+    std::vector<double> cuu(us, 0.0), cuv(vs, 0.0), cuw(ws, 0.0);
+    sim.face_pullback_public(mfu, mfv, mfw, cuu, cuv, cuw, /*fwd=*/true);
+    s.upload_to(s.A, mfu, mfv, mfw); // reuse A as a staggered source field
+    lfm_face_pullback(s, s.A, s.mhat, /*fwd=*/true);
     cudaDeviceSynchronize();
-    double efp = std::max({cmp(s.uhat_x, cux), cmp(s.uhat_y, cuy), cmp(s.uhat_z, cuz)});
-    check(efp < 1e-13, "forward pullback matches CPU", efp);
+    double efp = std::max(
+        {cmp(s.mhat.u, cuu), cmp(s.mhat.v, cuv), cmp(s.mhat.w, cuw)});
+    check(efp < 1e-13, "FIX① forward face pullback matches CPU", efp);
 
     s.free();
 }
@@ -435,20 +482,21 @@ static void test_p4(double Re, const char* tag, bool clamp = false) {
     cpu.step();
     gpu.step();
 
-    // Post-cycle impulse m and backward flow map Ψ should match the CPU reference.
+    // Post-cycle FIX① per-face backward flow map ψ_u and face impulse m should
+    // match the CPU reference bit-for-bit.
     auto cmpfm = [&](const double* dptr, const std::vector<double>& cpuv) {
         std::vector<double> h(cpuv.size());
         cudaMemcpy(h.data(), dptr, cpuv.size() * sizeof(double), cudaMemcpyDeviceToHost);
         return max_abs_diff(h, cpuv);
     };
-    FlowMap3D& fmc = cpu.flow_map();
-    double dpsi = std::max({cmpfm(gpu.state().psi_x, fmc.psi_x), cmpfm(gpu.state().psi_y, fmc.psi_y),
-                            cmpfm(gpu.state().psi_z, fmc.psi_z)});
-    double dm = std::max({cmpfm(gpu.state().m_x, cpu.impulse_x()),
-                          cmpfm(gpu.state().m_y, cpu.impulse_y()),
-                          cmpfm(gpu.state().m_z, cpu.impulse_z())});
-    check(dpsi < 1e-12, "post-cycle backward flow map Ψ matches CPU", dpsi);
-    check(dm < 1e-12, "post-cycle impulse m matches CPU", dm);
+    const auto& fmu = cpu.face_map_u();
+    double dpsi = std::max({cmpfm(gpu.state().fmu.bx, fmu.bx), cmpfm(gpu.state().fmu.by, fmu.by),
+                            cmpfm(gpu.state().fmu.bz, fmu.bz)});
+    double dm = std::max({cmpfm(gpu.state().mface.u, cpu.impulse_x()),
+                          cmpfm(gpu.state().mface.v, cpu.impulse_y()),
+                          cmpfm(gpu.state().mface.w, cpu.impulse_z())});
+    check(dpsi < 1e-12, "post-cycle per-face backward map ψ_u matches CPU", dpsi);
+    check(dm < 1e-12, "post-cycle face impulse m matches CPU", dm);
 
     const Grid3D& gc = cpu.grid();
     const Grid3D& gg = gpu.grid();
