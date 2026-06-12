@@ -27,10 +27,8 @@ void CudaPCGSolver3D::solve(Grid3D& g, const std::vector<double>& rhs, int max_i
     bool resize =
         (gpu_grid_ && (gpu_grid_->nx != nx || gpu_grid_->ny != ny || gpu_grid_->nz != nz));
     if (realloc) {
-        if (d_p_)
-            cudaFree(d_p_);
-        if (d_rhs_)
-            cudaFree(d_rhs_);
+        if (d_p_)   cudaFree(d_p_);
+        if (d_rhs_) cudaFree(d_rhs_);
         gpu_grid_ = std::make_unique<CudaGrid3D>();
         gpu_grid_->allocate(nx, ny, nz, g.dx, g.dy, g.dz);
         cudaMalloc(&d_p_, N * sizeof(double));

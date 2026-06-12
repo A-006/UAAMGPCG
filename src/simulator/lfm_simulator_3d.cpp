@@ -282,13 +282,21 @@ void LFMSimulator3D::accumulate_path_integral(Grid3D& u0, const std::vector<doub
 void LFMSimulator3D::rk2_advect(Grid3D& dst, const Grid3D& src, const std::vector<double>& vel_u,
                                 const std::vector<double>& vel_v, const std::vector<double>& vel_w,
                                 double dt_step) {
-    int nx = grid_.nx, ny = grid_.ny, nz = grid_.nz;
-    double dx = grid_.dx, dy = grid_.dy, dz = grid_.dz;
+    int nx = grid_.nx;
+    int ny = grid_.ny;
+    int nz = grid_.nz;
+    double dx = grid_.dx;
+    double dy = grid_.dy;
+    double dz = grid_.dz;
 
     auto backtrace = [&](double x, double y, double z, double& xo, double& yo, double& zo) {
-        double u1, v1, w1;
+        double u1;
+        double v1;
+        double w1;
         sample_velocity(x, y, z, vel_u, vel_v, vel_w, u1, v1, w1);
-        double xm = x - 0.5 * dt_step * u1, ym = y - 0.5 * dt_step * v1, zm = z - 0.5 * dt_step * w1;
+        double xm = x - 0.5 * dt_step * u1;
+        double ym = y - 0.5 * dt_step * v1;
+        double zm = z - 0.5 * dt_step * w1;
         double um, vm, wm;
         sample_velocity(xm, ym, zm, vel_u, vel_v, vel_w, um, vm, wm);
         xo = x - dt_step * um;

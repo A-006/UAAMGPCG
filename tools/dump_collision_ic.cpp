@@ -24,25 +24,33 @@
 int main(int argc, char** argv) {
     int NX            = argc > 1 ? std::atoi(argv[1]) : 128;
     std::string outdir = argc > 2 ? argv[2] : "/tmp/coll_ic";
+    // Tunable ring IC (defaults == committed cross-validation setup, so a no-arg call
+    // is unchanged). Used to search for the paper Fig.3 "secondary filament" IC.
+    double radius = argc > 3 ? std::atof(argv[3]) : 0.10;
+    double core   = argc > 4 ? std::atof(argv[4]) : 0.022;
+    double circ   = argc > 5 ? std::atof(argv[5]) : 1.0;
+    double sep    = argc > 6 ? std::atof(argv[6]) : 0.15;   // distance between ring centers (x)
+    int    nseg   = argc > 7 ? std::atoi(argv[7]) : 300;
     int NY = 2 * NX, NZ = 2 * NX;     // collision axis x is the short one (paper aspect)
     double Lx = 0.5, Ly = 1.0, Lz = 1.0; // dx=dy=dz uniform
     mkdir(outdir.c_str(), 0755);
 
     Grid3D g(NX, NY, NZ, Lx, Ly, Lz);
 
-    // EXACT same rings as run_collision_paper.cu.
     scenarios::VortexRing left;
-    left.center      = {0.35 * Lx, 0.5 * Ly, 0.5 * Lz};
+    left.center      = {0.5 * Lx - 0.5 * sep, 0.5 * Ly, 0.5 * Lz};
     left.axis        = {1.0, 0.0, 0.0};
-    left.radius      = 0.10;
-    left.core        = 0.022;
-    left.circulation = +1.0;
-    left.n_segments  = 300;
+    left.radius      = radius;
+    left.core        = core;
+    left.circulation = +circ;
+    left.n_segments  = nseg;
     scenarios::VortexRing right = left;
-    right.center                = {0.65 * Lx, 0.5 * Ly, 0.5 * Lz};
-    right.circulation           = -1.0;
+    right.center                = {0.5 * Lx + 0.5 * sep, 0.5 * Ly, 0.5 * Lz};
+    right.circulation           = -circ;
     scenarios::add_vortex_ring(g, left);
     scenarios::add_vortex_ring(g, right);
+    std::printf("rings: radius=%g core=%g circ=%g sep=%g nseg=%d  (dx=%g, core=%.1f cells)\n",
+                radius, core, circ, sep, nseg, Lx / NX, core / (Lx / NX));
 
     // x-faces: (nx+1, ny, nz), a[ix,iy,iz] = u_at(ix, iy+1, iz+1)
     {

@@ -286,9 +286,9 @@ void CudaPCG3D::free_buffers() {
         cudaFree(d_count_buf);
     d_r = d_z = d_p = d_Ap = d_xt = d_dot_buf = nullptr;
     d_count_buf                               = nullptr;
-    d_scalar                           = nullptr;
-    dot_buf_size_                      = 0;
-    N_                                 = 0;
+    d_scalar                                  = nullptr;
+    dot_buf_size_                             = 0;
+    N_                                        = 0;
     if (gf_N_ > 0) {
         gf_.free();
         if (d_rf)

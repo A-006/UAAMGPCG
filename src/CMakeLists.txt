@@ -6,7 +6,10 @@ set(LFM_SOURCES
     numerics/bc/patches_3d.cpp
     numerics/pressure/pressure_3d.cpp
     simulator/simulator_3d.cpp
+    simulator/scene_3d.cpp
+    simulator/runner_3d.cpp
     io/vtk_writer_3d.cpp
+    io/vtk_slim_3d.cpp
     core/scalar_field_3d.cpp
     simulator/scenarios/2d/karman.cpp
     simulator/scenarios/scenario_registry.cpp

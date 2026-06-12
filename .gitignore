@@ -20,6 +20,10 @@ Makefile
 *.ptx
 *.cubin
 
+*.gif
+*.png
+*.sh
+
 # Anything user-local (outputs, animations, papers, scratch). Drop them in .local/.
 .local/
 
@@ -45,7 +49,7 @@ tools/karman_vortex_street/inputs/
 tools/karman_vortex_street/output/
 tools/karman_vortex_street/figures/
 tools/karman/*
-/slides/*
+/slide/*
 /slides1/*
 *.md
 

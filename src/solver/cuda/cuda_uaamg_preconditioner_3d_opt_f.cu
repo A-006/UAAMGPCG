@@ -32,10 +32,15 @@ __global__ __launch_bounds__(512, 2) void rbgs_tiled_kernel_f(float* __restrict 
     __shared__ float sx[TILED_TH][TILED_TH][TILED_TH];
     __shared__ bool ss[TILED_TH][TILED_TH][TILED_TH];
 
-    int tx = threadIdx.x, ty = threadIdx.y, tz = threadIdx.z;
-    int gi = blockIdx.x * TILED_T + tx + 1, gj = blockIdx.y * TILED_T + ty + 1,
-        gk = blockIdx.z * TILED_T + tz + 1;
-    int li = tx + 1, lj = ty + 1, lk = tz + 1;
+    int tx = threadIdx.x; 
+    int ty = threadIdx.y;
+    int tz = threadIdx.z;
+    int gi = blockIdx.x * TILED_T + tx + 1;
+    int gj = blockIdx.y * TILED_T + ty + 1;
+    int gk = blockIdx.z * TILED_T + tz + 1;
+    int li = tx + 1;
+    int lj = ty + 1;
+    int lk = tz + 1;
 
     bool valid = (gi <= nx && gj <= ny && gk <= nz);
     int gid    = valid ? opti_idx_f(gi, gj, gk, pitch, ny) : -1;
@@ -186,10 +191,15 @@ __global__ __launch_bounds__(512, 2) void rbgs_smooth_only_kernel_f(
     __shared__ float sx[TILED_TH][TILED_TH][TILED_TH];
     __shared__ bool ss[TILED_TH][TILED_TH][TILED_TH];
 
-    int tx = threadIdx.x, ty = threadIdx.y, tz = threadIdx.z;
-    int gi = blockIdx.x * TILED_T + tx + 1, gj = blockIdx.y * TILED_T + ty + 1,
-        gk = blockIdx.z * TILED_T + tz + 1;
-    int li = tx + 1, lj = ty + 1, lk = tz + 1;
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int tz = threadIdx.z;
+    int gi = blockIdx.x * TILED_T + tx + 1;
+    int gj = blockIdx.y * TILED_T + ty + 1;
+    int gk = blockIdx.z * TILED_T + tz + 1;
+    int li = tx + 1;
+    int lj = ty + 1;
+    int lk = tz + 1;
     bool valid = (gi <= nx && gj <= ny && gk <= nz);
     int gid    = valid ? opti_idx_f(gi, gj, gk, pitch, ny) : -1;
 

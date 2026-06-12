@@ -18,8 +18,8 @@ void make_basis(const std::array<double, 3>& axis, std::array<double, 3>& e1,
     n[2] /= m;
 
     // Pick a vector not parallel to n
-    std::array<double, 3> tmp =
-        (std::abs(n[0]) < 0.9) ? std::array<double, 3>{1, 0, 0} : std::array<double, 3>{0, 1, 0};
+    std::array<double, 3> tmp = (std::abs(n[0]) < 0.9) ? 
+                                std::array<double, 3>{1, 0, 0} : std::array<double, 3>{0, 1, 0};
     // e1 = (tmp × n) normalized
     e1[0] = tmp[1] * n[2] - tmp[2] * n[1];
     e1[1] = tmp[2] * n[0] - tmp[0] * n[2];
