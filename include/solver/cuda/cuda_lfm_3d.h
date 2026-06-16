@@ -95,6 +95,17 @@ struct CudaLFMState3D {
     CudaVel3D mhat{};  // forward-pullback scratch û0 (face-sized)
     CudaVel3D merr{};  // error / correction scratch (face-sized)
 
+    // FP32 scratch copies of a MAC velocity field, used only by the fp32_march
+    // production sampling path. The flow-map sampling kernels gather double
+    // velocity values and convert each to float per load — on consumer GPUs that
+    // FP64→FP32 convert runs on the 1/64-rate FP64 pipe and was the #1 hotspot of
+    // face_march/face_pullback (ncu: FP64 pipe ~24%). Pre-converting the whole
+    // field once to these float buffers turns the hot gather into a pure FP32
+    // load, removing the per-sample FP64 convert. The FP64 (bit-exact test) path
+    // keeps reading the double arrays directly. Sized like one CudaVel3D.
+    float *vu32 = nullptr, *vv32 = nullptr, *vw32 = nullptr; // velocity (march)
+    float *su32 = nullptr, *sv32 = nullptr, *sw32 = nullptr; // source  (pullback/advect-src)
+
     void allocate(int nx_, int ny_, int nz_, double dx_, double dy_, double dz_, int n_steps_);
     void free();
 

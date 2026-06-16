@@ -23,11 +23,37 @@ inline void dfree(double*& p) {
         cudaFree(p);
     p = nullptr;
 }
+inline float* fmalloc(int n) {
+    float* p = nullptr;
+    cudaMalloc(&p, (size_t)n * sizeof(float));
+    cudaMemset(p, 0, (size_t)n * sizeof(float));
+    return p;
+}
+inline void ffree(float*& p) {
+    if (p)
+        cudaFree(p);
+    p = nullptr;
+}
 dim3 block3() { return dim3(8, 8, 8); }
 dim3 grid3(int nx, int ny, int nz) {
     return dim3((nx + 7) / 8, (ny + 7) / 8, (nz + 7) / 8);
 }
 } // namespace
+
+// Element-wise double→float copy of one MAC component (coalesced 1D map). Used to
+// stage the FP32 velocity/source scratch so the hot sampling gather is pure FP32.
+__global__ void d2f_copy_kernel(float* __restrict dst, const double* __restrict src, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n)
+        dst[i] = (float)src[i];
+}
+static void convert_vel_f32(CudaVel3D src, float* du, float* dv, float* dw, int us, int vs,
+                            int ws) {
+    int B = 256;
+    d2f_copy_kernel<<<(us + B - 1) / B, B>>>(du, src.u, us);
+    d2f_copy_kernel<<<(vs + B - 1) / B, B>>>(dv, src.v, vs);
+    d2f_copy_kernel<<<(ws + B - 1) / B, B>>>(dw, src.w, ws);
+}
 
 // ════════════════════════════════════════════════════════════════════
 // Shared device functions — exact ports of the corresponding routines in
@@ -72,10 +98,24 @@ template <typename T> __device__ inline void t_bspline_d(T r, T dw[3]) {
     dw[1] = T(-2.0) * r;
     dw[2] = r + T(0.5);
 }
+// Nearest-cell index of a continuous grid coordinate. The FP64 path keeps the
+// EXACT expression of the CPU reference ((int)floor((double)c + 0.5)) so the
+// bit-exact GPU-vs-CPU test still passes; the FP32 path uses floorf so the hot
+// production sampler stays off the RTX 3090's 1/64-rate FP64 pipe (ncu showed
+// the FP64 pipe was the #1 hotspot at ~24%, all from this floor((double)…)).
+template <typename T> __device__ inline int t_round_idx(T c);
+template <> __device__ inline int t_round_idx<double>(double c) {
+    return (int)floor(c + 0.5);
+}
+template <> __device__ inline int t_round_idx<float>(float c) {
+    return (int)floorf(c + 0.5f);
+}
 
-// 27-point quadratic B-spline velocity interpolation (MAC-aware).
-template <typename T>
-__device__ inline void d_sample_velocity(const double* uu, const double* vv, const double* ww,
+// 27-point quadratic B-spline velocity interpolation (MAC-aware). VT is the
+// stored velocity element type: double (bit-exact path) or float (fp32 path,
+// pre-staged scratch → no per-load FP64 convert). Deduced from the pointer args.
+template <typename T, typename VT = double>
+__device__ inline void d_sample_velocity(const VT* uu, const VT* vv, const VT* ww,
                                          T x, T y, T z, int nx, int ny, int nz,
                                          T dx, T dy, T dz, T Lx, T Ly,
                                          T Lz, T& vu, T& vvel, T& vw) {
@@ -86,7 +126,7 @@ __device__ inline void d_sample_velocity(const double* uu, const double* vv, con
     // u-face at (i·dx,(j-0.5)·dy,(k-0.5)·dz)
     {
         T cx = x / dx, cy = y / dy + T(0.5), cz = z / dz + T(0.5);
-        int ic = (int)floor((double)cx + 0.5), jc = (int)floor((double)cy + 0.5), kc = (int)floor((double)cz + 0.5);
+        int ic = t_round_idx<T>(cx), jc = t_round_idx<T>(cy), kc = t_round_idx<T>(cz);
         T wx[3], wy[3], wz[3];
         t_bspline<T>(cx - ic, wx);
         t_bspline<T>(cy - jc, wy);
@@ -97,14 +137,14 @@ __device__ inline void d_sample_velocity(const double* uu, const double* vv, con
                 for (int di = -1; di <= 1; di++) {
                     int ii = iclamp(ic + di, 0, nx), jj = iclamp(jc + dj, 1, ny),
                         kk = iclamp(kc + dk, 1, nz);
-                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * (T)uu[lfm_iu(ii, jj, kk, nx, ny)];
+                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * (T)__ldg(&uu[lfm_iu(ii, jj, kk, nx, ny)]);
                 }
         vu = s;
     }
     // v-face at ((i-0.5)·dx, j·dy, (k-0.5)·dz)
     {
         T cx = x / dx + T(0.5), cy = y / dy, cz = z / dz + T(0.5);
-        int ic = (int)floor((double)cx + 0.5), jc = (int)floor((double)cy + 0.5), kc = (int)floor((double)cz + 0.5);
+        int ic = t_round_idx<T>(cx), jc = t_round_idx<T>(cy), kc = t_round_idx<T>(cz);
         T wx[3], wy[3], wz[3];
         t_bspline<T>(cx - ic, wx);
         t_bspline<T>(cy - jc, wy);
@@ -115,14 +155,14 @@ __device__ inline void d_sample_velocity(const double* uu, const double* vv, con
                 for (int di = -1; di <= 1; di++) {
                     int ii = iclamp(ic + di, 1, nx), jj = iclamp(jc + dj, 0, ny),
                         kk = iclamp(kc + dk, 1, nz);
-                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * (T)vv[lfm_iv(ii, jj, kk, nx, ny)];
+                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * (T)__ldg(&vv[lfm_iv(ii, jj, kk, nx, ny)]);
                 }
         vvel = s;
     }
     // w-face at ((i-0.5)·dx,(j-0.5)·dy, k·dz)
     {
         T cx = x / dx + T(0.5), cy = y / dy + T(0.5), cz = z / dz;
-        int ic = (int)floor((double)cx + 0.5), jc = (int)floor((double)cy + 0.5), kc = (int)floor((double)cz + 0.5);
+        int ic = t_round_idx<T>(cx), jc = t_round_idx<T>(cy), kc = t_round_idx<T>(cz);
         T wx[3], wy[3], wz[3];
         t_bspline<T>(cx - ic, wx);
         t_bspline<T>(cy - jc, wy);
@@ -133,7 +173,7 @@ __device__ inline void d_sample_velocity(const double* uu, const double* vv, con
                 for (int di = -1; di <= 1; di++) {
                     int ii = iclamp(ic + di, 1, nx), jj = iclamp(jc + dj, 1, ny),
                         kk = iclamp(kc + dk, 0, nz);
-                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * (T)ww[lfm_iw(ii, jj, kk, nx, ny)];
+                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * (T)__ldg(&ww[lfm_iw(ii, jj, kk, nx, ny)]);
                 }
         vw = s;
     }
@@ -144,8 +184,8 @@ __device__ inline void d_sample_velocity(const double* uu, const double* vv, con
 // off-grid position (≡ author's InterpMacN2Grad). Replaces the nearest-cell finite
 // difference so the flow-map Jacobian dF/dt=∇u·F is evolved consistently — this is the
 // circulation-preserving term, and the FD/snap version was the dominant dissipation source.
-template <typename T>
-__device__ inline void d_sample_velocity_grad(const double* uu, const double* vv, const double* ww,
+template <typename T, typename VT = double>
+__device__ inline void d_sample_velocity_grad(const VT* uu, const VT* vv, const VT* ww,
                                               T x, T y, T z, int nx, int ny, int nz,
                                               T dx, T dy, T dz, T Lx, T Ly,
                                               T Lz, T& vu, T& vvel, T& vw,
@@ -156,7 +196,7 @@ __device__ inline void d_sample_velocity_grad(const double* uu, const double* vv
     // u-face at (i·dx,(j-0.5)·dy,(k-0.5)·dz)  → row a=0
     {
         T cx = x / dx, cy = y / dy + T(0.5), cz = z / dz + T(0.5);
-        int ic = (int)floor((double)cx + 0.5), jc = (int)floor((double)cy + 0.5), kc = (int)floor((double)cz + 0.5);
+        int ic = t_round_idx<T>(cx), jc = t_round_idx<T>(cy), kc = t_round_idx<T>(cz);
         T wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
         t_bspline<T>(cx - ic, wx);   t_bspline_d<T>(cx - ic, dwx);
         t_bspline<T>(cy - jc, wy);   t_bspline_d<T>(cy - jc, dwy);
@@ -167,7 +207,7 @@ __device__ inline void d_sample_velocity_grad(const double* uu, const double* vv
                 for (int di = -1; di <= 1; di++) {
                     int ii = iclamp(ic + di, 0, nx), jj = iclamp(jc + dj, 1, ny),
                         kk = iclamp(kc + dk, 1, nz);
-                    T val = (T)uu[lfm_iu(ii, jj, kk, nx, ny)];
+                    T val = (T)__ldg(&uu[lfm_iu(ii, jj, kk, nx, ny)]);
                     s  += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
                     sx += dwx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
                     sy += wx[di + 1] * dwy[dj + 1] * wz[dk + 1] * val;
@@ -179,7 +219,7 @@ __device__ inline void d_sample_velocity_grad(const double* uu, const double* vv
     // v-face at ((i-0.5)·dx, j·dy, (k-0.5)·dz)  → row a=1
     {
         T cx = x / dx + T(0.5), cy = y / dy, cz = z / dz + T(0.5);
-        int ic = (int)floor((double)cx + 0.5), jc = (int)floor((double)cy + 0.5), kc = (int)floor((double)cz + 0.5);
+        int ic = t_round_idx<T>(cx), jc = t_round_idx<T>(cy), kc = t_round_idx<T>(cz);
         T wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
         t_bspline<T>(cx - ic, wx);   t_bspline_d<T>(cx - ic, dwx);
         t_bspline<T>(cy - jc, wy);   t_bspline_d<T>(cy - jc, dwy);
@@ -190,7 +230,7 @@ __device__ inline void d_sample_velocity_grad(const double* uu, const double* vv
                 for (int di = -1; di <= 1; di++) {
                     int ii = iclamp(ic + di, 1, nx), jj = iclamp(jc + dj, 0, ny),
                         kk = iclamp(kc + dk, 1, nz);
-                    T val = (T)vv[lfm_iv(ii, jj, kk, nx, ny)];
+                    T val = (T)__ldg(&vv[lfm_iv(ii, jj, kk, nx, ny)]);
                     s  += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
                     sx += dwx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
                     sy += wx[di + 1] * dwy[dj + 1] * wz[dk + 1] * val;
@@ -202,7 +242,7 @@ __device__ inline void d_sample_velocity_grad(const double* uu, const double* vv
     // w-face at ((i-0.5)·dx,(j-0.5)·dy, k·dz)  → row a=2
     {
         T cx = x / dx + T(0.5), cy = y / dy + T(0.5), cz = z / dz;
-        int ic = (int)floor((double)cx + 0.5), jc = (int)floor((double)cy + 0.5), kc = (int)floor((double)cz + 0.5);
+        int ic = t_round_idx<T>(cx), jc = t_round_idx<T>(cy), kc = t_round_idx<T>(cz);
         T wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
         t_bspline<T>(cx - ic, wx);   t_bspline_d<T>(cx - ic, dwx);
         t_bspline<T>(cy - jc, wy);   t_bspline_d<T>(cy - jc, dwy);
@@ -213,7 +253,7 @@ __device__ inline void d_sample_velocity_grad(const double* uu, const double* vv
                 for (int di = -1; di <= 1; di++) {
                     int ii = iclamp(ic + di, 1, nx), jj = iclamp(jc + dj, 1, ny),
                         kk = iclamp(kc + dk, 0, nz);
-                    T val = (T)ww[lfm_iw(ii, jj, kk, nx, ny)];
+                    T val = (T)__ldg(&ww[lfm_iw(ii, jj, kk, nx, ny)]);
                     s  += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
                     sx += dwx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
                     sy += wx[di + 1] * dwy[dj + 1] * wz[dk + 1] * val;
@@ -331,6 +371,14 @@ void CudaLFMState3D::allocate(int nx_, int ny_, int nz_, double dx_, double dy_,
     alloc_vel(mface);
     alloc_vel(mhat);
     alloc_vel(merr);
+
+    // FP32 velocity/source scratch (one MAC field each) for the fp32 sampling path.
+    vu32 = fmalloc(us);
+    vv32 = fmalloc(vs);
+    vw32 = fmalloc(ws);
+    su32 = fmalloc(us);
+    sv32 = fmalloc(vs);
+    sw32 = fmalloc(ws);
 }
 
 void CudaLFMState3D::free() {
@@ -387,6 +435,12 @@ void CudaLFMState3D::free() {
     free_vel(mface);
     free_vel(mhat);
     free_vel(merr);
+    ffree(vu32);
+    ffree(vv32);
+    ffree(vw32);
+    ffree(su32);
+    ffree(sv32);
+    ffree(sw32);
 }
 
 void CudaLFMState3D::upload_velocity(const std::vector<double>& hu, const std::vector<double>& hv,
@@ -657,26 +711,26 @@ struct FMPtrs {
     double* J[9];
 };
 
-template <typename T>
-__device__ inline void d_backtrace(const double* vu, const double* vv, const double* vw, T x,
+template <typename T, typename VT>
+__device__ inline void d_backtrace(const VT* vu, const VT* vv, const VT* vw, T x,
                                     T y, T z, T dt_step, const GeomParams g,
                                     T& xo, T& yo, T& zo) {
     T gdx = (T)g.dx, gdy = (T)g.dy, gdz = (T)g.dz, gLx = (T)g.Lx, gLy = (T)g.Ly, gLz = (T)g.Lz;
     T u1, v1, w1;
-    d_sample_velocity<T>(vu, vv, vw, x, y, z, g.nx, g.ny, g.nz, gdx, gdy, gdz, gLx, gLy, gLz, u1,
+    d_sample_velocity<T, VT>(vu, vv, vw, x, y, z, g.nx, g.ny, g.nz, gdx, gdy, gdz, gLx, gLy, gLz, u1,
                          v1, w1);
     T xm = x - T(0.5) * dt_step * u1, ym = y - T(0.5) * dt_step * v1, zm = z - T(0.5) * dt_step * w1;
     T um, vm, wm;
-    d_sample_velocity<T>(vu, vv, vw, xm, ym, zm, g.nx, g.ny, g.nz, gdx, gdy, gdz, gLx, gLy, gLz,
+    d_sample_velocity<T, VT>(vu, vv, vw, xm, ym, zm, g.nx, g.ny, g.nz, gdx, gdy, gdz, gLx, gLy, gLz,
                          um, vm, wm);
     xo = x - dt_step * um;
     yo = y - dt_step * vm;
     zo = z - dt_step * wm;
 }
 
-template <typename T>
-__global__ void advect_u_kernel(double* dst, const double* su, const double* sv, const double* sw,
-                                 const double* vu, const double* vv, const double* vw,
+template <typename T, typename VT>
+__global__ void advect_u_kernel(double* dst, const VT* su, const VT* sv, const VT* sw,
+                                 const VT* vu, const VT* vv, const VT* vw,
                                  const bool* solid, double dt_step, GeomParams g) {
     int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
     int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
@@ -689,14 +743,14 @@ __global__ void advect_u_kernel(double* dst, const double* su, const double* sv,
         return;
     }
     T xs, ys, zs, ou, ov, ow, dts = (T)dt_step;
-    d_backtrace<T>(vu, vv, vw, T(i * g.dx), T((j - 0.5) * g.dy), T((k - 0.5) * g.dz), dts, g, xs, ys, zs);
-    d_sample_velocity<T>(su, sv, sw, xs, ys, zs, g.nx, g.ny, g.nz, (T)g.dx, (T)g.dy, (T)g.dz, (T)g.Lx, (T)g.Ly, (T)g.Lz,
+    d_backtrace<T, VT>(vu, vv, vw, T(i * g.dx), T((j - 0.5) * g.dy), T((k - 0.5) * g.dz), dts, g, xs, ys, zs);
+    d_sample_velocity<T, VT>(su, sv, sw, xs, ys, zs, g.nx, g.ny, g.nz, (T)g.dx, (T)g.dy, (T)g.dz, (T)g.Lx, (T)g.Ly, (T)g.Lz,
                          ou, ov, ow);
     dst[id] = ou;
 }
-template <typename T>
-__global__ void advect_v_kernel(double* dst, const double* su, const double* sv, const double* sw,
-                                 const double* vu, const double* vv, const double* vw,
+template <typename T, typename VT>
+__global__ void advect_v_kernel(double* dst, const VT* su, const VT* sv, const VT* sw,
+                                 const VT* vu, const VT* vv, const VT* vw,
                                  const bool* solid, double dt_step, GeomParams g) {
     int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
     int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
@@ -709,14 +763,14 @@ __global__ void advect_v_kernel(double* dst, const double* su, const double* sv,
         return;
     }
     T xs, ys, zs, ou, ov, ow, dts = (T)dt_step;
-    d_backtrace<T>(vu, vv, vw, T((i - 0.5) * g.dx), T(j * g.dy), T((k - 0.5) * g.dz), dts, g, xs, ys, zs);
-    d_sample_velocity<T>(su, sv, sw, xs, ys, zs, g.nx, g.ny, g.nz, (T)g.dx, (T)g.dy, (T)g.dz, (T)g.Lx, (T)g.Ly, (T)g.Lz,
+    d_backtrace<T, VT>(vu, vv, vw, T((i - 0.5) * g.dx), T(j * g.dy), T((k - 0.5) * g.dz), dts, g, xs, ys, zs);
+    d_sample_velocity<T, VT>(su, sv, sw, xs, ys, zs, g.nx, g.ny, g.nz, (T)g.dx, (T)g.dy, (T)g.dz, (T)g.Lx, (T)g.Ly, (T)g.Lz,
                          ou, ov, ow);
     dst[id] = ov;
 }
-template <typename T>
-__global__ void advect_w_kernel(double* dst, const double* su, const double* sv, const double* sw,
-                                 const double* vu, const double* vv, const double* vw,
+template <typename T, typename VT>
+__global__ void advect_w_kernel(double* dst, const VT* su, const VT* sv, const VT* sw,
+                                 const VT* vu, const VT* vv, const VT* vw,
                                  const bool* solid, double dt_step, GeomParams g) {
     int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
     int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
@@ -729,8 +783,8 @@ __global__ void advect_w_kernel(double* dst, const double* su, const double* sv,
         return;
     }
     T xs, ys, zs, ou, ov, ow, dts = (T)dt_step;
-    d_backtrace<T>(vu, vv, vw, T((i - 0.5) * g.dx), T((j - 0.5) * g.dy), T(k * g.dz), dts, g, xs, ys, zs);
-    d_sample_velocity<T>(su, sv, sw, xs, ys, zs, g.nx, g.ny, g.nz, (T)g.dx, (T)g.dy, (T)g.dz, (T)g.Lx, (T)g.Ly, (T)g.Lz,
+    d_backtrace<T, VT>(vu, vv, vw, T((i - 0.5) * g.dx), T((j - 0.5) * g.dy), T(k * g.dz), dts, g, xs, ys, zs);
+    d_sample_velocity<T, VT>(su, sv, sw, xs, ys, zs, g.nx, g.ny, g.nz, (T)g.dx, (T)g.dy, (T)g.dz, (T)g.Lx, (T)g.Ly, (T)g.Lz,
                          ou, ov, ow);
     dst[id] = ow;
 }
@@ -743,13 +797,18 @@ void lfm_rk2_advect(CudaLFMState3D& s, CudaVel3D dst, CudaVel3D src, CudaVel3D v
     GeomParams g = geom(s);
     dim3 blk = block3(), gr = grid3(s.nx, s.ny, s.nz);
     if (s.fp32_march) {
-        advect_u_kernel<float><<<gr, blk>>>(dst.u, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
-        advect_v_kernel<float><<<gr, blk>>>(dst.v, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
-        advect_w_kernel<float><<<gr, blk>>>(dst.w, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
+        int us = lfm_u_size(s.nx, s.ny, s.nz), vs = lfm_v_size(s.nx, s.ny, s.nz),
+            ws = lfm_w_size(s.nx, s.ny, s.nz);
+        // Stage src + vel as FP32 once → the hot gather reads pure float (no per-load FP64 convert).
+        convert_vel_f32(src, s.su32, s.sv32, s.sw32, us, vs, ws);
+        convert_vel_f32(vel, s.vu32, s.vv32, s.vw32, us, vs, ws);
+        advect_u_kernel<float, float><<<gr, blk>>>(dst.u, s.su32, s.sv32, s.sw32, s.vu32, s.vv32, s.vw32, s.g_.solid, dt_step, g);
+        advect_v_kernel<float, float><<<gr, blk>>>(dst.v, s.su32, s.sv32, s.sw32, s.vu32, s.vv32, s.vw32, s.g_.solid, dt_step, g);
+        advect_w_kernel<float, float><<<gr, blk>>>(dst.w, s.su32, s.sv32, s.sw32, s.vu32, s.vv32, s.vw32, s.g_.solid, dt_step, g);
     } else {
-        advect_u_kernel<double><<<gr, blk>>>(dst.u, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
-        advect_v_kernel<double><<<gr, blk>>>(dst.v, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
-        advect_w_kernel<double><<<gr, blk>>>(dst.w, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
+        advect_u_kernel<double, double><<<gr, blk>>>(dst.u, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
+        advect_v_kernel<double, double><<<gr, blk>>>(dst.v, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
+        advect_w_kernel<double, double><<<gr, blk>>>(dst.w, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
     }
 }
 
@@ -1395,15 +1454,15 @@ __global__ void face_identity_kernel(FaceMapPtrs f, int axis, bool fwd, GeomPara
 // RK4 of one face point: state s[6]=[pos(3),covector(3)]. Mirrors the CPU
 // face_march_point (non-incremental k1..k4). T=double reproduces the CPU bit-
 // for-bit; T=float is the fast production path (author runs FP32 throughout).
-template <typename T>
+template <typename T, typename VT>
 __device__ inline void d_face_march_point(T& px, T& py, T& pz, T Tcov[3],
-                                          const double* uu, const double* vv, const double* ww,
+                                          const VT* uu, const VT* vv, const VT* ww,
                                           T dt_march, GeomParams G) {
     T Gdx = (T)G.dx, Gdy = (T)G.dy, Gdz = (T)G.dz, GLx = (T)G.Lx, GLy = (T)G.Ly, GLz = (T)G.Lz;
     T s0[6] = {px, py, pz, Tcov[0], Tcov[1], Tcov[2]};
     auto rhs = [&](const T s[6], T d[6]) {
         T vu, vvel, vw, g[9];
-        d_sample_velocity_grad<T>(uu, vv, ww, s[0], s[1], s[2], G.nx, G.ny, G.nz, Gdx, Gdy, Gdz, GLx,
+        d_sample_velocity_grad<T, VT>(uu, vv, ww, s[0], s[1], s[2], G.nx, G.ny, G.nz, Gdx, Gdy, Gdz, GLx,
                                   GLy, GLz, vu, vvel, vw, g);
         d[0] = vu;
         d[1] = vvel;
@@ -1437,15 +1496,15 @@ __device__ inline void d_face_march_point(T& px, T& py, T& pz, T Tcov[3],
     pz = tclamp<T>(out[2], T(0), GLz);
     for (int a = 0; a < 3; a++) {
         T val = out[3 + a];
-        if (!isfinite((double)val))
-            val = 0.0;
+        if (!isfinite(val))
+            val = T(0);
         Tcov[a] = val;
     }
 }
 
-template <typename T>
-__global__ void face_march_kernel(FaceMapPtrs f, int axis, bool fwd, const double* uu,
-                                  const double* vv, const double* ww, double dt_march,
+template <typename T, typename VT>
+__global__ void __launch_bounds__(256, 2) face_march_kernel(FaceMapPtrs f, int axis, bool fwd, const VT* uu,
+                                  const VT* vv, const VT* ww, double dt_march,
                                   GeomParams G) {
     int imax, jmax, kmax;
     d_face_limits(axis, G.nx, G.ny, G.nz, imax, jmax, kmax);
@@ -1459,7 +1518,7 @@ __global__ void face_march_kernel(FaceMapPtrs f, int axis, bool fwd, const doubl
     if (fwd) {
         T Tcov[3] = {(T)f.f0[m], (T)f.f1[m], (T)f.f2[m]};
         T px = (T)f.fx[m], py = (T)f.fy[m], pz = (T)f.fz[m];
-        d_face_march_point<T>(px, py, pz, Tcov, uu, vv, ww, dtm, G);
+        d_face_march_point<T, VT>(px, py, pz, Tcov, uu, vv, ww, dtm, G);
         f.fx[m] = px;
         f.fy[m] = py;
         f.fz[m] = pz;
@@ -1469,7 +1528,7 @@ __global__ void face_march_kernel(FaceMapPtrs f, int axis, bool fwd, const doubl
     } else {
         T Tcov[3] = {(T)f.t0[m], (T)f.t1[m], (T)f.t2[m]};
         T px = (T)f.bx[m], py = (T)f.by[m], pz = (T)f.bz[m];
-        d_face_march_point<T>(px, py, pz, Tcov, uu, vv, ww, dtm, G);
+        d_face_march_point<T, VT>(px, py, pz, Tcov, uu, vv, ww, dtm, G);
         f.bx[m] = px;
         f.by[m] = py;
         f.bz[m] = pz;
@@ -1480,9 +1539,9 @@ __global__ void face_march_kernel(FaceMapPtrs f, int axis, bool fwd, const doubl
 }
 
 // Per-face pullback dst_a = T_a · src(ψ_a) (fwd=false: backward map; fwd=true: forward).
-template <typename T>
-__global__ void face_pullback_kernel(FaceMapPtrs f, int axis, bool fwd, const double* su,
-                                     const double* sv, const double* sw, double* dst, GeomParams G) {
+template <typename T, typename VT>
+__global__ void face_pullback_kernel(FaceMapPtrs f, int axis, bool fwd, const VT* su,
+                                     const VT* sv, const VT* sw, double* dst, GeomParams G) {
     int imax, jmax, kmax;
     d_face_limits(axis, G.nx, G.ny, G.nz, imax, jmax, kmax);
     int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
@@ -1498,7 +1557,7 @@ __global__ void face_pullback_kernel(FaceMapPtrs f, int axis, bool fwd, const do
     T T1 = (T)(fwd ? f.f1[m] : f.t1[m]);
     T T2 = (T)(fwd ? f.f2[m] : f.t2[m]);
     T sX, sY, sZ;
-    d_sample_velocity<T>(su, sv, sw, px, py, pz, G.nx, G.ny, G.nz, (T)G.dx, (T)G.dy, (T)G.dz, (T)G.Lx, (T)G.Ly, (T)G.Lz,
+    d_sample_velocity<T, VT>(su, sv, sw, px, py, pz, G.nx, G.ny, G.nz, (T)G.dx, (T)G.dy, (T)G.dz, (T)G.Lx, (T)G.Ly, (T)G.Lz,
                          sX, sY, sZ);
     dst[m] = T0 * sX + T1 * sY + T2 * sZ;
 }
@@ -1544,45 +1603,47 @@ void lfm_face_set_backward_identity(CudaLFMState3D& s) {
 }
 // The 6-state RK4 (pos+covector) is register/local-memory heavy; a 512-thread
 // block overflows resources. Use 256 threads (8×8×4) like the cell march.
-void lfm_face_march_forward(CudaLFMState3D& s, CudaVel3D vel, double dt_march) {
+// Launch the per-axis face march. In the fp32 path the velocity field is staged
+// once into FP32 scratch (s.vu32/…) so the hot sampling gather is pure float and
+// avoids the per-load FP64 convert (the prior #1 hotspot). The double (test) path
+// reads the double arrays directly and stays bit-exact vs CPU.
+static void face_march_run(CudaLFMState3D& s, CudaVel3D vel, double dt_march, bool fwd) {
     GeomParams G = geom(s);
     int im, jm, km;
     dim3 blk(8, 8, 4);
+    if (s.fp32_march)
+        convert_vel_f32(vel, s.vu32, s.vv32, s.vw32, lfm_u_size(s.nx, s.ny, s.nz),
+                        lfm_v_size(s.nx, s.ny, s.nz), lfm_w_size(s.nx, s.ny, s.nz));
     for (int axis = 0; axis < 3; axis++) {
         d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
         CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
         dim3 gr((im + 7) / 8, (jm + 7) / 8, (km + 3) / 4);
         if (s.fp32_march)
-            face_march_kernel<float><<<gr, blk>>>(face_ptrs(f), axis, true, vel.u, vel.v, vel.w, dt_march, G);
+            face_march_kernel<float, float><<<gr, blk>>>(face_ptrs(f), axis, fwd, s.vu32, s.vv32, s.vw32, dt_march, G);
         else
-            face_march_kernel<double><<<gr, blk>>>(face_ptrs(f), axis, true, vel.u, vel.v, vel.w, dt_march, G);
+            face_march_kernel<double, double><<<gr, blk>>>(face_ptrs(f), axis, fwd, vel.u, vel.v, vel.w, dt_march, G);
     }
 }
+void lfm_face_march_forward(CudaLFMState3D& s, CudaVel3D vel, double dt_march) {
+    face_march_run(s, vel, dt_march, true);
+}
 void lfm_face_march_backward(CudaLFMState3D& s, CudaVel3D vel, double dt_march) {
-    GeomParams G = geom(s);
-    int im, jm, km;
-    dim3 blk(8, 8, 4);
-    for (int axis = 0; axis < 3; axis++) {
-        d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
-        CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
-        dim3 gr((im + 7) / 8, (jm + 7) / 8, (km + 3) / 4);
-        if (s.fp32_march)
-            face_march_kernel<float><<<gr, blk>>>(face_ptrs(f), axis, false, vel.u, vel.v, vel.w, dt_march, G);
-        else
-            face_march_kernel<double><<<gr, blk>>>(face_ptrs(f), axis, false, vel.u, vel.v, vel.w, dt_march, G);
-    }
+    face_march_run(s, vel, dt_march, false);
 }
 void lfm_face_pullback(CudaLFMState3D& s, CudaVel3D src, CudaVel3D dst, bool fwd) {
     GeomParams G = geom(s);
     int im, jm, km;
+    if (s.fp32_march)
+        convert_vel_f32(src, s.su32, s.sv32, s.sw32, lfm_u_size(s.nx, s.ny, s.nz),
+                        lfm_v_size(s.nx, s.ny, s.nz), lfm_w_size(s.nx, s.ny, s.nz));
     for (int axis = 0; axis < 3; axis++) {
         d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
         CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
         double* d = (axis == 0) ? dst.u : (axis == 1 ? dst.v : dst.w);
         if (s.fp32_march)
-            face_pullback_kernel<float><<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, src.u, src.v, src.w, d, G);
+            face_pullback_kernel<float, float><<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, s.su32, s.sv32, s.sw32, d, G);
         else
-            face_pullback_kernel<double><<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, src.u, src.v, src.w, d, G);
+            face_pullback_kernel<double, double><<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, src.u, src.v, src.w, d, G);
     }
 }
 
