@@ -27,6 +27,7 @@ public:
     double t_end                = 10.0;
     int lfm_cycle_steps         = 10;    // n in LFM Algorithm 1
     bool lfm_bfecc_clamp        = false; // clamp BFECC-corrected impulse to neighbor min/max
+    bool lfm_march_fp32         = true;  // FP32 face flow-map marching/sampling (author-faithful, ~order faster on consumer GPUs)
                                          // (paper's BfeccClamp: lets inviscid runs stay stable)
     // Velocity wall BC for the LFM cycle: "free_slip" (closed box, default) or
     // "freestream" (prescribe inflow_u on all walls — delta wing / wind tunnel).

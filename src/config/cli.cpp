@@ -52,6 +52,8 @@ void apply_kv(Config& cfg, const std::string& key, const std::string& value) {
              [](Config& c, const std::string& v) { c.lfm_cycle_steps = std::stoi(v); }},
             {"lfm_bfecc_clamp",
              [](Config& c, const std::string& v) { c.lfm_bfecc_clamp = std::stoi(v) != 0; }},
+            {"lfm_march_fp32",
+             [](Config& c, const std::string& v) { c.lfm_march_fp32 = std::stoi(v) != 0; }},
             {"lfm_bc", [](Config& c, const std::string& v) { c.lfm_bc = v; }},
             {"inflow_ux", [](Config& c, const std::string& v) { c.inflow_ux = std::stod(v); }},
             {"inflow_uy", [](Config& c, const std::string& v) { c.inflow_uy = std::stod(v); }},

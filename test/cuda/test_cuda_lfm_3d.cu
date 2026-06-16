@@ -83,6 +83,7 @@ static void test_p0() {
 
     // ── GPU state ──
     CudaLFMState3D s;
+    s.fp32_march = false; // bit-exact GPU-vs-CPU reference: force the FP64 marcher
     s.allocate(nx, ny, nz, dx, dy, dz, /*n_steps=*/2);
     std::vector<char> solid(lfm_p_size(nx, ny, nz), 0);
     s.upload_solid(solid);
@@ -170,6 +171,7 @@ static void test_p1() {
 
     // GPU
     CudaLFMState3D s;
+    s.fp32_march = false; // bit-exact GPU-vs-CPU reference: force the FP64 marcher
     s.allocate(nx, ny, nz, dx, dy, dz, 2);
     std::vector<char> solid(lfm_p_size(nx, ny, nz), 0);
     s.upload_solid(solid);
@@ -218,6 +220,7 @@ static void test_p2() {
     FlowMap3D& fm = sim.flow_map();
 
     CudaLFMState3D s;
+    s.fp32_march = false; // bit-exact GPU-vs-CPU reference: force the FP64 marcher
     s.allocate(nx, ny, nz, dx, dy, dz, 2);
     std::vector<char> solid(lfm_p_size(nx, ny, nz), 0);
     s.upload_solid(solid);
@@ -314,6 +317,7 @@ static void test_p3() {
     FlowMap3D& fm = sim.flow_map();
 
     CudaLFMState3D s;
+    s.fp32_march = false; // bit-exact GPU-vs-CPU reference: force the FP64 marcher
     s.allocate(nx, ny, nz, dx, dy, dz, 2);
     std::vector<char> solid(lfm_p_size(nx, ny, nz), 0);
     s.upload_solid(solid);
@@ -467,6 +471,7 @@ static void test_p4(double Re, const char* tag, bool clamp = false) {
     cfg.time_integrator      = "lfm";
     cfg.lfm_cycle_steps      = 3; // ≥3 also exercises the leapfrog main loop + path integral
     cfg.lfm_bfecc_clamp      = clamp;
+    cfg.lfm_march_fp32       = false; // bit-exact GPU-vs-CPU reference: force the FP64 marcher
 
     // CPU orchestration, GPU Poisson solve (same CudaPCG3D the GPU sim uses).
     LFMSimulator3D cpu(cfg, std::make_unique<CudaPCGSolver3D>(true));

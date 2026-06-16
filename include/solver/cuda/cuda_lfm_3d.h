@@ -54,6 +54,11 @@ struct CudaLFMState3D {
     double Lx = 0, Ly = 0, Lz = 0;
     int n_steps = 0;
 
+    // Face flow-map marching / sampling precision. true (default) = FP32 math
+    // (author-faithful, ~order faster on consumer GPUs whose FP64 throughput is
+    // 1/64). The bit-exact GPU-vs-CPU tests set this false for the FP64 path.
+    bool fp32_march = true;
+
     CudaGrid3D g_{};               // solid mask + grid metadata for the Poisson solve
     CudaPCG3D pcg_{};              // device UAAMG-PCG (null-space safe)
     double *d_p = nullptr;          // pressure (p_size)

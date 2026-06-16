@@ -55,66 +55,85 @@ __device__ inline void d_bspline_d(double r, double dw[3]) {
     dw[2] = r + 0.5;       // d/dr [0.5(0.5+r)^2]
 }
 
+// ── T-typed helpers (T=double → bit-exact path; T=float → fast production
+// LFM sampling). Velocity/map loads stay from the double arrays and are cast to
+// T; only the per-point ALU (the hot 27-point interpolation) runs in T. ──
+template <typename T> __device__ inline T tclamp(T v, T lo, T hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+template <typename T> __device__ inline void t_bspline(T r, T w[3]) {
+    T a  = T(0.5) - r, b = T(0.5) + r;
+    w[0] = T(0.5) * a * a;
+    w[1] = T(0.75) - r * r;
+    w[2] = T(0.5) * b * b;
+}
+template <typename T> __device__ inline void t_bspline_d(T r, T dw[3]) {
+    dw[0] = r - T(0.5);
+    dw[1] = T(-2.0) * r;
+    dw[2] = r + T(0.5);
+}
+
 // 27-point quadratic B-spline velocity interpolation (MAC-aware).
+template <typename T>
 __device__ inline void d_sample_velocity(const double* uu, const double* vv, const double* ww,
-                                         double x, double y, double z, int nx, int ny, int nz,
-                                         double dx, double dy, double dz, double Lx, double Ly,
-                                         double Lz, double& vu, double& vvel, double& vw) {
-    x = dclamp(x, 0.0, Lx);
-    y = dclamp(y, 0.0, Ly);
-    z = dclamp(z, 0.0, Lz);
+                                         T x, T y, T z, int nx, int ny, int nz,
+                                         T dx, T dy, T dz, T Lx, T Ly,
+                                         T Lz, T& vu, T& vvel, T& vw) {
+    x = tclamp<T>(x, T(0), Lx);
+    y = tclamp<T>(y, T(0), Ly);
+    z = tclamp<T>(z, T(0), Lz);
 
     // u-face at (i·dx,(j-0.5)·dy,(k-0.5)·dz)
     {
-        double cx = x / dx, cy = y / dy + 0.5, cz = z / dz + 0.5;
-        int ic = (int)floor(cx + 0.5), jc = (int)floor(cy + 0.5), kc = (int)floor(cz + 0.5);
-        double wx[3], wy[3], wz[3];
-        d_bspline(cx - ic, wx);
-        d_bspline(cy - jc, wy);
-        d_bspline(cz - kc, wz);
-        double s = 0;
+        T cx = x / dx, cy = y / dy + T(0.5), cz = z / dz + T(0.5);
+        int ic = (int)floor((double)cx + 0.5), jc = (int)floor((double)cy + 0.5), kc = (int)floor((double)cz + 0.5);
+        T wx[3], wy[3], wz[3];
+        t_bspline<T>(cx - ic, wx);
+        t_bspline<T>(cy - jc, wy);
+        t_bspline<T>(cz - kc, wz);
+        T s = 0;
         for (int dk = -1; dk <= 1; dk++)
             for (int dj = -1; dj <= 1; dj++)
                 for (int di = -1; di <= 1; di++) {
                     int ii = iclamp(ic + di, 0, nx), jj = iclamp(jc + dj, 1, ny),
                         kk = iclamp(kc + dk, 1, nz);
-                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * uu[lfm_iu(ii, jj, kk, nx, ny)];
+                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * (T)uu[lfm_iu(ii, jj, kk, nx, ny)];
                 }
         vu = s;
     }
     // v-face at ((i-0.5)·dx, j·dy, (k-0.5)·dz)
     {
-        double cx = x / dx + 0.5, cy = y / dy, cz = z / dz + 0.5;
-        int ic = (int)floor(cx + 0.5), jc = (int)floor(cy + 0.5), kc = (int)floor(cz + 0.5);
-        double wx[3], wy[3], wz[3];
-        d_bspline(cx - ic, wx);
-        d_bspline(cy - jc, wy);
-        d_bspline(cz - kc, wz);
-        double s = 0;
+        T cx = x / dx + T(0.5), cy = y / dy, cz = z / dz + T(0.5);
+        int ic = (int)floor((double)cx + 0.5), jc = (int)floor((double)cy + 0.5), kc = (int)floor((double)cz + 0.5);
+        T wx[3], wy[3], wz[3];
+        t_bspline<T>(cx - ic, wx);
+        t_bspline<T>(cy - jc, wy);
+        t_bspline<T>(cz - kc, wz);
+        T s = 0;
         for (int dk = -1; dk <= 1; dk++)
             for (int dj = -1; dj <= 1; dj++)
                 for (int di = -1; di <= 1; di++) {
                     int ii = iclamp(ic + di, 1, nx), jj = iclamp(jc + dj, 0, ny),
                         kk = iclamp(kc + dk, 1, nz);
-                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * vv[lfm_iv(ii, jj, kk, nx, ny)];
+                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * (T)vv[lfm_iv(ii, jj, kk, nx, ny)];
                 }
         vvel = s;
     }
     // w-face at ((i-0.5)·dx,(j-0.5)·dy, k·dz)
     {
-        double cx = x / dx + 0.5, cy = y / dy + 0.5, cz = z / dz;
-        int ic = (int)floor(cx + 0.5), jc = (int)floor(cy + 0.5), kc = (int)floor(cz + 0.5);
-        double wx[3], wy[3], wz[3];
-        d_bspline(cx - ic, wx);
-        d_bspline(cy - jc, wy);
-        d_bspline(cz - kc, wz);
-        double s = 0;
+        T cx = x / dx + T(0.5), cy = y / dy + T(0.5), cz = z / dz;
+        int ic = (int)floor((double)cx + 0.5), jc = (int)floor((double)cy + 0.5), kc = (int)floor((double)cz + 0.5);
+        T wx[3], wy[3], wz[3];
+        t_bspline<T>(cx - ic, wx);
+        t_bspline<T>(cy - jc, wy);
+        t_bspline<T>(cz - kc, wz);
+        T s = 0;
         for (int dk = -1; dk <= 1; dk++)
             for (int dj = -1; dj <= 1; dj++)
                 for (int di = -1; di <= 1; di++) {
                     int ii = iclamp(ic + di, 1, nx), jj = iclamp(jc + dj, 1, ny),
                         kk = iclamp(kc + dk, 0, nz);
-                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * ww[lfm_iw(ii, jj, kk, nx, ny)];
+                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * (T)ww[lfm_iw(ii, jj, kk, nx, ny)];
                 }
         vw = s;
     }
@@ -125,29 +144,30 @@ __device__ inline void d_sample_velocity(const double* uu, const double* vv, con
 // off-grid position (≡ author's InterpMacN2Grad). Replaces the nearest-cell finite
 // difference so the flow-map Jacobian dF/dt=∇u·F is evolved consistently — this is the
 // circulation-preserving term, and the FD/snap version was the dominant dissipation source.
+template <typename T>
 __device__ inline void d_sample_velocity_grad(const double* uu, const double* vv, const double* ww,
-                                              double x, double y, double z, int nx, int ny, int nz,
-                                              double dx, double dy, double dz, double Lx, double Ly,
-                                              double Lz, double& vu, double& vvel, double& vw,
-                                              double g[9]) {
-    x = dclamp(x, 0.0, Lx);
-    y = dclamp(y, 0.0, Ly);
-    z = dclamp(z, 0.0, Lz);
+                                              T x, T y, T z, int nx, int ny, int nz,
+                                              T dx, T dy, T dz, T Lx, T Ly,
+                                              T Lz, T& vu, T& vvel, T& vw,
+                                              T g[9]) {
+    x = tclamp<T>(x, T(0), Lx);
+    y = tclamp<T>(y, T(0), Ly);
+    z = tclamp<T>(z, T(0), Lz);
     // u-face at (i·dx,(j-0.5)·dy,(k-0.5)·dz)  → row a=0
     {
-        double cx = x / dx, cy = y / dy + 0.5, cz = z / dz + 0.5;
-        int ic = (int)floor(cx + 0.5), jc = (int)floor(cy + 0.5), kc = (int)floor(cz + 0.5);
-        double wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
-        d_bspline(cx - ic, wx);   d_bspline_d(cx - ic, dwx);
-        d_bspline(cy - jc, wy);   d_bspline_d(cy - jc, dwy);
-        d_bspline(cz - kc, wz);   d_bspline_d(cz - kc, dwz);
-        double s = 0, sx = 0, sy = 0, sz = 0;
+        T cx = x / dx, cy = y / dy + T(0.5), cz = z / dz + T(0.5);
+        int ic = (int)floor((double)cx + 0.5), jc = (int)floor((double)cy + 0.5), kc = (int)floor((double)cz + 0.5);
+        T wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
+        t_bspline<T>(cx - ic, wx);   t_bspline_d<T>(cx - ic, dwx);
+        t_bspline<T>(cy - jc, wy);   t_bspline_d<T>(cy - jc, dwy);
+        t_bspline<T>(cz - kc, wz);   t_bspline_d<T>(cz - kc, dwz);
+        T s = 0, sx = 0, sy = 0, sz = 0;
         for (int dk = -1; dk <= 1; dk++)
             for (int dj = -1; dj <= 1; dj++)
                 for (int di = -1; di <= 1; di++) {
                     int ii = iclamp(ic + di, 0, nx), jj = iclamp(jc + dj, 1, ny),
                         kk = iclamp(kc + dk, 1, nz);
-                    double val = uu[lfm_iu(ii, jj, kk, nx, ny)];
+                    T val = (T)uu[lfm_iu(ii, jj, kk, nx, ny)];
                     s  += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
                     sx += dwx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
                     sy += wx[di + 1] * dwy[dj + 1] * wz[dk + 1] * val;
@@ -158,19 +178,19 @@ __device__ inline void d_sample_velocity_grad(const double* uu, const double* vv
     }
     // v-face at ((i-0.5)·dx, j·dy, (k-0.5)·dz)  → row a=1
     {
-        double cx = x / dx + 0.5, cy = y / dy, cz = z / dz + 0.5;
-        int ic = (int)floor(cx + 0.5), jc = (int)floor(cy + 0.5), kc = (int)floor(cz + 0.5);
-        double wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
-        d_bspline(cx - ic, wx);   d_bspline_d(cx - ic, dwx);
-        d_bspline(cy - jc, wy);   d_bspline_d(cy - jc, dwy);
-        d_bspline(cz - kc, wz);   d_bspline_d(cz - kc, dwz);
-        double s = 0, sx = 0, sy = 0, sz = 0;
+        T cx = x / dx + T(0.5), cy = y / dy, cz = z / dz + T(0.5);
+        int ic = (int)floor((double)cx + 0.5), jc = (int)floor((double)cy + 0.5), kc = (int)floor((double)cz + 0.5);
+        T wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
+        t_bspline<T>(cx - ic, wx);   t_bspline_d<T>(cx - ic, dwx);
+        t_bspline<T>(cy - jc, wy);   t_bspline_d<T>(cy - jc, dwy);
+        t_bspline<T>(cz - kc, wz);   t_bspline_d<T>(cz - kc, dwz);
+        T s = 0, sx = 0, sy = 0, sz = 0;
         for (int dk = -1; dk <= 1; dk++)
             for (int dj = -1; dj <= 1; dj++)
                 for (int di = -1; di <= 1; di++) {
                     int ii = iclamp(ic + di, 1, nx), jj = iclamp(jc + dj, 0, ny),
                         kk = iclamp(kc + dk, 1, nz);
-                    double val = vv[lfm_iv(ii, jj, kk, nx, ny)];
+                    T val = (T)vv[lfm_iv(ii, jj, kk, nx, ny)];
                     s  += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
                     sx += dwx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
                     sy += wx[di + 1] * dwy[dj + 1] * wz[dk + 1] * val;
@@ -181,19 +201,19 @@ __device__ inline void d_sample_velocity_grad(const double* uu, const double* vv
     }
     // w-face at ((i-0.5)·dx,(j-0.5)·dy, k·dz)  → row a=2
     {
-        double cx = x / dx + 0.5, cy = y / dy + 0.5, cz = z / dz;
-        int ic = (int)floor(cx + 0.5), jc = (int)floor(cy + 0.5), kc = (int)floor(cz + 0.5);
-        double wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
-        d_bspline(cx - ic, wx);   d_bspline_d(cx - ic, dwx);
-        d_bspline(cy - jc, wy);   d_bspline_d(cy - jc, dwy);
-        d_bspline(cz - kc, wz);   d_bspline_d(cz - kc, dwz);
-        double s = 0, sx = 0, sy = 0, sz = 0;
+        T cx = x / dx + T(0.5), cy = y / dy + T(0.5), cz = z / dz;
+        int ic = (int)floor((double)cx + 0.5), jc = (int)floor((double)cy + 0.5), kc = (int)floor((double)cz + 0.5);
+        T wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
+        t_bspline<T>(cx - ic, wx);   t_bspline_d<T>(cx - ic, dwx);
+        t_bspline<T>(cy - jc, wy);   t_bspline_d<T>(cy - jc, dwy);
+        t_bspline<T>(cz - kc, wz);   t_bspline_d<T>(cz - kc, dwz);
+        T s = 0, sx = 0, sy = 0, sz = 0;
         for (int dk = -1; dk <= 1; dk++)
             for (int dj = -1; dj <= 1; dj++)
                 for (int di = -1; di <= 1; di++) {
                     int ii = iclamp(ic + di, 1, nx), jj = iclamp(jc + dj, 1, ny),
                         kk = iclamp(kc + dk, 0, nz);
-                    double val = ww[lfm_iw(ii, jj, kk, nx, ny)];
+                    T val = (T)ww[lfm_iw(ii, jj, kk, nx, ny)];
                     s  += wx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
                     sx += dwx[di + 1] * wy[dj + 1] * wz[dk + 1] * val;
                     sy += wx[di + 1] * dwy[dj + 1] * wz[dk + 1] * val;
@@ -637,21 +657,24 @@ struct FMPtrs {
     double* J[9];
 };
 
-__device__ inline void d_backtrace(const double* vu, const double* vv, const double* vw, double x,
-                                    double y, double z, double dt_step, const GeomParams g,
-                                    double& xo, double& yo, double& zo) {
-    double u1, v1, w1;
-    d_sample_velocity(vu, vv, vw, x, y, z, g.nx, g.ny, g.nz, g.dx, g.dy, g.dz, g.Lx, g.Ly, g.Lz, u1,
-                      v1, w1);
-    double xm = x - 0.5 * dt_step * u1, ym = y - 0.5 * dt_step * v1, zm = z - 0.5 * dt_step * w1;
-    double um, vm, wm;
-    d_sample_velocity(vu, vv, vw, xm, ym, zm, g.nx, g.ny, g.nz, g.dx, g.dy, g.dz, g.Lx, g.Ly, g.Lz,
-                      um, vm, wm);
+template <typename T>
+__device__ inline void d_backtrace(const double* vu, const double* vv, const double* vw, T x,
+                                    T y, T z, T dt_step, const GeomParams g,
+                                    T& xo, T& yo, T& zo) {
+    T gdx = (T)g.dx, gdy = (T)g.dy, gdz = (T)g.dz, gLx = (T)g.Lx, gLy = (T)g.Ly, gLz = (T)g.Lz;
+    T u1, v1, w1;
+    d_sample_velocity<T>(vu, vv, vw, x, y, z, g.nx, g.ny, g.nz, gdx, gdy, gdz, gLx, gLy, gLz, u1,
+                         v1, w1);
+    T xm = x - T(0.5) * dt_step * u1, ym = y - T(0.5) * dt_step * v1, zm = z - T(0.5) * dt_step * w1;
+    T um, vm, wm;
+    d_sample_velocity<T>(vu, vv, vw, xm, ym, zm, g.nx, g.ny, g.nz, gdx, gdy, gdz, gLx, gLy, gLz,
+                         um, vm, wm);
     xo = x - dt_step * um;
     yo = y - dt_step * vm;
     zo = z - dt_step * wm;
 }
 
+template <typename T>
 __global__ void advect_u_kernel(double* dst, const double* su, const double* sv, const double* sw,
                                  const double* vu, const double* vv, const double* vw,
                                  const bool* solid, double dt_step, GeomParams g) {
@@ -665,12 +688,13 @@ __global__ void advect_u_kernel(double* dst, const double* su, const double* sv,
         dst[id] = 0;
         return;
     }
-    double xs, ys, zs, ou, ov, ow;
-    d_backtrace(vu, vv, vw, i * g.dx, (j - 0.5) * g.dy, (k - 0.5) * g.dz, dt_step, g, xs, ys, zs);
-    d_sample_velocity(su, sv, sw, xs, ys, zs, g.nx, g.ny, g.nz, g.dx, g.dy, g.dz, g.Lx, g.Ly, g.Lz,
-                      ou, ov, ow);
+    T xs, ys, zs, ou, ov, ow, dts = (T)dt_step;
+    d_backtrace<T>(vu, vv, vw, T(i * g.dx), T((j - 0.5) * g.dy), T((k - 0.5) * g.dz), dts, g, xs, ys, zs);
+    d_sample_velocity<T>(su, sv, sw, xs, ys, zs, g.nx, g.ny, g.nz, (T)g.dx, (T)g.dy, (T)g.dz, (T)g.Lx, (T)g.Ly, (T)g.Lz,
+                         ou, ov, ow);
     dst[id] = ou;
 }
+template <typename T>
 __global__ void advect_v_kernel(double* dst, const double* su, const double* sv, const double* sw,
                                  const double* vu, const double* vv, const double* vw,
                                  const bool* solid, double dt_step, GeomParams g) {
@@ -684,12 +708,13 @@ __global__ void advect_v_kernel(double* dst, const double* su, const double* sv,
         dst[id] = 0;
         return;
     }
-    double xs, ys, zs, ou, ov, ow;
-    d_backtrace(vu, vv, vw, (i - 0.5) * g.dx, j * g.dy, (k - 0.5) * g.dz, dt_step, g, xs, ys, zs);
-    d_sample_velocity(su, sv, sw, xs, ys, zs, g.nx, g.ny, g.nz, g.dx, g.dy, g.dz, g.Lx, g.Ly, g.Lz,
-                      ou, ov, ow);
+    T xs, ys, zs, ou, ov, ow, dts = (T)dt_step;
+    d_backtrace<T>(vu, vv, vw, T((i - 0.5) * g.dx), T(j * g.dy), T((k - 0.5) * g.dz), dts, g, xs, ys, zs);
+    d_sample_velocity<T>(su, sv, sw, xs, ys, zs, g.nx, g.ny, g.nz, (T)g.dx, (T)g.dy, (T)g.dz, (T)g.Lx, (T)g.Ly, (T)g.Lz,
+                         ou, ov, ow);
     dst[id] = ov;
 }
+template <typename T>
 __global__ void advect_w_kernel(double* dst, const double* su, const double* sv, const double* sw,
                                  const double* vu, const double* vv, const double* vw,
                                  const bool* solid, double dt_step, GeomParams g) {
@@ -703,10 +728,10 @@ __global__ void advect_w_kernel(double* dst, const double* su, const double* sv,
         dst[id] = 0;
         return;
     }
-    double xs, ys, zs, ou, ov, ow;
-    d_backtrace(vu, vv, vw, (i - 0.5) * g.dx, (j - 0.5) * g.dy, k * g.dz, dt_step, g, xs, ys, zs);
-    d_sample_velocity(su, sv, sw, xs, ys, zs, g.nx, g.ny, g.nz, g.dx, g.dy, g.dz, g.Lx, g.Ly, g.Lz,
-                      ou, ov, ow);
+    T xs, ys, zs, ou, ov, ow, dts = (T)dt_step;
+    d_backtrace<T>(vu, vv, vw, T((i - 0.5) * g.dx), T((j - 0.5) * g.dy), T(k * g.dz), dts, g, xs, ys, zs);
+    d_sample_velocity<T>(su, sv, sw, xs, ys, zs, g.nx, g.ny, g.nz, (T)g.dx, (T)g.dy, (T)g.dz, (T)g.Lx, (T)g.Ly, (T)g.Lz,
+                         ou, ov, ow);
     dst[id] = ow;
 }
 
@@ -717,12 +742,15 @@ static GeomParams geom(const CudaLFMState3D& s) {
 void lfm_rk2_advect(CudaLFMState3D& s, CudaVel3D dst, CudaVel3D src, CudaVel3D vel, double dt_step) {
     GeomParams g = geom(s);
     dim3 blk = block3(), gr = grid3(s.nx, s.ny, s.nz);
-    advect_u_kernel<<<gr, blk>>>(dst.u, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid,
-                                 dt_step, g);
-    advect_v_kernel<<<gr, blk>>>(dst.v, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid,
-                                 dt_step, g);
-    advect_w_kernel<<<gr, blk>>>(dst.w, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid,
-                                 dt_step, g);
+    if (s.fp32_march) {
+        advect_u_kernel<float><<<gr, blk>>>(dst.u, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
+        advect_v_kernel<float><<<gr, blk>>>(dst.v, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
+        advect_w_kernel<float><<<gr, blk>>>(dst.w, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
+    } else {
+        advect_u_kernel<double><<<gr, blk>>>(dst.u, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
+        advect_v_kernel<double><<<gr, blk>>>(dst.v, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
+        advect_w_kernel<double><<<gr, blk>>>(dst.w, src.u, src.v, src.w, vel.u, vel.v, vel.w, s.g_.solid, dt_step, g);
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1365,31 +1393,34 @@ __global__ void face_identity_kernel(FaceMapPtrs f, int axis, bool fwd, GeomPara
 }
 
 // RK4 of one face point: state s[6]=[pos(3),covector(3)]. Mirrors the CPU
-// face_march_point (non-incremental k1..k4) so GPU==CPU bit-for-bit.
-__device__ inline void d_face_march_point(double& px, double& py, double& pz, double T[3],
+// face_march_point (non-incremental k1..k4). T=double reproduces the CPU bit-
+// for-bit; T=float is the fast production path (author runs FP32 throughout).
+template <typename T>
+__device__ inline void d_face_march_point(T& px, T& py, T& pz, T Tcov[3],
                                           const double* uu, const double* vv, const double* ww,
-                                          double dt_march, GeomParams G) {
-    double s0[6] = {px, py, pz, T[0], T[1], T[2]};
-    auto rhs = [&](const double s[6], double d[6]) {
-        double vu, vvel, vw, g[9];
-        d_sample_velocity_grad(uu, vv, ww, s[0], s[1], s[2], G.nx, G.ny, G.nz, G.dx, G.dy, G.dz, G.Lx,
-                               G.Ly, G.Lz, vu, vvel, vw, g);
+                                          T dt_march, GeomParams G) {
+    T Gdx = (T)G.dx, Gdy = (T)G.dy, Gdz = (T)G.dz, GLx = (T)G.Lx, GLy = (T)G.Ly, GLz = (T)G.Lz;
+    T s0[6] = {px, py, pz, Tcov[0], Tcov[1], Tcov[2]};
+    auto rhs = [&](const T s[6], T d[6]) {
+        T vu, vvel, vw, g[9];
+        d_sample_velocity_grad<T>(uu, vv, ww, s[0], s[1], s[2], G.nx, G.ny, G.nz, Gdx, Gdy, Gdz, GLx,
+                                  GLy, GLz, vu, vvel, vw, g);
         d[0] = vu;
         d[1] = vvel;
         d[2] = vw;
         for (int a = 0; a < 3; a++)
             d[3 + a] = g[3 * a + 0] * s[3 + 0] + g[3 * a + 1] * s[3 + 1] + g[3 * a + 2] * s[3 + 2];
     };
-    double k1[6], k2[6], k3[6], k4[6], tmp[6], out[6];
+    T k1[6], k2[6], k3[6], k4[6], tmp[6], out[6];
     rhs(s0, k1);
     for (int m = 0; m < 6; m++) {
         k1[m] *= dt_march;
-        tmp[m] = s0[m] + 0.5 * k1[m];
+        tmp[m] = s0[m] + T(0.5) * k1[m];
     }
     rhs(tmp, k2);
     for (int m = 0; m < 6; m++) {
         k2[m] *= dt_march;
-        tmp[m] = s0[m] + 0.5 * k2[m];
+        tmp[m] = s0[m] + T(0.5) * k2[m];
     }
     rhs(tmp, k3);
     for (int m = 0; m < 6; m++) {
@@ -1399,19 +1430,20 @@ __device__ inline void d_face_march_point(double& px, double& py, double& pz, do
     rhs(tmp, k4);
     for (int m = 0; m < 6; m++) {
         k4[m] *= dt_march;
-        out[m] = s0[m] + (k1[m] + 2 * k2[m] + 2 * k3[m] + k4[m]) / 6.0;
+        out[m] = s0[m] + (k1[m] + T(2) * k2[m] + T(2) * k3[m] + k4[m]) / T(6.0);
     }
-    px = dclamp(out[0], 0.0, G.Lx);
-    py = dclamp(out[1], 0.0, G.Ly);
-    pz = dclamp(out[2], 0.0, G.Lz);
+    px = tclamp<T>(out[0], T(0), GLx);
+    py = tclamp<T>(out[1], T(0), GLy);
+    pz = tclamp<T>(out[2], T(0), GLz);
     for (int a = 0; a < 3; a++) {
-        double val = out[3 + a];
-        if (!isfinite(val))
+        T val = out[3 + a];
+        if (!isfinite((double)val))
             val = 0.0;
-        T[a] = val;
+        Tcov[a] = val;
     }
 }
 
+template <typename T>
 __global__ void face_march_kernel(FaceMapPtrs f, int axis, bool fwd, const double* uu,
                                   const double* vv, const double* ww, double dt_march,
                                   GeomParams G) {
@@ -1423,30 +1455,32 @@ __global__ void face_march_kernel(FaceMapPtrs f, int axis, bool fwd, const doubl
     if (i > imax || j > jmax || k > kmax)
         return;
     int m = d_face_idx(axis, i, j, k, G.nx, G.ny);
+    T dtm = (T)dt_march;
     if (fwd) {
-        double T[3] = {f.f0[m], f.f1[m], f.f2[m]};
-        double px = f.fx[m], py = f.fy[m], pz = f.fz[m];
-        d_face_march_point(px, py, pz, T, uu, vv, ww, dt_march, G);
+        T Tcov[3] = {(T)f.f0[m], (T)f.f1[m], (T)f.f2[m]};
+        T px = (T)f.fx[m], py = (T)f.fy[m], pz = (T)f.fz[m];
+        d_face_march_point<T>(px, py, pz, Tcov, uu, vv, ww, dtm, G);
         f.fx[m] = px;
         f.fy[m] = py;
         f.fz[m] = pz;
-        f.f0[m] = T[0];
-        f.f1[m] = T[1];
-        f.f2[m] = T[2];
+        f.f0[m] = Tcov[0];
+        f.f1[m] = Tcov[1];
+        f.f2[m] = Tcov[2];
     } else {
-        double T[3] = {f.t0[m], f.t1[m], f.t2[m]};
-        double px = f.bx[m], py = f.by[m], pz = f.bz[m];
-        d_face_march_point(px, py, pz, T, uu, vv, ww, dt_march, G);
+        T Tcov[3] = {(T)f.t0[m], (T)f.t1[m], (T)f.t2[m]};
+        T px = (T)f.bx[m], py = (T)f.by[m], pz = (T)f.bz[m];
+        d_face_march_point<T>(px, py, pz, Tcov, uu, vv, ww, dtm, G);
         f.bx[m] = px;
         f.by[m] = py;
         f.bz[m] = pz;
-        f.t0[m] = T[0];
-        f.t1[m] = T[1];
-        f.t2[m] = T[2];
+        f.t0[m] = Tcov[0];
+        f.t1[m] = Tcov[1];
+        f.t2[m] = Tcov[2];
     }
 }
 
 // Per-face pullback dst_a = T_a · src(ψ_a) (fwd=false: backward map; fwd=true: forward).
+template <typename T>
 __global__ void face_pullback_kernel(FaceMapPtrs f, int axis, bool fwd, const double* su,
                                      const double* sv, const double* sw, double* dst, GeomParams G) {
     int imax, jmax, kmax;
@@ -1456,16 +1490,16 @@ __global__ void face_pullback_kernel(FaceMapPtrs f, int axis, bool fwd, const do
     int k = blockIdx.z * blockDim.z + threadIdx.z + 1;
     if (i > imax || j > jmax || k > kmax)
         return;
-    int m     = d_face_idx(axis, i, j, k, G.nx, G.ny);
-    double px = fwd ? f.fx[m] : f.bx[m];
-    double py = fwd ? f.fy[m] : f.by[m];
-    double pz = fwd ? f.fz[m] : f.bz[m];
-    double T0 = fwd ? f.f0[m] : f.t0[m];
-    double T1 = fwd ? f.f1[m] : f.t1[m];
-    double T2 = fwd ? f.f2[m] : f.t2[m];
-    double sX, sY, sZ;
-    d_sample_velocity(su, sv, sw, px, py, pz, G.nx, G.ny, G.nz, G.dx, G.dy, G.dz, G.Lx, G.Ly, G.Lz,
-                      sX, sY, sZ);
+    int m = d_face_idx(axis, i, j, k, G.nx, G.ny);
+    T px = (T)(fwd ? f.fx[m] : f.bx[m]);
+    T py = (T)(fwd ? f.fy[m] : f.by[m]);
+    T pz = (T)(fwd ? f.fz[m] : f.bz[m]);
+    T T0 = (T)(fwd ? f.f0[m] : f.t0[m]);
+    T T1 = (T)(fwd ? f.f1[m] : f.t1[m]);
+    T T2 = (T)(fwd ? f.f2[m] : f.t2[m]);
+    T sX, sY, sZ;
+    d_sample_velocity<T>(su, sv, sw, px, py, pz, G.nx, G.ny, G.nz, (T)G.dx, (T)G.dy, (T)G.dz, (T)G.Lx, (T)G.Ly, (T)G.Lz,
+                         sX, sY, sZ);
     dst[m] = T0 * sX + T1 * sY + T2 * sZ;
 }
 
@@ -1518,7 +1552,10 @@ void lfm_face_march_forward(CudaLFMState3D& s, CudaVel3D vel, double dt_march) {
         d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
         CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
         dim3 gr((im + 7) / 8, (jm + 7) / 8, (km + 3) / 4);
-        face_march_kernel<<<gr, blk>>>(face_ptrs(f), axis, true, vel.u, vel.v, vel.w, dt_march, G);
+        if (s.fp32_march)
+            face_march_kernel<float><<<gr, blk>>>(face_ptrs(f), axis, true, vel.u, vel.v, vel.w, dt_march, G);
+        else
+            face_march_kernel<double><<<gr, blk>>>(face_ptrs(f), axis, true, vel.u, vel.v, vel.w, dt_march, G);
     }
 }
 void lfm_face_march_backward(CudaLFMState3D& s, CudaVel3D vel, double dt_march) {
@@ -1529,7 +1566,10 @@ void lfm_face_march_backward(CudaLFMState3D& s, CudaVel3D vel, double dt_march) 
         d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
         CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
         dim3 gr((im + 7) / 8, (jm + 7) / 8, (km + 3) / 4);
-        face_march_kernel<<<gr, blk>>>(face_ptrs(f), axis, false, vel.u, vel.v, vel.w, dt_march, G);
+        if (s.fp32_march)
+            face_march_kernel<float><<<gr, blk>>>(face_ptrs(f), axis, false, vel.u, vel.v, vel.w, dt_march, G);
+        else
+            face_march_kernel<double><<<gr, blk>>>(face_ptrs(f), axis, false, vel.u, vel.v, vel.w, dt_march, G);
     }
 }
 void lfm_face_pullback(CudaLFMState3D& s, CudaVel3D src, CudaVel3D dst, bool fwd) {
@@ -1539,8 +1579,10 @@ void lfm_face_pullback(CudaLFMState3D& s, CudaVel3D src, CudaVel3D dst, bool fwd
         d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
         CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
         double* d = (axis == 0) ? dst.u : (axis == 1 ? dst.v : dst.w);
-        face_pullback_kernel<<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, src.u,
-                                                                  src.v, src.w, d, G);
+        if (s.fp32_march)
+            face_pullback_kernel<float><<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, src.u, src.v, src.w, d, G);
+        else
+            face_pullback_kernel<double><<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, src.u, src.v, src.w, d, G);
     }
 }
 

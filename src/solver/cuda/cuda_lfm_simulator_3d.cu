@@ -56,6 +56,7 @@ CudaLFMSimulator3D::CudaLFMSimulator3D(const Config& cfg)
     : cfg_(cfg), grid_(cfg.NX, cfg.NY, cfg.NZ, cfg.Lx, cfg.Ly, cfg.Lz) {
     int n_steps = std::max(1, cfg.lfm_cycle_steps);
     s_.allocate(cfg.NX, cfg.NY, cfg.NZ, cfg.Lx / cfg.NX, cfg.Ly / cfg.NY, cfg.Lz / cfg.NZ, n_steps);
+    s_.fp32_march = cfg.lfm_march_fp32;
 }
 
 CudaLFMSimulator3D::~CudaLFMSimulator3D() {
