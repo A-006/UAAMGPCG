@@ -20,6 +20,16 @@ public:
     /// V-cycle while still converging (pure FP32 PCG diverges).
     void solve_mixed(CudaGrid3D& g, double* p, double* rhs, int max_iter, double tol);
 
+    /// Mixed-precision tile-native solve (production projection path). The warp
+    /// V-cycle, matvec, and the FP32 search direction p / preconditioned z / Ap
+    /// run in FP32 in the 8³ tile layout; only the CG recurrence (residual r and
+    /// solution x) is kept in FP64 so the solve reaches the author's ~1e-3 |div|
+    /// regime instead of the ~1e-2 floor a pure-FP32 outer loop stagnates at.
+    /// Reductions accumulate in FP64. RHS (FP64 pitched) is cast/scattered once;
+    /// the solution is gathered/cast back once. ~2× vs the FP64 `solve` on a
+    /// consumer GPU (FP64 ≈ 1/64 FP32), which stays available for high accuracy.
+    void solve_f32_tile(CudaGrid3D& g, double* p, double* rhs, int max_iter, double tol);
+
     /// Fully device-resident PCG: all scalars/alpha/beta on device, no per-iter
     /// host sync (cudaMemcpy). Fixed iteration count (like the paper). Removes the
     /// per-dot host round-trip that bottlenecks small grids.
@@ -36,6 +46,11 @@ private:
     float *d_rf = nullptr, *d_zf = nullptr;
     bool mixed_ = false;
     void mixed_apply(int N, const double* dr, double* dz);
+
+    // FP32 tile-native solve scratch (solve_f32_tile): pitched rhs + tile p/Ap/x.
+    float *d_rf_pitch = nullptr, *d_pf = nullptr, *d_Apf = nullptr, *d_xtf = nullptr;
+    long f32_tile_N_ = 0;
+    int f32_pitch_N_ = 0;
 
     double *d_r = nullptr, *d_z = nullptr, *d_p = nullptr, *d_Ap = nullptr;
     double* d_xt      = nullptr; // tile-layout solution accumulator (tile-native solve)

@@ -9,6 +9,7 @@
 // ════════════════════════════════════════════════════════════════════
 #include "solver/cuda/cuda_lfm_3d.h"
 #include <cstdio>
+#include <cstdlib>
 #include <vector>
 
 namespace {
@@ -691,7 +692,14 @@ void lfm_project(CudaLFMState3D& s, CudaVel3D vel, double dt, int iters, double 
     build_divergence_rhs_kernel<<<grid3(nx, ny, nz), block3()>>>(
         vel.u, vel.v, vel.w, s.g_.solid, s.d_rhs, nx, ny, nz, s.dx, s.dy, s.dz, dt);
     cudaMemset(s.d_p, 0, (size_t)ps * sizeof(double));
-    s.pcg_.solve(s.g_, s.d_p, s.d_rhs, iters, tol);
+    // Precision routing: default to the fully-FP32 tile-native solve (the author's
+    // regime — under-converged 6-iter solves don't need FP64). Set PCG_FP64=1 to
+    // fall back to the high-accuracy FP64 tile-native solve.
+    static const bool pcg_fp64 = std::getenv("PCG_FP64") != nullptr;
+    if (pcg_fp64)
+        s.pcg_.solve(s.g_, s.d_p, s.d_rhs, iters, tol);
+    else
+        s.pcg_.solve_f32_tile(s.g_, s.d_p, s.d_rhs, iters, tol);
     correct_velocity_kernel<<<grid3(nx, ny, nz), block3()>>>(
         vel.u, vel.v, vel.w, s.d_p, s.g_.solid, nx, ny, nz, s.dx, s.dy, s.dz, dt);
 }

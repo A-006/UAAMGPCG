@@ -18,6 +18,7 @@
 #include "solver/factory_3d.h"
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <vector>
 
 static int g_fail = 0;
@@ -517,6 +518,11 @@ static void test_p4(double Re, const char* tag, bool clamp = false) {
 }
 
 int main() {
+    // This suite validates the GPU solver bit-for-bit against the FP64 CPU
+    // reference (tol 1e-9), so it must exercise the FP64 projection path. The
+    // production default is the faster FP32 tile-native solve (validated
+    // end-to-end via |div|max, not against the FP64 CPU golden).
+    setenv("PCG_FP64", "1", 1);
     test_p0();
     test_p1();
     test_p2();

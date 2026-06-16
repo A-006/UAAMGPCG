@@ -34,6 +34,102 @@ __global__ void dot_partial_kernel_3d(const double* a, const double* b, const bo
         d_partial[blockIdx.x] = sdata[0];
 }
 
+// ── FP32-input dot-product with FP64 accumulation (mixed: store fp32, accumulate fp64) ──
+template <typename S>
+__global__ void dot_partial_acc_kernel(const S* a, const S* b, const bool* solid, long N,
+                                       double* d_partial) {
+    __shared__ double sdata[256];
+    int tid    = threadIdx.x;
+    double sum = 0.0;
+    for (long k = (long)blockIdx.x * blockDim.x + tid; k < N; k += (long)blockDim.x * gridDim.x) {
+        if (!solid[k])
+            sum += (double)a[k] * (double)b[k];
+    }
+    sdata[tid] = sum;
+    __syncthreads();
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s)
+            sdata[tid] += sdata[tid + s];
+        __syncthreads();
+    }
+    if (tid == 0)
+        d_partial[blockIdx.x] = sdata[0];
+}
+
+// ── FP32-input sum with FP64 accumulation ──
+template <typename S>
+__global__ void sum_flat_acc_kernel(const S* v, const bool* solid, long N, double* part) {
+    __shared__ double s[256];
+    int tid    = threadIdx.x;
+    double sum = 0.0;
+    for (long k = (long)blockIdx.x * blockDim.x + tid; k < N; k += (long)blockDim.x * gridDim.x)
+        if (!solid[k])
+            sum += (double)v[k];
+    s[tid] = sum;
+    __syncthreads();
+    for (int st = blockDim.x / 2; st > 0; st >>= 1) {
+        if (tid < st)
+            s[tid] += s[tid + st];
+        __syncthreads();
+    }
+    if (tid == 0)
+        part[blockIdx.x] = s[0];
+}
+
+// ── FP32 flat element-wise ops (tile layout, solid skipped) ──
+__global__ void subtract_mean_flat_kernel_f(float* v, float mean, const bool* solid, long N) {
+    long k = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (k < N && !solid[k])
+        v[k] -= mean;
+}
+__global__ void xpby_flat_kernel_f(float* y, const float* x, float b, const bool* solid, long N) {
+    long k = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (k < N && !solid[k])
+        y[k] = x[k] + b * y[k];
+}
+// scatter rhs (FP64 pitched) → tile-layout FP32, via to_tile we already have a float pitched
+__global__ void cast_d2f_flat(const double* d, float* f, long N) {
+    long k = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (k < N)
+        f[k] = (float)d[k];
+}
+__global__ void cast_f2d_flat(const float* f, double* d, long N) {
+    long k = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (k < N)
+        d[k] = (double)f[k];
+}
+// Mixed axpy: y(FP64) += a * x(FP32), accumulating in FP64 (residual recurrence).
+__global__ void axpy_dmix_kernel(double* y, const float* x, double a, const bool* solid, long N) {
+    long k = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (k < N && !solid[k])
+        y[k] += a * (double)x[k];
+}
+// Mixed dot: a(FP64) · b(FP32), accumulating in FP64.
+__global__ void dot_dmix_kernel(const double* a, const float* b, const bool* solid, long N,
+                                double* part) {
+    __shared__ double s[256];
+    int tid    = threadIdx.x;
+    double sum = 0.0;
+    for (long k = (long)blockIdx.x * blockDim.x + tid; k < N; k += (long)blockDim.x * gridDim.x)
+        if (!solid[k])
+            sum += a[k] * (double)b[k];
+    s[tid] = sum;
+    __syncthreads();
+    for (int st = blockDim.x / 2; st > 0; st >>= 1) {
+        if (tid < st)
+            s[tid] += s[tid + st];
+        __syncthreads();
+    }
+    if (tid == 0)
+        part[blockIdx.x] = s[0];
+}
+// Cast FP64 tile → FP32 tile (feed the FP32 V-cycle's b buffer from the FP64 residual).
+__global__ void cast_d2f_tile(const double* d, float* f, const bool* solid, long N) {
+    long k = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (k < N)
+        f[k] = solid[k] ? 0.0f : (float)d[k];
+}
+
 // ── 3D interior sum (1D thread mapping over nx*ny*nz) ──
 __global__ void sum_interior_kernel_3d(const double* v, const bool* solid, int nx, int ny, int nz,
                                        int pitch, double* part) {
@@ -298,6 +394,17 @@ void CudaPCG3D::free_buffers() {
         d_rf = d_zf = nullptr;
         gf_N_       = 0;
     }
+    if (d_rf_pitch)
+        cudaFree(d_rf_pitch);
+    if (d_pf)
+        cudaFree(d_pf);
+    if (d_Apf)
+        cudaFree(d_Apf);
+    if (d_xtf)
+        cudaFree(d_xtf);
+    d_rf_pitch = d_pf = d_Apf = d_xtf = nullptr;
+    f32_tile_N_  = 0;
+    f32_pitch_N_ = 0;
 }
 
 void CudaPCG3D::solve(CudaGrid3D& g, double* p, double* rhs, int max_iter, double tol) {
@@ -383,5 +490,180 @@ void CudaPCG3D::solve(CudaGrid3D& g, double* p, double* rhs, int max_iter, doubl
     }
     // solution (tile) → pitched output
     precond_->from_tile(d_xt, p, g);
+    CUDA_CHECK_3D(cudaDeviceSynchronize());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Mixed-precision tile-native PCG (the production projection path on consumer
+//  GPUs, where FP64 ≈ 1/64 FP32). The expensive work — the warp V-cycle, the
+//  matvec, and the FP32 search direction p / preconditioned z / Ap — runs in
+//  FP32 in the 8³ tile layout. Only the accuracy-critical CG recurrence (the
+//  residual r and solution x, updated r -= α·Ap / x += α·p) is kept in FP64,
+//  which is what lets the solve reach the author's ~1e-3 |div| regime instead
+//  of stagnating near the ~1e-2 floor a pure-FP32 outer loop hits. Dot/sum
+//  reductions accumulate in FP64. RHS (FP64 pitched) is cast+scattered once;
+//  the solution is gathered+cast back once. The FP64 `solve` stays available
+//  (PCG_FP64=1) for the bit-for-bit CPU cross-check / high-accuracy needs.
+// ═══════════════════════════════════════════════════════════════════════════
+void CudaPCG3D::solve_f32_tile(CudaGrid3D& g, double* p, double* rhs, int max_iter, double tol) {
+    int nx = g.nx, ny = g.ny, nz = g.nz;
+    int N = (nx + 2) * (ny + 2) * (nz + 2);
+    ensure_buffers(N); // reuse d_dot_buf / d_count_buf (FP64 partials) + reduce helpers
+    // Cap reduction blocks: kernels are grid-stride, so a small fixed block count
+    // shrinks the per-dot D2H partial copy (the per-iteration host round-trip that
+    // dominates once the V-cycle is FP32). 2048 partials sum deterministically.
+    int nblocks1d = (N + 255) / 256 + 1;
+    if (nblocks1d > 2048)
+        nblocks1d = 2048;
+
+    // ── Float grid mirroring g (uniform stencil from dx + solid). Set up once. ──
+    if (gf_N_ < N) {
+        if (gf_N_ > 0) {
+            gf_.free();
+            if (d_rf)
+                cudaFree(d_rf);
+            if (d_zf)
+                cudaFree(d_zf);
+            d_rf = d_zf = nullptr;
+        }
+        gf_.allocate(nx, ny, nz, (float)g.dx, (float)g.dy, (float)g.dz);
+        gf_N_ = N;
+    }
+    if (f32_pitch_N_ < N) {
+        if (d_rf_pitch)
+            cudaFree(d_rf_pitch);
+        cudaMalloc(&d_rf_pitch, N * sizeof(float));
+        f32_pitch_N_ = N;
+    }
+    cudaMemcpy(gf_.solid, g.solid, N * sizeof(bool), cudaMemcpyDeviceToDevice);
+    precond_f_->setupLevels(gf_);
+
+    const long Nt    = precond_f_->level0_count();
+    const bool* tsol = precond_f_->level0_solid();
+    int nbe          = (int)((Nt + 255) / 256);
+    if (f32_tile_N_ < Nt) {
+        if (d_pf)
+            cudaFree(d_pf);
+        if (d_Apf)
+            cudaFree(d_Apf);
+        if (d_xtf)
+            cudaFree(d_xtf);
+        cudaMalloc(&d_pf, Nt * sizeof(float));
+        cudaMalloc(&d_Apf, Nt * sizeof(float));
+        cudaMalloc(&d_xtf, Nt * sizeof(float));
+        f32_tile_N_ = Nt;
+    }
+
+    // ── Hybrid precision (the accuracy-critical recurrence stays FP64) ──
+    //  r (residual) and x (solution) live in FP64 tile buffers — running the
+    //  r -= α·Ap / x += α·p recurrence in FP64 is what lets the PCG escape the
+    //  ~1e-2 stagnation floor of a pure-FP32 outer loop and reach the author's
+    //  ~1e-3 regime in a few iters. p, z, Ap, the matvec, and the whole V-cycle
+    //  run in FP32 (the expensive bandwidth/flops). d_r / d_xt (FP64, sized ≥Nt)
+    //  are reused as the FP64 r / x tiles; precond_f_ level0 b/x are the FP32
+    //  V-cycle in/out (also reused as scratch for the FP32 residual cast).
+    int nbr    = (int)((N + 255) / 256);
+    double* rt = d_r;  // residual (FP64 tile)
+    double* xt = d_xt; // solution (FP64 tile)
+    float* bf  = precond_f_->level0_b(); // FP32 V-cycle input
+    float* zt  = precond_f_->level0_x(); // FP32 V-cycle output (preconditioned)
+
+    // rhs (FP64 pitched) → FP32 pitched → FP32 tile (bf) → FP64 tile residual.
+    cast_d2f_flat<<<nbr, 256>>>(rhs, d_rf_pitch, N);
+    precond_f_->to_tile(d_rf_pitch, bf, gf_);
+    cast_f2d_flat<<<nbe, 256>>>(bf, rt, Nt);
+
+    auto mean_d = [&](const double* v) -> double {
+        sum_flat_acc_kernel<double><<<nblocks1d, 256>>>(v, tsol, Nt, d_dot_buf);
+        cudaDeviceSynchronize();
+        double s = host_reduce_3d(d_dot_buf, nblocks1d);
+        count_flat_kernel<<<nblocks1d, 256>>>(tsol, Nt, d_count_buf);
+        cudaDeviceSynchronize();
+        int c = host_reduce_int_3d(d_count_buf, nblocks1d);
+        return c > 0 ? s / c : 0.0;
+    };
+    auto mean_f = [&](const float* v) -> float {
+        sum_flat_acc_kernel<float><<<nblocks1d, 256>>>(v, tsol, Nt, d_dot_buf);
+        cudaDeviceSynchronize();
+        double s = host_reduce_3d(d_dot_buf, nblocks1d);
+        count_flat_kernel<<<nblocks1d, 256>>>(tsol, Nt, d_count_buf);
+        cudaDeviceSynchronize();
+        int c = host_reduce_int_3d(d_count_buf, nblocks1d);
+        return c > 0 ? (float)(s / c) : 0.0f;
+    };
+    auto dot_dd = [&](const double* a, const double* b) -> double {
+        dot_partial_acc_kernel<double><<<nblocks1d, 256>>>(a, b, tsol, Nt, d_dot_buf);
+        cudaDeviceSynchronize();
+        return host_reduce_3d(d_dot_buf, nblocks1d);
+    };
+    auto dot_ff = [&](const float* a, const float* b) -> double {
+        dot_partial_acc_kernel<float><<<nblocks1d, 256>>>(a, b, tsol, Nt, d_dot_buf);
+        cudaDeviceSynchronize();
+        return host_reduce_3d(d_dot_buf, nblocks1d);
+    };
+    auto dot_df = [&](const double* a, const float* b) -> double {
+        dot_dmix_kernel<<<nblocks1d, 256>>>(a, b, tsol, Nt, d_dot_buf);
+        cudaDeviceSynchronize();
+        return host_reduce_3d(d_dot_buf, nblocks1d);
+    };
+
+    double mr = mean_d(rt); // r = -(r - mean)
+    subtract_mean_flat_kernel<<<nbe, 256>>>(rt, mr, tsol, Nt);
+    negate_flat_kernel<<<nbe, 256>>>(rt, tsol, Nt);
+
+    // z = M⁻¹ r : cast r→FP32 b, run FP32 V-cycle, mean-remove z (FP32).
+    cast_d2f_tile<<<nbe, 256>>>(rt, bf, tsol, Nt);
+    precond_f_->vcycle_inplace();
+    zt       = precond_f_->level0_x();
+    float mz = mean_f(zt);
+    subtract_mean_flat_kernel_f<<<nbe, 256>>>(zt, mz, tsol, Nt);
+    cudaMemcpy(d_pf, zt, Nt * sizeof(float), cudaMemcpyDeviceToDevice); // p = z (FP32)
+    cudaMemset(xt, 0, Nt * sizeof(double));                             // x = 0 (FP64)
+
+    double rsold = dot_df(rt, zt);
+    if (rsold < 1e-30) {
+        cudaMemset(p, 0, N * sizeof(double));
+        return;
+    }
+    double r0_sq      = dot_dd(rt, rt);
+    double tol_abs_sq = (r0_sq > 0) ? r0_sq * tol * tol : tol * tol;
+    last_iters        = max_iter;
+    last_rel_res      = 1.0;
+
+    for (int k = 0; k < max_iter; k++) {
+        precond_f_->matvec_tiled(d_pf, d_Apf); // Ap = A p   (FP32)
+        double pAp = dot_ff(d_pf, d_Apf);
+        if (pAp < 1e-20)
+            break;
+        double alpha = rsold / pAp;
+
+        axpy_dmix_kernel<<<nbe, 256>>>(xt, d_pf, alpha, tsol, Nt);   // x += α p  (FP64 += α·FP32)
+        axpy_dmix_kernel<<<nbe, 256>>>(rt, d_Apf, -alpha, tsol, Nt); // r -= α Ap (FP64 recurrence)
+        CUDA_CHECK_3D(cudaDeviceSynchronize());
+
+        double rsnew = dot_dd(rt, rt);
+        if (rsnew < tol_abs_sq) {
+            last_iters   = k + 1;
+            last_rel_res = std::sqrt(rsnew / (r0_sq > 0 ? r0_sq : 1.0));
+            break;
+        }
+
+        cast_d2f_tile<<<nbe, 256>>>(rt, bf, tsol, Nt); // FP32 V-cycle input
+        precond_f_->vcycle_inplace();
+        zt        = precond_f_->level0_x();
+        float mz2 = mean_f(zt);
+        subtract_mean_flat_kernel_f<<<nbe, 256>>>(zt, mz2, tsol, Nt);
+
+        double rz  = dot_df(rt, zt);
+        float beta = (float)(rz / rsold);
+        rsold      = rz;
+        xpby_flat_kernel_f<<<nbe, 256>>>(d_pf, zt, beta, tsol, Nt); // p = z + β p  (FP32)
+        CUDA_CHECK_3D(cudaDeviceSynchronize());
+    }
+    // solution (FP64 tile) → FP32 tile → pitched FP32 → FP64 output. The output
+    // cast through FP32 is harmless: it feeds the velocity correction only.
+    cast_d2f_tile<<<nbe, 256>>>(xt, d_xtf, tsol, Nt);
+    precond_f_->from_tile(d_xtf, d_rf_pitch, gf_);
+    cast_f2d_flat<<<nbr, 256>>>(d_rf_pitch, p, N);
     CUDA_CHECK_3D(cudaDeviceSynchronize());
 }
