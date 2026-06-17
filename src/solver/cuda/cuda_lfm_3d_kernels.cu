@@ -1930,6 +1930,13 @@ static FaceMapPtrs face_ptrs(CudaLFMState3D::CudaFaceFlowMap& f) {
 static dim3 grid_face(int imax, int jmax, int kmax) {
     return dim3((imax + 7) / 8, (jmax + 7) / 8, (kmax + 7) / 8);
 }
+// Wide-x (32) face block + grid — same L1-window-reuse lever as the cell advect:
+// the per-face 27-tap value gather strides along i, so a full warp of consecutive
+// i per row reuses L1 lines. Used by the sampling face kernel (face_pullback).
+static dim3 block_face_wide() { return dim3(32, 4, 2); }
+static dim3 grid_face_wide(int imax, int jmax, int kmax) {
+    return dim3((imax + 31) / 32, (jmax + 3) / 4, (kmax + 1) / 2);
+}
 
 void lfm_face_set_forward_identity(CudaLFMState3D& s) {
     GeomParams G = geom(s);
@@ -2005,9 +2012,9 @@ void lfm_face_pullback(CudaLFMState3D& s, CudaVel3D src, CudaVel3D dst, bool fwd
         CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
         double* d = (axis == 0) ? dst.u : (axis == 1 ? dst.v : dst.w);
         if (fp16)
-            face_pullback_kernel<float, __half><<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, (__half*)s.su16, (__half*)s.sv16, (__half*)s.sw16, d, G);
+            face_pullback_kernel<float, __half><<<grid_face_wide(im, jm, km), block_face_wide()>>>(face_ptrs(f), axis, fwd, (__half*)s.su16, (__half*)s.sv16, (__half*)s.sw16, d, G);
         else if (s.fp32_march)
-            face_pullback_kernel<float, float><<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, s.su32, s.sv32, s.sw32, d, G);
+            face_pullback_kernel<float, float><<<grid_face_wide(im, jm, km), block_face_wide()>>>(face_ptrs(f), axis, fwd, s.su32, s.sv32, s.sw32, d, G);
         else
             face_pullback_kernel<double, double><<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, src.u, src.v, src.w, d, G);
     }
