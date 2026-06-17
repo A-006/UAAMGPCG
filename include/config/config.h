@@ -29,6 +29,11 @@ public:
     bool lfm_bfecc_clamp        = false; // clamp BFECC-corrected impulse to neighbor min/max
     bool lfm_march_fp32         = true;  // FP32 face flow-map marching/sampling (author-faithful, ~order faster on consumer GPUs)
                                          // (paper's BfeccClamp: lets inviscid runs stay stable)
+    bool lfm_sample_fp16        = false; // EXPERIMENT: FP16 (half2-packed) flow-map SAMPLING.
+                                         // Only active when lfm_march_fp32 is also true. Stores the
+                                         // velocity/source sampling scratch as __half and runs the
+                                         // 27-point B-spline interpolation in packed half2. Off by
+                                         // default; also switchable via env LFM_FP16=1.
     // Velocity wall BC for the LFM cycle: "free_slip" (closed box, default) or
     // "freestream" (prescribe inflow_u on all walls — delta wing / wind tunnel).
     std::string lfm_bc = "free_slip";

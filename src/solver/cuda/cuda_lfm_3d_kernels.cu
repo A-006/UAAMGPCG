@@ -10,9 +10,21 @@
 #include "solver/cuda/cuda_lfm_3d.h"
 #include <cstdio>
 #include <cstdlib>
+#include <cuda_fp16.h>
 #include <vector>
 
 namespace {
+inline __half* hmalloc(int n) {
+    __half* p = nullptr;
+    cudaMalloc(&p, (size_t)n * sizeof(__half));
+    cudaMemset(p, 0, (size_t)n * sizeof(__half));
+    return p;
+}
+inline void hfree(void*& p) {
+    if (p)
+        cudaFree(p);
+    p = nullptr;
+}
 inline double* dmalloc(int n) {
     double* p = nullptr;
     cudaMalloc(&p, (size_t)n * sizeof(double));
@@ -54,6 +66,30 @@ static void convert_vel_f32(CudaVel3D src, float* du, float* dv, float* dw, int 
     d2f_copy_kernel<<<(us + B - 1) / B, B>>>(du, src.u, us);
     d2f_copy_kernel<<<(vs + B - 1) / B, B>>>(dv, src.v, vs);
     d2f_copy_kernel<<<(ws + B - 1) / B, B>>>(dw, src.w, ws);
+}
+
+// Element-wise double→__half copy of one MAC component. Stages the FP16 sampling
+// scratch: the hot gather then loads 2 bytes/sample (vs 4 for FP32) and the inner
+// B-spline runs packed half2. |u|~5 is well inside FP16's range, only precision
+// (10-bit mantissa) is lost — that's the experiment's whole tradeoff.
+__global__ void d2h_copy_kernel(__half* __restrict dst, const double* __restrict src, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n)
+        dst[i] = __double2half(src[i]);
+}
+static void convert_vel_f16(CudaVel3D src, __half* du, __half* dv, __half* dw, int us, int vs,
+                            int ws) {
+    int B = 256;
+    d2h_copy_kernel<<<(us + B - 1) / B, B>>>(du, src.u, us);
+    d2h_copy_kernel<<<(vs + B - 1) / B, B>>>(dv, src.v, vs);
+    d2h_copy_kernel<<<(ws + B - 1) / B, B>>>(dw, src.w, ws);
+}
+
+// Resolve the FP16-sampling switch: the state flag (cfg.lfm_sample_fp16) OR env
+// LFM_FP16=1. Env is cached once. Only meaningful when fp32_march is also set.
+static bool fp16_sampling(const CudaLFMState3D& s) {
+    static const bool env = std::getenv("LFM_FP16") != nullptr;
+    return s.fp32_march && (s.sample_fp16 || env);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -265,6 +301,163 @@ __device__ inline void d_sample_velocity_grad(const VT* uu, const VT* vv, const 
     }
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// EXPERIMENT — FP16 (packed half2) samplers. Velocity scratch is pre-staged to
+// __half; coordinates / index math stay FP32 (geometry needs the range). The
+// inner 27-point B-spline runs in *genuine* packed half2:
+//   * grad sampler packs the four per-tap weighted sums (value, ∂x, ∂y, ∂z) into
+//     two __half2 lanes → 2 __hfma2 per tap instead of 4 scalar FMAs (≈2× ALU on
+//     the packed FP16 pipe). This is the face_march lever (FMA-bound).
+//   * plain sampler keeps a single sum per face but reads FP16 → halves the
+//     gather bytes (the advect / face_pullback lever, memory-gather-bound).
+// B-spline weights are computed in FP32 then narrowed to half2 (cheap, off the
+// hot path). |u|~5, |∇u·dx|~O(1) — comfortably inside FP16 range.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Plain velocity sample from FP16 scratch. Coords float; sum accumulated in float
+// (single sum/face → no packing benefit, the win is the halved gather).
+__device__ inline void d_sample_velocity_h16(const __half* uu, const __half* vv, const __half* ww,
+                                             float x, float y, float z, int nx, int ny, int nz,
+                                             float dx, float dy, float dz, float Lx, float Ly,
+                                             float Lz, float& vu, float& vvel, float& vw) {
+    x = tclamp<float>(x, 0.f, Lx);
+    y = tclamp<float>(y, 0.f, Ly);
+    z = tclamp<float>(z, 0.f, Lz);
+    {
+        float cx = x / dx, cy = y / dy + 0.5f, cz = z / dz + 0.5f;
+        int ic = t_round_idx<float>(cx), jc = t_round_idx<float>(cy), kc = t_round_idx<float>(cz);
+        float wx[3], wy[3], wz[3];
+        t_bspline<float>(cx - ic, wx); t_bspline<float>(cy - jc, wy); t_bspline<float>(cz - kc, wz);
+        float s = 0;
+        for (int dk = -1; dk <= 1; dk++)
+            for (int dj = -1; dj <= 1; dj++)
+                for (int di = -1; di <= 1; di++) {
+                    int ii = iclamp(ic + di, 0, nx), jj = iclamp(jc + dj, 1, ny),
+                        kk = iclamp(kc + dk, 1, nz);
+                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] *
+                         __half2float(__ldg(&uu[lfm_iu(ii, jj, kk, nx, ny)]));
+                }
+        vu = s;
+    }
+    {
+        float cx = x / dx + 0.5f, cy = y / dy, cz = z / dz + 0.5f;
+        int ic = t_round_idx<float>(cx), jc = t_round_idx<float>(cy), kc = t_round_idx<float>(cz);
+        float wx[3], wy[3], wz[3];
+        t_bspline<float>(cx - ic, wx); t_bspline<float>(cy - jc, wy); t_bspline<float>(cz - kc, wz);
+        float s = 0;
+        for (int dk = -1; dk <= 1; dk++)
+            for (int dj = -1; dj <= 1; dj++)
+                for (int di = -1; di <= 1; di++) {
+                    int ii = iclamp(ic + di, 1, nx), jj = iclamp(jc + dj, 0, ny),
+                        kk = iclamp(kc + dk, 1, nz);
+                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] *
+                         __half2float(__ldg(&vv[lfm_iv(ii, jj, kk, nx, ny)]));
+                }
+        vvel = s;
+    }
+    {
+        float cx = x / dx + 0.5f, cy = y / dy + 0.5f, cz = z / dz;
+        int ic = t_round_idx<float>(cx), jc = t_round_idx<float>(cy), kc = t_round_idx<float>(cz);
+        float wx[3], wy[3], wz[3];
+        t_bspline<float>(cx - ic, wx); t_bspline<float>(cy - jc, wy); t_bspline<float>(cz - kc, wz);
+        float s = 0;
+        for (int dk = -1; dk <= 1; dk++)
+            for (int dj = -1; dj <= 1; dj++)
+                for (int di = -1; di <= 1; di++) {
+                    int ii = iclamp(ic + di, 1, nx), jj = iclamp(jc + dj, 1, ny),
+                        kk = iclamp(kc + dk, 0, nz);
+                    s += wx[di + 1] * wy[dj + 1] * wz[dk + 1] *
+                         __half2float(__ldg(&ww[lfm_iw(ii, jj, kk, nx, ny)]));
+                }
+        vw = s;
+    }
+}
+
+// One MAC-face contribution of the grad sampler in packed half2. acc0=(s,∂x_raw),
+// acc1=(∂y_raw,∂z_raw) accumulated over the 27 taps; ∂ are pre-/dx etc. Weights
+// narrowed FP32→half once per axis (the 9 entries of wx/dwx/…), values read FP16.
+__device__ inline void d_face_grad_h16(const __half* fld, int icoff, int jcoff, int kcoff,
+                                       float cx, float cy, float cz, int nx, int ny, int nz,
+                                       int ilo, int jlo, int klo, int axis,
+                                       float& vout, float& gx, float& gy, float& gz) {
+    int ic = t_round_idx<float>(cx), jc = t_round_idx<float>(cy), kc = t_round_idx<float>(cz);
+    float wxf[3], wyf[3], wzf[3], dwxf[3], dwyf[3], dwzf[3];
+    t_bspline<float>(cx - ic, wxf);  t_bspline_d<float>(cx - ic, dwxf);
+    t_bspline<float>(cy - jc, wyf);  t_bspline_d<float>(cy - jc, dwyf);
+    t_bspline<float>(cz - kc, wzf);  t_bspline_d<float>(cz - kc, dwzf);
+    __half2 acc0 = __float2half2_rn(0.f), acc1 = __float2half2_rn(0.f);
+    for (int dk = -1; dk <= 1; dk++) {
+        int kk = iclamp(kc + dk, klo, nz);
+        float wz = wzf[dk + 1], dwz = dwzf[dk + 1];
+        for (int dj = -1; dj <= 1; dj++) {
+            int jj = iclamp(jc + dj, jlo, ny);
+            float wy = wyf[dj + 1], dwy = dwyf[dj + 1];
+            float wyz = wy * wz, dwy_wz = dwy * wz, wy_dwz = wy * dwz;
+            for (int di = -1; di <= 1; di++) {
+                int ii = iclamp(ic + di, ilo, nx);
+                float wx = wxf[di + 1], dwx = dwxf[di + 1];
+                int idx = (axis == 0) ? lfm_iu(ii, jj, kk, nx, ny)
+                                      : (axis == 1 ? lfm_iv(ii, jj, kk, nx, ny)
+                                                   : lfm_iw(ii, jj, kk, nx, ny));
+                __half v = __ldg(&fld[idx]);
+                __half2 v2 = __half2half2(v);
+                // lane layout: acc0=(w, dwx·wyz), acc1=(wx·dwy_wz, wx·wy_dwz)
+                __half2 w0 = __floats2half2_rn(wx * wyz, dwx * wyz);
+                __half2 w1 = __floats2half2_rn(wx * dwy_wz, wx * wy_dwz);
+                acc0 = __hfma2(v2, w0, acc0);
+                acc1 = __hfma2(v2, w1, acc1);
+            }
+        }
+    }
+    float2 a0 = __half22float2(acc0), a1 = __half22float2(acc1);
+    vout = a0.x; gx = a0.y; gy = a1.x; gz = a1.y;
+    (void)icoff; (void)jcoff; (void)kcoff; (void)ilo; (void)jlo; (void)klo;
+}
+
+// Velocity + 3×3 gradient from FP16 scratch, packed half2 inner loop. Mirrors
+// d_sample_velocity_grad's MAC offsets/clamps; g[3a+b]=∂u_a/∂x_b.
+__device__ inline void d_sample_velocity_grad_h16(const __half* uu, const __half* vv,
+                                                  const __half* ww, float x, float y, float z,
+                                                  int nx, int ny, int nz, float dx, float dy,
+                                                  float dz, float Lx, float Ly, float Lz, float& vu,
+                                                  float& vvel, float& vw, float g[9]) {
+    x = tclamp<float>(x, 0.f, Lx);
+    y = tclamp<float>(y, 0.f, Ly);
+    z = tclamp<float>(z, 0.f, Lz);
+    float gx, gy, gz;
+    // u-face (clamps 0,1,1)
+    d_face_grad_h16(uu, 0, 0, 0, x / dx, y / dy + 0.5f, z / dz + 0.5f, nx, ny, nz, 0, 1, 1, 0, vu,
+                    gx, gy, gz);
+    g[0] = gx / dx; g[1] = gy / dy; g[2] = gz / dz;
+    // v-face (clamps 1,0,1)
+    d_face_grad_h16(vv, 0, 0, 0, x / dx + 0.5f, y / dy, z / dz + 0.5f, nx, ny, nz, 1, 0, 1, 1, vvel,
+                    gx, gy, gz);
+    g[3] = gx / dx; g[4] = gy / dy; g[5] = gz / dz;
+    // w-face (clamps 1,1,0)
+    d_face_grad_h16(ww, 0, 0, 0, x / dx + 0.5f, y / dy + 0.5f, z / dz, nx, ny, nz, 1, 1, 0, 2, vw,
+                    gx, gy, gz);
+    g[6] = gx / dx; g[7] = gy / dy; g[8] = gz / dz;
+}
+
+// Specializations so the existing templated kernels (advect / face_march /
+// face_pullback) transparently dispatch to the FP16 path when instantiated with
+// VT=__half (T=float). Same signature as the primary templates.
+template <>
+__device__ inline void d_sample_velocity<float, __half>(
+    const __half* uu, const __half* vv, const __half* ww, float x, float y, float z, int nx, int ny,
+    int nz, float dx, float dy, float dz, float Lx, float Ly, float Lz, float& vu, float& vvel,
+    float& vw) {
+    d_sample_velocity_h16(uu, vv, ww, x, y, z, nx, ny, nz, dx, dy, dz, Lx, Ly, Lz, vu, vvel, vw);
+}
+template <>
+__device__ inline void d_sample_velocity_grad<float, __half>(
+    const __half* uu, const __half* vv, const __half* ww, float x, float y, float z, int nx, int ny,
+    int nz, float dx, float dy, float dz, float Lx, float Ly, float Lz, float& vu, float& vvel,
+    float& vw, float g[9]) {
+    d_sample_velocity_grad_h16(uu, vv, ww, x, y, z, nx, ny, nz, dx, dy, dz, Lx, Ly, Lz, vu, vvel, vw,
+                               g);
+}
+
 // 27-point quadratic B-spline at cell centers (interior-indexed scalar fields).
 __device__ inline void d_sample_cell_centered(const double* sx, const double* sy, const double* sz,
                                               double x, double y, double z, int nx, int ny, int nz,
@@ -380,6 +573,15 @@ void CudaLFMState3D::allocate(int nx_, int ny_, int nz_, double dx_, double dy_,
     su32 = fmalloc(us);
     sv32 = fmalloc(vs);
     sw32 = fmalloc(ws);
+
+    // FP16 sampling scratch (experiment). Always allocated (cheap: half the FP32
+    // scratch bytes); only used when sample_fp16 is enabled at runtime.
+    vu16 = hmalloc(us);
+    vv16 = hmalloc(vs);
+    vw16 = hmalloc(ws);
+    su16 = hmalloc(us);
+    sv16 = hmalloc(vs);
+    sw16 = hmalloc(ws);
 }
 
 void CudaLFMState3D::free() {
@@ -442,6 +644,12 @@ void CudaLFMState3D::free() {
     ffree(su32);
     ffree(sv32);
     ffree(sw32);
+    hfree(vu16);
+    hfree(vv16);
+    hfree(vw16);
+    hfree(su16);
+    hfree(sv16);
+    hfree(sw16);
 }
 
 void CudaLFMState3D::upload_velocity(const std::vector<double>& hu, const std::vector<double>& hv,
@@ -804,7 +1012,17 @@ static GeomParams geom(const CudaLFMState3D& s) {
 void lfm_rk2_advect(CudaLFMState3D& s, CudaVel3D dst, CudaVel3D src, CudaVel3D vel, double dt_step) {
     GeomParams g = geom(s);
     dim3 blk = block3(), gr = grid3(s.nx, s.ny, s.nz);
-    if (s.fp32_march) {
+    if (fp16_sampling(s)) {
+        int us = lfm_u_size(s.nx, s.ny, s.nz), vs = lfm_v_size(s.nx, s.ny, s.nz),
+            ws = lfm_w_size(s.nx, s.ny, s.nz);
+        __half *su16 = (__half*)s.su16, *sv16 = (__half*)s.sv16, *sw16 = (__half*)s.sw16;
+        __half *vu16 = (__half*)s.vu16, *vv16 = (__half*)s.vv16, *vw16 = (__half*)s.vw16;
+        convert_vel_f16(src, su16, sv16, sw16, us, vs, ws);
+        convert_vel_f16(vel, vu16, vv16, vw16, us, vs, ws);
+        advect_u_kernel<float, __half><<<gr, blk>>>(dst.u, su16, sv16, sw16, vu16, vv16, vw16, s.g_.solid, dt_step, g);
+        advect_v_kernel<float, __half><<<gr, blk>>>(dst.v, su16, sv16, sw16, vu16, vv16, vw16, s.g_.solid, dt_step, g);
+        advect_w_kernel<float, __half><<<gr, blk>>>(dst.w, su16, sv16, sw16, vu16, vv16, vw16, s.g_.solid, dt_step, g);
+    } else if (s.fp32_march) {
         int us = lfm_u_size(s.nx, s.ny, s.nz), vs = lfm_v_size(s.nx, s.ny, s.nz),
             ws = lfm_w_size(s.nx, s.ny, s.nz);
         // Stage src + vel as FP32 once → the hot gather reads pure float (no per-load FP64 convert).
@@ -1619,14 +1837,21 @@ static void face_march_run(CudaLFMState3D& s, CudaVel3D vel, double dt_march, bo
     GeomParams G = geom(s);
     int im, jm, km;
     dim3 blk(8, 8, 4);
-    if (s.fp32_march)
+    bool fp16 = fp16_sampling(s);
+    if (fp16)
+        convert_vel_f16(vel, (__half*)s.vu16, (__half*)s.vv16, (__half*)s.vw16,
+                        lfm_u_size(s.nx, s.ny, s.nz), lfm_v_size(s.nx, s.ny, s.nz),
+                        lfm_w_size(s.nx, s.ny, s.nz));
+    else if (s.fp32_march)
         convert_vel_f32(vel, s.vu32, s.vv32, s.vw32, lfm_u_size(s.nx, s.ny, s.nz),
                         lfm_v_size(s.nx, s.ny, s.nz), lfm_w_size(s.nx, s.ny, s.nz));
     for (int axis = 0; axis < 3; axis++) {
         d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
         CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
         dim3 gr((im + 7) / 8, (jm + 7) / 8, (km + 3) / 4);
-        if (s.fp32_march)
+        if (fp16)
+            face_march_kernel<float, __half><<<gr, blk>>>(face_ptrs(f), axis, fwd, (__half*)s.vu16, (__half*)s.vv16, (__half*)s.vw16, dt_march, G);
+        else if (s.fp32_march)
             face_march_kernel<float, float><<<gr, blk>>>(face_ptrs(f), axis, fwd, s.vu32, s.vv32, s.vw32, dt_march, G);
         else
             face_march_kernel<double, double><<<gr, blk>>>(face_ptrs(f), axis, fwd, vel.u, vel.v, vel.w, dt_march, G);
@@ -1641,14 +1866,21 @@ void lfm_face_march_backward(CudaLFMState3D& s, CudaVel3D vel, double dt_march) 
 void lfm_face_pullback(CudaLFMState3D& s, CudaVel3D src, CudaVel3D dst, bool fwd) {
     GeomParams G = geom(s);
     int im, jm, km;
-    if (s.fp32_march)
+    bool fp16 = fp16_sampling(s);
+    if (fp16)
+        convert_vel_f16(src, (__half*)s.su16, (__half*)s.sv16, (__half*)s.sw16,
+                        lfm_u_size(s.nx, s.ny, s.nz), lfm_v_size(s.nx, s.ny, s.nz),
+                        lfm_w_size(s.nx, s.ny, s.nz));
+    else if (s.fp32_march)
         convert_vel_f32(src, s.su32, s.sv32, s.sw32, lfm_u_size(s.nx, s.ny, s.nz),
                         lfm_v_size(s.nx, s.ny, s.nz), lfm_w_size(s.nx, s.ny, s.nz));
     for (int axis = 0; axis < 3; axis++) {
         d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
         CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
         double* d = (axis == 0) ? dst.u : (axis == 1 ? dst.v : dst.w);
-        if (s.fp32_march)
+        if (fp16)
+            face_pullback_kernel<float, __half><<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, (__half*)s.su16, (__half*)s.sv16, (__half*)s.sw16, d, G);
+        else if (s.fp32_march)
             face_pullback_kernel<float, float><<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, s.su32, s.sv32, s.sw32, d, G);
         else
             face_pullback_kernel<double, double><<<grid_face(im, jm, km), block3()>>>(face_ptrs(f), axis, fwd, src.u, src.v, src.w, d, G);

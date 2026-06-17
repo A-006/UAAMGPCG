@@ -58,6 +58,10 @@ struct CudaLFMState3D {
     // (author-faithful, ~order faster on consumer GPUs whose FP64 throughput is
     // 1/64). The bit-exact GPU-vs-CPU tests set this false for the FP64 path.
     bool fp32_march = true;
+    // EXPERIMENT: when true (and fp32_march is also true), the flow-map sampling
+    // scratch is stored as __half and the 27-point B-spline interpolation runs in
+    // packed half2. Gated by cfg.lfm_sample_fp16 / env LFM_FP16. Off → FP32 path.
+    bool sample_fp16 = false;
 
     CudaGrid3D g_{};               // solid mask + grid metadata for the Poisson solve
     CudaPCG3D pcg_{};              // device UAAMG-PCG (null-space safe)
@@ -105,6 +109,13 @@ struct CudaLFMState3D {
     // keeps reading the double arrays directly. Sized like one CudaVel3D.
     float *vu32 = nullptr, *vv32 = nullptr, *vw32 = nullptr; // velocity (march)
     float *su32 = nullptr, *sv32 = nullptr, *sw32 = nullptr; // source  (pullback/advect-src)
+
+    // EXPERIMENT (sample_fp16): __half scratch copies of the same MAC fields. The
+    // sampling gather then reads FP16 (half the gather bytes vs FP32) and the
+    // 27-point B-spline runs in packed half2. Declared as void* here so the header
+    // need not include <cuda_fp16.h>; cast to __half* inside the .cu.
+    void *vu16 = nullptr, *vv16 = nullptr, *vw16 = nullptr; // velocity (march)
+    void *su16 = nullptr, *sv16 = nullptr, *sw16 = nullptr; // source  (pullback/advect-src)
 
     void allocate(int nx_, int ny_, int nz_, double dx_, double dy_, double dz_, int n_steps_);
     void free();
