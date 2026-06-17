@@ -15,6 +15,10 @@ public:
     }
     void build(const CudaGrid3DT_<T>& fine);
     void setupLevels(const CudaGrid3DT_<T>& fine);
+    // Force the next setupLevels() to rebuild the Galerkin/trimming coefficients even
+    // if the geometry signature matches the cache. Call this whenever the solid mask is
+    // mutated in place (moving geometry); static-geometry scenarios never need it.
+    void invalidate_coeffs() { coeffs_ready_ = false; }
     void vcycle_apply(const CudaGrid3DT_<T>& fine, const T* r, T* z);
     void apply(const CudaGrid3DT_<T>& fine, const T* r, T* z);
     void destroy();
@@ -61,6 +65,15 @@ public:
 private:
     std::vector<Level> levels_;
     int cached_nx_ = -1, cached_ny_ = -1, cached_nz_ = -1;
+    // Coefficient-hierarchy cache (lever #1). The solid restriction, fine/Galerkin
+    // coeffs and §5.4 trimming computed in setupLevels() depend ONLY on the solid mask
+    // and grid spacing — not the RHS — and the coeff buffers are read-only during the
+    // solve. So once built they can be reused across every projection of a static-
+    // geometry run (all current LFM scenarios). The guard keys on the solid-mask pointer
+    // + spacing; invalidate_coeffs() (or env UAAMG_REBUILD=1) forces a rebuild.
+    const void* coeff_sig_solid_ = nullptr;
+    T coeff_sig_dx_ = 0, coeff_sig_dy_ = 0, coeff_sig_dz_ = 0;
+    bool coeffs_ready_ = false;
 };
 
 using CudaUAAMGPreconditioner3D  = CudaUAAMGPreconditioner3DT<double>;

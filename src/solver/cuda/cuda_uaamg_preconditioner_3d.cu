@@ -1698,6 +1698,14 @@ template <typename T> void CudaUAAMGPreconditioner3DT<T>::build(const CudaGrid3D
 
 template <typename T> void CudaUAAMGPreconditioner3DT<T>::setupLevels(const CudaGrid3DT_<T>& fine) {
     build(fine);
+    // Lever #1 — geometry cache: the coefficient hierarchy below depends only on the
+    // solid mask + spacing, so skip the rebuild when neither changed since the last
+    // setup (static geometry → every projection after the first is a no-op here).
+    static const bool force_rebuild = (std::getenv("UAAMG_REBUILD") != nullptr);
+    if (!force_rebuild && coeffs_ready_ && coeff_sig_solid_ == (const void*)fine.solid &&
+        coeff_sig_dx_ == fine.dx && coeff_sig_dy_ == fine.dy && coeff_sig_dz_ == fine.dz)
+        return;
+
     int nl              = (int)levels_.size();
     cudaStream_t stream = 0;
     int nx0 = fine.nx, ny0 = fine.ny, nz0 = fine.nz;
@@ -1757,6 +1765,14 @@ template <typename T> void CudaUAAMGPreconditioner3DT<T>::setupLevels(const Cuda
                 L.diag, L.diagd, L.g.nx, L.g.ny, L.g.nz, L.ntx, L.nty, L.ntz, L.trimmed);
         }
     }
+    // Record the geometry signature so the next same-geometry solve skips all of the
+    // above. The coeff buffers (cx/cy/cz/diag/trimmed + tiled solid) persist in build()'s
+    // dim cache and are read-only during the V-cycle/matvec, so the cache stays valid.
+    coeff_sig_solid_ = (const void*)fine.solid;
+    coeff_sig_dx_    = fine.dx;
+    coeff_sig_dy_    = fine.dy;
+    coeff_sig_dz_    = fine.dz;
+    coeffs_ready_    = true;
 }
 
 template <typename T>
@@ -1860,6 +1876,9 @@ template <typename T> void CudaUAAMGPreconditioner3DT<T>::destroy() {
     }
     levels_.clear();
     cached_nx_ = cached_ny_ = cached_nz_ = -1;
+    // Coeff buffers are gone — force the next setupLevels() to rebuild from scratch.
+    coeffs_ready_    = false;
+    coeff_sig_solid_ = nullptr;
 }
 
 // Explicit instantiations
