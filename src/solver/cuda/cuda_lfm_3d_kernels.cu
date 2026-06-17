@@ -1129,7 +1129,11 @@ static GeomParams geom(const CudaLFMState3D& s) {
 
 void lfm_rk2_advect(CudaLFMState3D& s, CudaVel3D dst, CudaVel3D src, CudaVel3D vel, double dt_step) {
     GeomParams g = geom(s);
-    dim3 blk = block3(), gr = grid3(s.nx, s.ny, s.nz);
+    // Advect is L1-gather-bound (ncu ~88% l1tex): map a full warp of consecutive i
+    // per row (wide x) so the overlapping 3-tap i-windows of neighbouring threads
+    // reuse the same L1 lines. 32×4×2 = 256 threads. Grid still covers [1..nx]×…
+    dim3 blk(32, 4, 2);
+    dim3 gr((s.nx + 31) / 32, (s.ny + 3) / 4, (s.nz + 1) / 2);
     if (fp16_sampling(s)) {
         int us = lfm_u_size(s.nx, s.ny, s.nz), vs = lfm_v_size(s.nx, s.ny, s.nz),
             ws = lfm_w_size(s.nx, s.ny, s.nz);
