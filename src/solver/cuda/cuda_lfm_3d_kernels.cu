@@ -325,27 +325,19 @@ __device__ inline float d_face_value_f32(const float* __restrict fld, int axis, 
     t_bspline<float>(cy - jc, wy);
     t_bspline<float>(cz - kc, wz);
     int ii0 = iclamp(ic - 1, ilo, nx), ii1 = iclamp(ic, ilo, nx), ii2 = iclamp(ic + 1, ilo, nx);
+    // Hoist the per-axis flat strides so the inner gather has no axis branch and
+    // reuses a single (k,j) base offset for all three di taps.
+    int sj = (axis == 0) ? (nx + 1) : (nx + 2);
+    int sk = (axis == 0) ? (nx + 1) * (ny + 2)
+                         : (axis == 1 ? (nx + 2) * (ny + 1) : (nx + 2) * (ny + 2));
     float s = 0.f;
     for (int dk = -1; dk <= 1; dk++) {
-        int kk = iclamp(kc + dk, klo, nz);
+        int kb = iclamp(kc + dk, klo, nz) * sk;
         float pk = 0.f;
         for (int dj = -1; dj <= 1; dj++) {
-            int jj = iclamp(jc + dj, jlo, ny);
-            // 1-D dot over di (the contiguous axis): 3 taps.
-            float r;
-            if (axis == 0) {
-                r = wx[0] * __ldg(&fld[lfm_iu(ii0, jj, kk, nx, ny)]) +
-                    wx[1] * __ldg(&fld[lfm_iu(ii1, jj, kk, nx, ny)]) +
-                    wx[2] * __ldg(&fld[lfm_iu(ii2, jj, kk, nx, ny)]);
-            } else if (axis == 1) {
-                r = wx[0] * __ldg(&fld[lfm_iv(ii0, jj, kk, nx, ny)]) +
-                    wx[1] * __ldg(&fld[lfm_iv(ii1, jj, kk, nx, ny)]) +
-                    wx[2] * __ldg(&fld[lfm_iv(ii2, jj, kk, nx, ny)]);
-            } else {
-                r = wx[0] * __ldg(&fld[lfm_iw(ii0, jj, kk, nx, ny)]) +
-                    wx[1] * __ldg(&fld[lfm_iw(ii1, jj, kk, nx, ny)]) +
-                    wx[2] * __ldg(&fld[lfm_iw(ii2, jj, kk, nx, ny)]);
-            }
+            int base = kb + iclamp(jc + dj, jlo, ny) * sj;
+            float r = wx[0] * __ldg(&fld[base + ii0]) + wx[1] * __ldg(&fld[base + ii1]) +
+                      wx[2] * __ldg(&fld[base + ii2]);
             pk += wy[dj + 1] * r;
         }
         s += wz[dk + 1] * pk;
@@ -379,26 +371,18 @@ __device__ inline void d_face_grad_f32(const float* __restrict fld, int axis, fl
     t_bspline<float>(cy - jc, wy);   t_bspline_d<float>(cy - jc, dwy);
     t_bspline<float>(cz - kc, wz);   t_bspline_d<float>(cz - kc, dwz);
     int ii0 = iclamp(ic - 1, ilo, nx), ii1 = iclamp(ic, ilo, nx), ii2 = iclamp(ic + 1, ilo, nx);
+    int sj = (axis == 0) ? (nx + 1) : (nx + 2);
+    int sk = (axis == 0) ? (nx + 1) * (ny + 2)
+                         : (axis == 1 ? (nx + 2) * (ny + 1) : (nx + 2) * (ny + 2));
     float v = 0.f, dx = 0.f, dy = 0.f, dz = 0.f;
     for (int dk = -1; dk <= 1; dk++) {
-        int kk = iclamp(kc + dk, klo, nz);
+        int kb = iclamp(kc + dk, klo, nz) * sk;
         float P = 0.f, Q = 0.f, Rb = 0.f; // dj-accumulated partials
         for (int dj = -1; dj <= 1; dj++) {
-            int jj = iclamp(jc + dj, jlo, ny);
-            float v0, v1, v2;
-            if (axis == 0) {
-                v0 = __ldg(&fld[lfm_iu(ii0, jj, kk, nx, ny)]);
-                v1 = __ldg(&fld[lfm_iu(ii1, jj, kk, nx, ny)]);
-                v2 = __ldg(&fld[lfm_iu(ii2, jj, kk, nx, ny)]);
-            } else if (axis == 1) {
-                v0 = __ldg(&fld[lfm_iv(ii0, jj, kk, nx, ny)]);
-                v1 = __ldg(&fld[lfm_iv(ii1, jj, kk, nx, ny)]);
-                v2 = __ldg(&fld[lfm_iv(ii2, jj, kk, nx, ny)]);
-            } else {
-                v0 = __ldg(&fld[lfm_iw(ii0, jj, kk, nx, ny)]);
-                v1 = __ldg(&fld[lfm_iw(ii1, jj, kk, nx, ny)]);
-                v2 = __ldg(&fld[lfm_iw(ii2, jj, kk, nx, ny)]);
-            }
+            int base = kb + iclamp(jc + dj, jlo, ny) * sj;
+            float v0 = __ldg(&fld[base + ii0]);
+            float v1 = __ldg(&fld[base + ii1]);
+            float v2 = __ldg(&fld[base + ii2]);
             float A = wx[0] * v0 + wx[1] * v1 + wx[2] * v2;   // Σ_di wx·v
             float B = dwx[0] * v0 + dwx[1] * v1 + dwx[2] * v2; // Σ_di dwx·v
             float wyj = wy[dj + 1], dwyj = dwy[dj + 1];
