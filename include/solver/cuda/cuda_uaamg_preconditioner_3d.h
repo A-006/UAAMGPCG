@@ -39,6 +39,12 @@ public:
     void from_tile(const T* tile, T* pitched, const CudaGrid3DT_<T>& fine); // gather (once)
     void matvec_tiled(const T* p_tile, T* Ap_tile);                        // A·p in tile layout
     void vcycle_inplace(); // M⁻¹ in place: b(=r) already set → result in x(=z)
+    // Same as vcycle_inplace but WITHOUT the terminal cudaDeviceSynchronize: the
+    // V-cycle's kernels are issued stream-ordered on stream 0, so a device-resident
+    // PCG whose other ops also run on stream 0 sees them in order with no host sync.
+    // (The host-side x↔scratch ping-pong still happens, so callers must re-fetch
+    //  level0_x() afterwards, exactly as for vcycle_inplace.)
+    void vcycle_inplace_async();
 
     /// Matrix-free Galerkin stencil per level + §5.4 trimming metadata.
     struct Level {

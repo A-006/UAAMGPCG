@@ -1830,6 +1830,16 @@ template <typename T> void CudaUAAMGPreconditioner3DT<T>::vcycle_inplace() {
     cudaDeviceSynchronize();
 }
 
+template <typename T> void CudaUAAMGPreconditioner3DT<T>::vcycle_inplace_async() {
+    int nl              = (int)levels_.size();
+    cudaStream_t stream = 0;
+    if ((long)levels_[0].g.nx * levels_[0].g.ny * levels_[0].g.nz < (1L << 21)) {
+        long N0 = (long)levels_[0].g.num_tiles * 512;
+        zero_kernel_3d<T><<<(N0 + 255) / 256, 256, 0, stream>>>(levels_[0].g.x, N0);
+    }
+    vCycle3D<T>(levels_.data(), 0, nl, stream); // no terminal sync — stream-ordered
+}
+
 template <typename T> void CudaUAAMGPreconditioner3DT<T>::destroy() {
     for (auto& L : levels_) {
         L.g.free();

@@ -55,6 +55,10 @@ private:
     double *d_r = nullptr, *d_z = nullptr, *d_p = nullptr, *d_Ap = nullptr;
     double* d_xt      = nullptr; // tile-layout solution accumulator (tile-native solve)
     double *d_dot_buf = nullptr, *d_scalar = nullptr;
+    // Device-resident scalar bank for solve_f32_tile (no per-iter host round-trip):
+    // [0]=rsold [1]=pAp [2]=rsnew [3]=rz [4]=alpha [5]=-alpha [6]=mean [7]=count
+    double* d_sc       = nullptr;
+    float* d_scf       = nullptr; // [0]=beta(f) [1]=mean(f)
     int* d_count_buf     = nullptr;
     size_t dot_buf_size_ = 0;
     int N_               = 0;
