@@ -302,6 +302,137 @@ __device__ inline void d_sample_velocity_grad(const VT* uu, const VT* vv, const 
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// SEPARABLE FP32 samplers — the tensor-product quadratic B-spline factored into
+// three sequential 1-D reductions (di → dj → dk) instead of the naive 27-tap
+// triple product. Same gather (27 values, identical clamps/MAC offsets), but the
+// weight algebra collapses: the value sampler drops from ~2 mul/tap to a chain of
+// 1-D dot products, and the grad sampler computes (value,∂x,∂y,∂z) from shared
+// partials instead of four independent triple products per tap (~324→~90 FMAs).
+// FP32-only: the di→dj→dk summation order differs from the bit-exact FP64 nested
+// loop, so these are used solely when T=VT=float; the double template keeps the
+// original order and stays GPU==CPU. Verified numerically by P2/P3/P4 (FP32
+// "matches CPU" checks use a tolerance, not bit-exactness).
+// ════════════════════════════════════════════════════════════════════════════
+
+// One MAC face's separable value interpolation (27-tap). lo* are the per-axis
+// clamp lower bounds (upper = nx/ny/nz). Returns Σ wx·wy·wz·val.
+__device__ inline float d_face_value_f32(const float* __restrict fld, int axis, float cx, float cy,
+                                         float cz, int nx, int ny, int nz, int ilo, int jlo,
+                                         int klo) {
+    int ic = t_round_idx<float>(cx), jc = t_round_idx<float>(cy), kc = t_round_idx<float>(cz);
+    float wx[3], wy[3], wz[3];
+    t_bspline<float>(cx - ic, wx);
+    t_bspline<float>(cy - jc, wy);
+    t_bspline<float>(cz - kc, wz);
+    int ii0 = iclamp(ic - 1, ilo, nx), ii1 = iclamp(ic, ilo, nx), ii2 = iclamp(ic + 1, ilo, nx);
+    float s = 0.f;
+    for (int dk = -1; dk <= 1; dk++) {
+        int kk = iclamp(kc + dk, klo, nz);
+        float pk = 0.f;
+        for (int dj = -1; dj <= 1; dj++) {
+            int jj = iclamp(jc + dj, jlo, ny);
+            // 1-D dot over di (the contiguous axis): 3 taps.
+            float r;
+            if (axis == 0) {
+                r = wx[0] * __ldg(&fld[lfm_iu(ii0, jj, kk, nx, ny)]) +
+                    wx[1] * __ldg(&fld[lfm_iu(ii1, jj, kk, nx, ny)]) +
+                    wx[2] * __ldg(&fld[lfm_iu(ii2, jj, kk, nx, ny)]);
+            } else if (axis == 1) {
+                r = wx[0] * __ldg(&fld[lfm_iv(ii0, jj, kk, nx, ny)]) +
+                    wx[1] * __ldg(&fld[lfm_iv(ii1, jj, kk, nx, ny)]) +
+                    wx[2] * __ldg(&fld[lfm_iv(ii2, jj, kk, nx, ny)]);
+            } else {
+                r = wx[0] * __ldg(&fld[lfm_iw(ii0, jj, kk, nx, ny)]) +
+                    wx[1] * __ldg(&fld[lfm_iw(ii1, jj, kk, nx, ny)]) +
+                    wx[2] * __ldg(&fld[lfm_iw(ii2, jj, kk, nx, ny)]);
+            }
+            pk += wy[dj + 1] * r;
+        }
+        s += wz[dk + 1] * pk;
+    }
+    return s;
+}
+
+template <>
+__device__ inline void d_sample_velocity<float, float>(
+    const float* uu, const float* vv, const float* ww, float x, float y, float z, int nx, int ny,
+    int nz, float dx, float dy, float dz, float Lx, float Ly, float Lz, float& vu, float& vvel,
+    float& vw) {
+    x  = tclamp<float>(x, 0.f, Lx);
+    y  = tclamp<float>(y, 0.f, Ly);
+    z  = tclamp<float>(z, 0.f, Lz);
+    vu = d_face_value_f32(uu, 0, x / dx, y / dy + 0.5f, z / dz + 0.5f, nx, ny, nz, 0, 1, 1);
+    vvel = d_face_value_f32(vv, 1, x / dx + 0.5f, y / dy, z / dz + 0.5f, nx, ny, nz, 1, 0, 1);
+    vw   = d_face_value_f32(ww, 2, x / dx + 0.5f, y / dy + 0.5f, z / dz, nx, ny, nz, 1, 1, 0);
+}
+
+// One MAC face's separable value+gradient interpolation. Outputs Σ wx·wy·wz·val
+// and the three analytic spline derivatives (still /dx-/dy-/dz scaled by caller).
+// Partials: over di accumulate (A=Σwx·v, B=Σdwx·v); over dj accumulate
+// (P=Σwy·A, Q=Σdwy·A, Rb=Σwy·B); over dk: v=Σwz·P, dx=Σwz·Rb, dy=Σwz·Q, dz=Σdwz·P.
+__device__ inline void d_face_grad_f32(const float* __restrict fld, int axis, float cx, float cy,
+                                       float cz, int nx, int ny, int nz, int ilo, int jlo, int klo,
+                                       float& vout, float& gx, float& gy, float& gz) {
+    int ic = t_round_idx<float>(cx), jc = t_round_idx<float>(cy), kc = t_round_idx<float>(cz);
+    float wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
+    t_bspline<float>(cx - ic, wx);   t_bspline_d<float>(cx - ic, dwx);
+    t_bspline<float>(cy - jc, wy);   t_bspline_d<float>(cy - jc, dwy);
+    t_bspline<float>(cz - kc, wz);   t_bspline_d<float>(cz - kc, dwz);
+    int ii0 = iclamp(ic - 1, ilo, nx), ii1 = iclamp(ic, ilo, nx), ii2 = iclamp(ic + 1, ilo, nx);
+    float v = 0.f, dx = 0.f, dy = 0.f, dz = 0.f;
+    for (int dk = -1; dk <= 1; dk++) {
+        int kk = iclamp(kc + dk, klo, nz);
+        float P = 0.f, Q = 0.f, Rb = 0.f; // dj-accumulated partials
+        for (int dj = -1; dj <= 1; dj++) {
+            int jj = iclamp(jc + dj, jlo, ny);
+            float v0, v1, v2;
+            if (axis == 0) {
+                v0 = __ldg(&fld[lfm_iu(ii0, jj, kk, nx, ny)]);
+                v1 = __ldg(&fld[lfm_iu(ii1, jj, kk, nx, ny)]);
+                v2 = __ldg(&fld[lfm_iu(ii2, jj, kk, nx, ny)]);
+            } else if (axis == 1) {
+                v0 = __ldg(&fld[lfm_iv(ii0, jj, kk, nx, ny)]);
+                v1 = __ldg(&fld[lfm_iv(ii1, jj, kk, nx, ny)]);
+                v2 = __ldg(&fld[lfm_iv(ii2, jj, kk, nx, ny)]);
+            } else {
+                v0 = __ldg(&fld[lfm_iw(ii0, jj, kk, nx, ny)]);
+                v1 = __ldg(&fld[lfm_iw(ii1, jj, kk, nx, ny)]);
+                v2 = __ldg(&fld[lfm_iw(ii2, jj, kk, nx, ny)]);
+            }
+            float A = wx[0] * v0 + wx[1] * v1 + wx[2] * v2;   // Σ_di wx·v
+            float B = dwx[0] * v0 + dwx[1] * v1 + dwx[2] * v2; // Σ_di dwx·v
+            float wyj = wy[dj + 1], dwyj = dwy[dj + 1];
+            P  += wyj * A;
+            Q  += dwyj * A;
+            Rb += wyj * B;
+        }
+        float wzk = wz[dk + 1], dwzk = dwz[dk + 1];
+        v  += wzk * P;
+        dx += wzk * Rb;
+        dy += wzk * Q;
+        dz += dwzk * P;
+    }
+    vout = v; gx = dx; gy = dy; gz = dz;
+}
+
+template <>
+__device__ inline void d_sample_velocity_grad<float, float>(
+    const float* uu, const float* vv, const float* ww, float x, float y, float z, int nx, int ny,
+    int nz, float dx, float dy, float dz, float Lx, float Ly, float Lz, float& vu, float& vvel,
+    float& vw, float g[9]) {
+    x = tclamp<float>(x, 0.f, Lx);
+    y = tclamp<float>(y, 0.f, Ly);
+    z = tclamp<float>(z, 0.f, Lz);
+    float gx, gy, gz;
+    d_face_grad_f32(uu, 0, x / dx, y / dy + 0.5f, z / dz + 0.5f, nx, ny, nz, 0, 1, 1, vu, gx, gy, gz);
+    g[0] = gx / dx; g[1] = gy / dy; g[2] = gz / dz;
+    d_face_grad_f32(vv, 1, x / dx + 0.5f, y / dy, z / dz + 0.5f, nx, ny, nz, 1, 0, 1, vvel, gx, gy, gz);
+    g[3] = gx / dx; g[4] = gy / dy; g[5] = gz / dz;
+    d_face_grad_f32(ww, 2, x / dx + 0.5f, y / dy + 0.5f, z / dz, nx, ny, nz, 1, 1, 0, vw, gx, gy, gz);
+    g[6] = gx / dx; g[7] = gy / dy; g[8] = gz / dz;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // EXPERIMENT — FP16 (packed half2) samplers. Velocity scratch is pre-staged to
 // __half; coordinates / index math stay FP32 (geometry needs the range). The
 // inner 27-point B-spline runs in *genuine* packed half2:
