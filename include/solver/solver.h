@@ -26,8 +26,7 @@ public:
      * @param max_iter Maximum iterations (or sweeps for Jacobi/RBGS).
      * @param tol      Convergence tolerance (for CG/PCG).
      */
-    virtual void solve(Grid& g, const std::vector<double>& rhs,
-                       int max_iter, double tol) = 0;
+    virtual void solve(Grid& g, const std::vector<double>& rhs, int max_iter, double tol) = 0;
 
     /** @brief Human-readable solver name. */
     virtual std::string name() const = 0;

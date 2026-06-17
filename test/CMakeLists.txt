@@ -22,6 +22,18 @@ target_link_libraries(test_lfm PRIVATE lfm_lib)
 add_executable(test_integration integration/test_integration.cpp)
 target_link_libraries(test_integration PRIVATE lfm_lib)
 
+add_executable(test_bc_solid integration/test_bc_solid.cpp)
+target_link_libraries(test_bc_solid PRIVATE lfm_lib)
+
+# ── Bulk CPU unit tests (added 2026-06-17) — all link lfm_lib only ──
+foreach(_ut
+        test_bc_patches_2d test_grid_ops_2d test_grid_3d test_scalar_field_3d
+        test_bc_patches_3d test_config_cli test_scenarios_2d test_scenarios_3d
+        test_io_roundtrip test_numerics_interp test_flow_map)
+    add_executable(${_ut} integration/${_ut}.cpp)
+    target_link_libraries(${_ut} PRIVATE lfm_lib)
+endforeach()
+
 add_executable(test_karman_bench integration/test_karman_bench.cpp)
 target_link_libraries(test_karman_bench PRIVATE lfm_lib)
 
@@ -31,6 +43,9 @@ target_link_libraries(test_uaamg PRIVATE lfm_lib)
 # ── 3D integration tests ──
 add_executable(test_uaamg_3d integration/test_uaamg_3d.cpp)
 target_link_libraries(test_uaamg_3d PRIVATE lfm_lib)
+
+add_executable(test_lfm_3d integration/test_lfm_3d.cpp)
+target_link_libraries(test_lfm_3d PRIVATE lfm_lib)
 
 add_executable(test_karman_bench_3d integration/test_karman_bench_3d.cpp)
 target_link_libraries(test_karman_bench_3d PRIVATE lfm_lib)
@@ -60,14 +75,17 @@ add_executable(run_karman_chorin ../tools/run_karman_chorin.cpp)
 target_link_libraries(run_karman_chorin PRIVATE lfm_lib)
 
 # ── 3D paper scenarios ────────────────────────────────────────────
+# Note: vortex reconnection (Fig. 5) and trefoil knot (Fig. 7) are now scenarios
+# of the unified `cfdsim` launcher (scenario=vortex_reconnection / trefoil_knot).
 add_executable(run_vortex_ring_collision   ../tools/run_vortex_ring_collision.cpp)
-add_executable(run_vortex_ring_connection  ../tools/run_vortex_ring_connection.cpp)
-add_executable(run_trefoil_knot            ../tools/run_trefoil_knot.cpp)
 add_executable(run_delta_wing              ../tools/run_delta_wing.cpp)
 add_executable(run_fire_ball               ../tools/run_fire_ball.cpp)
 add_executable(run_wind_turbine            ../tools/run_wind_turbine.cpp)
-foreach(_t run_vortex_ring_collision run_vortex_ring_connection
-           run_trefoil_knot run_delta_wing run_fire_ball run_wind_turbine)
+add_executable(test_bfecc_clamp            integration/test_bfecc_clamp.cpp)
+add_executable(run_delta_wing_lfm          ../tools/run_delta_wing_lfm.cpp)
+add_executable(dump_collision_ic           ../tools/dump_collision_ic.cpp)
+foreach(_t run_vortex_ring_collision run_delta_wing run_fire_ball run_wind_turbine
+           test_bfecc_clamp run_delta_wing_lfm dump_collision_ic)
     target_link_libraries(${_t} PRIVATE lfm_lib)
 endforeach()
 

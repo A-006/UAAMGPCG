@@ -6,7 +6,7 @@
  */
 #pragma once
 #include "solver/solver_3d.h"
-#include "solver/preconditioner/preconditioner_3d.h"
+#include "solver/preconditioner/3d/preconditioner_3d.h"
 #include <memory>
 
 /**
@@ -31,12 +31,11 @@ public:
      * @param max_iter Maximum PCG iterations.
      * @param tol      Convergence tolerance on residual L2-norm.
      */
-    void solve(Grid3D& g, const std::vector<double>& rhs,
-               int max_iter, double tol) override;
+    void solve(Grid3D& g, const std::vector<double>& rhs, int max_iter, double tol) override;
 
     /** @brief Returns "PCG3D(<preconditioner>)". */
     std::string name() const override;
 
 private:
-    std::unique_ptr<Preconditioner3D> precond_;  ///< Preconditioner instance.
+    std::unique_ptr<Preconditioner3D> precond_; ///< Preconditioner instance.
 };

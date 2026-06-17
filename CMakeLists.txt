@@ -31,6 +31,9 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
     message(STATUS "CUDA enabled — building GPU solver")
     add_subdirectory(src/solver/cuda)
 
+    # GPU unit / benchmark tests (moved out of src/solver/cuda)
+    add_subdirectory(test/cuda)
+
     # GPU Karman benchmark (2D)
     add_executable(test_karman_bench_gpu test/integration/test_karman_bench_gpu.cu)
     set_target_properties(test_karman_bench_gpu PROPERTIES
@@ -64,6 +67,31 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
     target_link_libraries(run_karman_long_gpu PRIVATE lfm_lib cuda_uaamg_lib cuda_cg_lib)
     target_include_directories(run_karman_long_gpu PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
+    # ── Unified INPUT-file-driven launcher for ALL GPU 3D LFM scenes ──
+    # One binary replaces the former per-scene runners (run_vortex_ring_*,
+    # run_*_collision_*, run_delta_wing_*, run_collision_paper, plus the CPU
+    # reconnection/trefoil demos): the scenario + every parameter come from an
+    # INI file (see inputs/*.in). Scenarios: vortex_ring | vortex_collision |
+    # collision_paper | delta_wing | vortex_reconnection | trefoil_knot.
+    #   ./build/cfdsim inputs/vortex_collision.in
+    # collision_paper's author cross-check (raw IC load, velocity dump) lives on
+    # as the ic_dir= / dump_vel= knobs.
+    # CUDA build: compile the .cpp as CUDA (nvcc) so it can drive the GPU-resident
+    # simulator. HAVE_CUDA enables the GPU backend; runs on GPU by default
+    # (backend=auto), with a CPU fallback when no device is present.
+    # cfdsim.cpp is just main(); make_simulator_3d.cpp builds the GPU/CPU
+    # simulator, so it needs nvcc too. Both compile as CUDA in this build.
+    add_executable(cfdsim src/cfdsim.cpp src/simulator/make_simulator_3d.cpp)
+    set_source_files_properties(src/cfdsim.cpp src/simulator/make_simulator_3d.cpp
+        PROPERTIES LANGUAGE CUDA)
+    set_target_properties(cfdsim PROPERTIES
+        LINKER_LANGUAGE CUDA
+        CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
+    )
+    target_compile_definitions(cfdsim PRIVATE HAVE_CUDA)
+    target_link_libraries(cfdsim PRIVATE cuda_lfm_3d_lib cuda_uaamg_3d_lib cuda_cg_3d_lib lfm_lib)
+    target_include_directories(cfdsim PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
     # GPU Karman validate (Cd/Cl/St)
     add_executable(test_karman_validate_gpu test/integration/test_karman_validate_gpu.cu)
     set_target_properties(test_karman_validate_gpu PROPERTIES
@@ -76,6 +104,13 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
         ${CMAKE_SOURCE_DIR}/test
     )
 else()
-    message(STATUS "CUDA not enabled — skipping GPU solver")
-    message(STATUS "  To build with CUDA: CUDACXX=/usr/local/cuda/bin/nvcc cmake ..")
+    message(STATUS "CUDA not enabled — building cfdsim as a CPU-only binary")
+    message(STATUS "  To build with GPU support: CUDACXX=/usr/local/cuda/bin/nvcc cmake ..")
+
+    # CPU-only cfdsim: the SAME sources, compiled by the C++ compiler (no nvcc).
+    # Without HAVE_CUDA make_simulator_3d.cpp pulls in no CUDA headers, so
+    # backend=auto/gpu both resolve to the host LFMSimulator3D. GPU optional.
+    add_executable(cfdsim src/cfdsim.cpp src/simulator/make_simulator_3d.cpp)
+    target_link_libraries(cfdsim PRIVATE lfm_lib)
+    target_include_directories(cfdsim PRIVATE ${CMAKE_SOURCE_DIR}/include)
 endif()

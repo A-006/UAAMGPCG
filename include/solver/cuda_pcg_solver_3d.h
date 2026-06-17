@@ -16,11 +16,12 @@ public:
     explicit CudaPCGSolver3D(bool use_precond = true);
     ~CudaPCGSolver3D() override;
 
-    void solve(Grid3D& g, const std::vector<double>& rhs,
-               int max_iter, double tol) override;
+    void solve(Grid3D& g, const std::vector<double>& rhs, int max_iter, double tol) override;
     std::string name() const override;
 
-    CudaUAAMGPreconditioner3D& precond() { return pcg_->precond(); }
+    CudaUAAMGPreconditioner3D& precond() {
+        return pcg_->precond();
+    }
 
 private:
     bool use_precond_;
@@ -28,5 +29,5 @@ private:
     double *d_p_ = nullptr, *d_rhs_ = nullptr;
     int N_ = 0;
     std::unique_ptr<CudaPCG3D> pcg_;
-    std::unique_ptr<CudaCG3D>  cg_;
+    std::unique_ptr<CudaCG3D> cg_;
 };

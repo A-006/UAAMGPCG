@@ -1,0 +1,41 @@
+# Style for UAAMGPCG — wide, readable, one-statement-per-line.
+# Mirrors the hand-formatted ChorinSimulator::run(): 4-space indent,
+# attached braces, spaces around operators, aligned consecutive assignments,
+# no cramped single-line loops/ifs.
+---
+Language:        Cpp
+BasedOnStyle:    LLVM
+
+IndentWidth:     4
+TabWidth:        4
+UseTab:          Never
+ColumnLimit:     100
+ContinuationIndentWidth: 4
+AccessModifierOffset: -4
+
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+
+# Alignment — gives the aligned `=` / declaration columns from the demo.
+AlignConsecutiveAssignments: Consecutive
+AlignAfterOpenBracket: Align
+AlignOperands:   Align
+AlignTrailingComments: true
+
+# Expand the cramped one-liners (for(...){a;b;}  /  if(x)y;) onto real lines.
+AllowShortBlocksOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+
+# Braces attached, K&R-ish — matches `for (...) {` in the demo.
+BreakBeforeBraces: Attach
+SpaceBeforeParens: ControlStatements
+Cpp11BracedListStyle: true
+FixNamespaceComments: true
+MaxEmptyLinesToKeep: 2
+
+# Don't reorder includes — this codebase relies on include order in places.
+SortIncludes:    false

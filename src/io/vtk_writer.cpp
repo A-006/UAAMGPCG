@@ -10,7 +10,10 @@ void VtkWriter::write(const Grid& g, int frame, const Config& cfg) {
     std::ostringstream ss;
     ss << cfg.out_dir << "/frame_" << std::setw(5) << std::setfill('0') << frame << ".vtk";
     std::ofstream f(ss.str());
-    if (!f) { std::cerr << "Cannot write " << ss.str() << "\n"; return; }
+    if (!f) {
+        std::cerr << "Cannot write " << ss.str() << "\n";
+        return;
+    }
 
     f << std::scientific << std::setprecision(6);
 
@@ -18,11 +21,11 @@ void VtkWriter::write(const Grid& g, int frame, const Config& cfg) {
     f << "LFM 2D Fluid - Frame " << frame << "\n";
     f << "ASCII\n";
     f << "DATASET STRUCTURED_POINTS\n";
-    f << "DIMENSIONS " << (g.nx+1) << " " << (g.ny+1) << " 1\n";
+    f << "DIMENSIONS " << (g.nx + 1) << " " << (g.ny + 1) << " 1\n";
     f << "ORIGIN 0 0 0\n";
     f << "SPACING " << g.dx << " " << g.dy << " 1\n";
 
-    int np = (g.nx+1) * (g.ny+1);
+    int np = (g.nx + 1) * (g.ny + 1);
     f << "POINT_DATA " << np << "\n";
 
     // Velocity (interpolated at nodes)
@@ -32,13 +35,24 @@ void VtkWriter::write(const Grid& g, int frame, const Config& cfg) {
             double u_sum = 0.0, v_sum = 0.0;
             int nu = 0, nv = 0;
 
-            if (i > 0 && j > 0 && j <= g.ny) { u_sum += g.u_at(i-1, j); nu++; }
-            if (i < g.nx && j > 0 && j <= g.ny) { u_sum += g.u_at(i, j); nu++; }
-            if (j > 0 && i > 0 && i <= g.nx) { v_sum += g.v_at(i, j-1); nv++; }
-            if (j < g.ny && i > 0 && i <= g.nx) { v_sum += g.v_at(i, j); nv++; }
+            if (i > 0 && j > 0 && j <= g.ny) {
+                u_sum += g.u_at(i - 1, j);
+                nu++;
+            }
+            if (i < g.nx && j > 0 && j <= g.ny) {
+                u_sum += g.u_at(i, j);
+                nu++;
+            }
+            if (j > 0 && i > 0 && i <= g.nx) {
+                v_sum += g.v_at(i, j - 1);
+                nv++;
+            }
+            if (j < g.ny && i > 0 && i <= g.nx) {
+                v_sum += g.v_at(i, j);
+                nv++;
+            }
 
-            f << ((nu>0) ? u_sum/nu : 0.0) << " "
-              << ((nv>0) ? v_sum/nv : 0.0) << " 0\n";
+            f << ((nu > 0) ? u_sum / nu : 0.0) << " " << ((nv > 0) ? v_sum / nv : 0.0) << " 0\n";
         }
     }
 
@@ -49,9 +63,9 @@ void VtkWriter::write(const Grid& g, int frame, const Config& cfg) {
         for (int i = 0; i <= g.nx; i++) {
             double dvdx = 0.0, dudy = 0.0;
             if (i > 0 && i < g.nx && j > 0 && j <= g.ny)
-                dvdx = (g.v_at(i+1,j) - g.v_at(i,j)) / g.dx;
+                dvdx = (g.v_at(i + 1, j) - g.v_at(i, j)) / g.dx;
             if (i > 0 && i <= g.nx && j > 0 && j < g.ny)
-                dudy = (g.u_at(i,j+1) - g.u_at(i,j)) / g.dy;
+                dudy = (g.u_at(i, j + 1) - g.u_at(i, j)) / g.dy;
             f << (dvdx - dudy) << "\n";
         }
     }
@@ -74,7 +88,7 @@ void VtkWriter::write(const Grid& g, int frame, const Config& cfg) {
         for (int i = 0; i <= g.nx; i++) {
             int ci = Grid::clamp(i, 1, g.nx);
             int cj = Grid::clamp(j, 1, g.ny);
-            f << (g.is_solid(ci,cj) ? 1.0 : 0.0) << "\n";
+            f << (g.is_solid(ci, cj) ? 1.0 : 0.0) << "\n";
         }
     }
 
@@ -85,16 +99,16 @@ void VtkWriter::printStatus(int step, double t, const Grid& g) {
     double max_u = 0.0, max_div = 0.0;
     for (int i = 1; i <= g.nx; i++) {
         for (int j = 1; j <= g.ny; j++) {
-            if (g.is_solid(i,j)) continue;
-            double uc = 0.5 * (g.u_at(i-1,j) + g.u_at(i,j));
-            double vc = 0.5 * (g.v_at(i,j-1) + g.v_at(i,j));
-            max_u = std::max(max_u, std::sqrt(uc*uc + vc*vc));
-            max_div = std::max(max_div, std::abs(g.divergence(i,j)));
+            if (g.is_solid(i, j))
+                continue;
+            double uc = 0.5 * (g.u_at(i - 1, j) + g.u_at(i, j));
+            double vc = 0.5 * (g.v_at(i, j - 1) + g.v_at(i, j));
+            max_u     = std::max(max_u, std::sqrt(uc * uc + vc * vc));
+            max_div   = std::max(max_div, std::abs(g.divergence(i, j)));
         }
     }
-    std::cout << "  step=" << std::setw(6) << step
-              << "  t=" << std::fixed << std::setprecision(4) << t
-              << "  max|u|=" << std::setprecision(3) << max_u
-              << "  max|div|=" << std::scientific << std::setprecision(3) << max_div
-              << std::fixed << "\n";
+    std::cout << "  step=" << std::setw(6) << step << "  t=" << std::fixed << std::setprecision(4)
+              << t << "  max|u|=" << std::setprecision(3) << max_u
+              << "  max|div|=" << std::scientific << std::setprecision(3) << max_div << std::fixed
+              << "\n";
 }

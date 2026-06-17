@@ -1,8 +1,6 @@
 #include "solver/cuda_pcg_solver_3d.h"
 
-CudaPCGSolver3D::CudaPCGSolver3D(bool use_precond)
-    : use_precond_(use_precond)
-{
+CudaPCGSolver3D::CudaPCGSolver3D(bool use_precond) : use_precond_(use_precond) {
     if (use_precond_)
         pcg_ = std::make_unique<CudaPCG3D>();
     else
@@ -10,31 +8,32 @@ CudaPCGSolver3D::CudaPCGSolver3D(bool use_precond)
 }
 
 CudaPCGSolver3D::~CudaPCGSolver3D() {
-    if (d_p_)   cudaFree(d_p_);
-    if (d_rhs_) cudaFree(d_rhs_);
+    if (d_p_)
+        cudaFree(d_p_);
+    if (d_rhs_)
+        cudaFree(d_rhs_);
 }
 
 std::string CudaPCGSolver3D::name() const {
     return use_precond_ ? "PCG(CUDA-UAAMG-3D)" : "CG(CUDA-3D)";
 }
 
-void CudaPCGSolver3D::solve(Grid3D& g, const std::vector<double>& rhs,
-                             int max_iter, double tol) {
-    int N = (int)rhs.size();
+void CudaPCGSolver3D::solve(Grid3D& g, const std::vector<double>& rhs, int max_iter, double tol) {
+    int N  = (int)rhs.size();
     int nx = g.nx, ny = g.ny, nz = g.nz;
 
     // Allocate / reallocate GPU buffers if size or dimensions changed
     bool realloc = (!gpu_grid_ || N_ != N);
-    bool resize  = (gpu_grid_ &&
-        (gpu_grid_->nx != nx || gpu_grid_->ny != ny || gpu_grid_->nz != nz));
+    bool resize =
+        (gpu_grid_ && (gpu_grid_->nx != nx || gpu_grid_->ny != ny || gpu_grid_->nz != nz));
     if (realloc) {
         if (d_p_)   cudaFree(d_p_);
         if (d_rhs_) cudaFree(d_rhs_);
         gpu_grid_ = std::make_unique<CudaGrid3D>();
         gpu_grid_->allocate(nx, ny, nz, g.dx, g.dy, g.dz);
-        cudaMalloc(&d_p_,   N * sizeof(double));
+        cudaMalloc(&d_p_, N * sizeof(double));
         cudaMalloc(&d_rhs_, N * sizeof(double));
-        N_ = N;
+        N_     = N;
         resize = false; // already fresh
     }
     if (resize) {
@@ -45,7 +44,8 @@ void CudaPCGSolver3D::solve(Grid3D& g, const std::vector<double>& rhs,
     // Copy solid mask: CPU vector<bool> is bit-packed → expand to char array
     if (realloc || resize) {
         std::vector<char> solid_tmp(N);
-        for (int k = 0; k < N; k++) solid_tmp[k] = g.solid[k];
+        for (int k = 0; k < N; k++)
+            solid_tmp[k] = g.solid[k];
         cudaMemcpy(gpu_grid_->solid, solid_tmp.data(), N, cudaMemcpyHostToDevice);
     }
 

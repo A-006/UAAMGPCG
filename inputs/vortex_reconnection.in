@@ -1,0 +1,28 @@
+# ── Vortex-ring reconnection (LFM paper Fig. 5) ────────────────────────────
+# Two same-sign rings, offset and tilted so their near sides approach, deform,
+# and reconnect into a merged topology. Reconnection is viscosity-driven (Re>0).
+# Run: ./build/cfdsim inputs/vortex_reconnection.in
+#  or: ./pipeline.sh inputs/vortex_reconnection.in
+
+scenario   = vortex_reconnection
+
+backend    = auto       # auto: 有GPU就用GPU，没有自动保底CPU。也可写死 gpu / cpu
+
+NX         = 64
+NY         = 64
+NZ         = 64
+cycles     = 200
+dt         = 0.004
+Re         = 2000         # viscous — drives the core annihilation / reconnection
+
+circulation = 0.6
+tilt_deg    = 25          # ring tilt so near sides approach
+
+frame_skip = 4
+vtk_mode   = full         # small grid → velocity-coloured 3D
+out_dir    = output_vortex_reconnection
+
+# ── post-processing (pipeline.sh / render/render.py) ──
+render_mode  = iso3d
+render_level = 0.15
+render_orbit = 120

@@ -1,5 +1,5 @@
 #include "io/vtk_writer_3d.h"
-#include "ops/operators_3d.h"
+#include "numerics/ops/operators_3d.h"
 #include <fstream>
 #include <sstream>
 #include <iomanip>
@@ -11,7 +11,10 @@ void VtkWriter3D::write(const Grid3D& g, int frame, const Config& cfg) {
     std::ostringstream ss;
     ss << cfg.out_dir << "/frame_" << std::setw(5) << std::setfill('0') << frame << ".vtk";
     std::ofstream f(ss.str());
-    if (!f) { std::cerr << "Cannot write " << ss.str() << "\n"; return; }
+    if (!f) {
+        std::cerr << "Cannot write " << ss.str() << "\n";
+        return;
+    }
 
     f << std::scientific << std::setprecision(6);
     f << "# vtk DataFile Version 2.0\n";
@@ -32,20 +35,31 @@ void VtkWriter3D::write(const Grid3D& g, int frame, const Config& cfg) {
             for (int i = 0; i <= g.nx; i++) {
                 double u_sum = 0.0, v_sum = 0.0, w_sum = 0.0;
                 int nu = 0, nv = 0, nw = 0;
-                if (i > 0 && j > 0 && j <= g.ny && k > 0 && k <= g.nz)
-                    { u_sum += g.u_at(i - 1, j, k); nu++; }
-                if (i < g.nx && j > 0 && j <= g.ny && k > 0 && k <= g.nz)
-                    { u_sum += g.u_at(i, j, k); nu++; }
-                if (j > 0 && i > 0 && i <= g.nx && k > 0 && k <= g.nz)
-                    { v_sum += g.v_at(i, j - 1, k); nv++; }
-                if (j < g.ny && i > 0 && i <= g.nx && k > 0 && k <= g.nz)
-                    { v_sum += g.v_at(i, j, k); nv++; }
-                if (k > 0 && i > 0 && i <= g.nx && j > 0 && j <= g.ny)
-                    { w_sum += g.w_at(i, j, k - 1); nw++; }
-                if (k < g.nz && i > 0 && i <= g.nx && j > 0 && j <= g.ny)
-                    { w_sum += g.w_at(i, j, k); nw++; }
-                f << ((nu > 0) ? u_sum / nu : 0.0) << " "
-                  << ((nv > 0) ? v_sum / nv : 0.0) << " "
+                if (i > 0 && j > 0 && j <= g.ny && k > 0 && k <= g.nz) {
+                    u_sum += g.u_at(i - 1, j, k);
+                    nu++;
+                }
+                if (i < g.nx && j > 0 && j <= g.ny && k > 0 && k <= g.nz) {
+                    u_sum += g.u_at(i, j, k);
+                    nu++;
+                }
+                if (j > 0 && i > 0 && i <= g.nx && k > 0 && k <= g.nz) {
+                    v_sum += g.v_at(i, j - 1, k);
+                    nv++;
+                }
+                if (j < g.ny && i > 0 && i <= g.nx && k > 0 && k <= g.nz) {
+                    v_sum += g.v_at(i, j, k);
+                    nv++;
+                }
+                if (k > 0 && i > 0 && i <= g.nx && j > 0 && j <= g.ny) {
+                    w_sum += g.w_at(i, j, k - 1);
+                    nw++;
+                }
+                if (k < g.nz && i > 0 && i <= g.nx && j > 0 && j <= g.ny) {
+                    w_sum += g.w_at(i, j, k);
+                    nw++;
+                }
+                f << ((nu > 0) ? u_sum / nu : 0.0) << " " << ((nv > 0) ? v_sum / nv : 0.0) << " "
                   << ((nw > 0) ? w_sum / nw : 0.0) << "\n";
             }
         }
@@ -96,20 +110,20 @@ void VtkWriter3D::printStatus(int step, double t, const Grid3D& g) {
     for (int k = 1; k <= g.nz; k++) {
         for (int j = 1; j <= g.ny; j++) {
             for (int i = 1; i <= g.nx; i++) {
-                if (g.is_solid(i, j, k)) continue;
+                if (g.is_solid(i, j, k))
+                    continue;
                 double uc = 0.5 * (g.u_at(i - 1, j, k) + g.u_at(i, j, k));
                 double vc = 0.5 * (g.v_at(i, j - 1, k) + g.v_at(i, j, k));
                 double wc = 0.5 * (g.w_at(i, j, k - 1) + g.w_at(i, j, k));
-                max_u = std::max(max_u, std::sqrt(uc * uc + vc * vc + wc * wc));
-                max_div = std::max(max_div, std::abs(g.divergence(i, j, k)));
+                max_u     = std::max(max_u, std::sqrt(uc * uc + vc * vc + wc * wc));
+                max_div   = std::max(max_div, std::abs(g.divergence(i, j, k)));
                 max_omega = std::max(max_omega, fvc::vorticity_magnitude(g, i, j, k));
             }
         }
     }
-    std::cout << "  step=" << std::setw(6) << step
-              << "  t=" << std::fixed << std::setprecision(4) << t
-              << "  |u|max=" << std::setprecision(3) << max_u
+    std::cout << "  step=" << std::setw(6) << step << "  t=" << std::fixed << std::setprecision(4)
+              << t << "  |u|max=" << std::setprecision(3) << max_u
               << "  |ω|max=" << std::setprecision(3) << max_omega
-              << "  |div|max=" << std::scientific << std::setprecision(2) << max_div
-              << std::fixed << "\n";
+              << "  |div|max=" << std::scientific << std::setprecision(2) << max_div << std::fixed
+              << "\n";
 }

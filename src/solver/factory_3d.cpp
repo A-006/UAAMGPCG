@@ -8,22 +8,38 @@
 #include "solver/jacobi_3d.h"
 #include "solver/rbgs_3d.h"
 #include "solver/pcg_3d.h"
-#include "solver/preconditioner/identity_preconditioner_3d.h"
-// 3D preconditioners — included once implemented
-// #include "solver/preconditioner/gmg_preconditioner_3d.h"
-// #include "solver/preconditioner/amg_preconditioner_3d.h"
-// #include "solver/preconditioner/uaamg_preconditioner_3d.h"
+#include "solver/preconditioner/3d/identity_preconditioner_3d.h"
+#include "solver/preconditioner/3d/gmg_preconditioner_3d.h"
+#include "solver/preconditioner/3d/amg_preconditioner_3d.h"
+#include "solver/preconditioner/3d/uaamg_preconditioner_3d.h"
+#include "util/registry.h"
+
+namespace {
+
+util::Registry<Solver3D>& registry() {
+    static auto reg = [] {
+        util::Registry<Solver3D> r;
+        r.add("jacobi", [] { return std::make_unique<Jacobi3D>(); });
+        r.add("rbgs", [] { return std::make_unique<RBGS3D>(); });
+        r.add("cg",
+              [] { return std::make_unique<PCG3D>(std::make_unique<IdentityPreconditioner3D>()); });
+        // Preconditioned CG variants. "pcg" defaults to the paper's UAAMG.
+        r.add("pcg", [] { return std::make_unique<PCG3D>(std::make_unique<UAAMGPreconditioner3D>()); });
+        r.add("pcg_gmg",
+              [] { return std::make_unique<PCG3D>(std::make_unique<GMGPreconditioner3D>()); });
+        r.add("pcg_amg",
+              [] { return std::make_unique<PCG3D>(std::make_unique<AMGPreconditioner3D>()); });
+        r.add("pcg_uaamg",
+              [] { return std::make_unique<PCG3D>(std::make_unique<UAAMGPreconditioner3D>()); });
+        return r;
+    }();
+    return reg;
+}
+
+} // namespace
 
 std::unique_ptr<Solver3D> Factory3D::create(const std::string& name) {
-    if (name == "jacobi")    return std::make_unique<Jacobi3D>();
-    if (name == "rbgs")      return std::make_unique<RBGS3D>();
-    if (name == "cg")        return std::make_unique<PCG3D>(std::make_unique<IdentityPreconditioner3D>());
-    // if (name == "pcg")       return std::make_unique<PCG3D>(std::make_unique<GMGPreconditioner3D>());
-    // if (name == "pcg_gmg")   return std::make_unique<PCG3D>(std::make_unique<GMGPreconditioner3D>());
-    // if (name == "pcg_amg")   return std::make_unique<PCG3D>(std::make_unique<AMGPreconditioner3D>());
-    // if (name == "pcg_uaamg") return std::make_unique<PCG3D>(std::make_unique<UAAMGPreconditioner3D>());
-    // Fallback: return Jacobi3D for pcg/pcg_gmg/pcg_amg/pcg_uaamg until 3D preconditioners exist
-    if (name == "pcg" || name == "pcg_gmg" || name == "pcg_amg" || name == "pcg_uaamg")
-        return std::make_unique<Jacobi3D>();
-    return std::make_unique<Jacobi3D>();
+    auto& reg = registry();
+    // Unknown keys fall back to Jacobi3D.
+    return reg.contains(name) ? reg.create(name) : std::make_unique<Jacobi3D>();
 }
