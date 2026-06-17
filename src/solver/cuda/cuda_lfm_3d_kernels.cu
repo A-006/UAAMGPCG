@@ -488,45 +488,48 @@ __device__ inline void d_sample_velocity_h16(const __half* uu, const __half* vv,
     }
 }
 
-// One MAC-face contribution of the grad sampler in packed half2. acc0=(s,∂x_raw),
-// acc1=(∂y_raw,∂z_raw) accumulated over the 27 taps; ∂ are pre-/dx etc. Weights
-// narrowed FP32→half once per axis (the 9 entries of wx/dwx/…), values read FP16.
+// One MAC-face contribution of the grad sampler, separable form. Values are read
+// from FP16 scratch (the gather is the FP16 memory win) but the B-spline algebra
+// runs separably in FP32 — full-rate FMA on the 3090 and far fewer ops than the
+// packed-half2 27-tap version, which (post the separable FP32 rewrite) was the
+// slower path. Partials: di→(A,B); dj→(P,Q,Rb); dk→(v,∂x,∂y,∂z).
 __device__ inline void d_face_grad_h16(const __half* fld, int icoff, int jcoff, int kcoff,
                                        float cx, float cy, float cz, int nx, int ny, int nz,
                                        int ilo, int jlo, int klo, int axis,
                                        float& vout, float& gx, float& gy, float& gz) {
     int ic = t_round_idx<float>(cx), jc = t_round_idx<float>(cy), kc = t_round_idx<float>(cz);
-    float wxf[3], wyf[3], wzf[3], dwxf[3], dwyf[3], dwzf[3];
-    t_bspline<float>(cx - ic, wxf);  t_bspline_d<float>(cx - ic, dwxf);
-    t_bspline<float>(cy - jc, wyf);  t_bspline_d<float>(cy - jc, dwyf);
-    t_bspline<float>(cz - kc, wzf);  t_bspline_d<float>(cz - kc, dwzf);
-    __half2 acc0 = __float2half2_rn(0.f), acc1 = __float2half2_rn(0.f);
+    float wx[3], wy[3], wz[3], dwx[3], dwy[3], dwz[3];
+    t_bspline<float>(cx - ic, wx);   t_bspline_d<float>(cx - ic, dwx);
+    t_bspline<float>(cy - jc, wy);   t_bspline_d<float>(cy - jc, dwy);
+    t_bspline<float>(cz - kc, wz);   t_bspline_d<float>(cz - kc, dwz);
+    int ii0 = iclamp(ic - 1, ilo, nx), ii1 = iclamp(ic, ilo, nx), ii2 = iclamp(ic + 1, ilo, nx);
+    int sj = (axis == 0) ? (nx + 1) : (nx + 2);
+    int sk = (axis == 0) ? (nx + 1) * (ny + 2)
+                         : (axis == 1 ? (nx + 2) * (ny + 1) : (nx + 2) * (ny + 2));
+    float v = 0.f, dx = 0.f, dy = 0.f, dz = 0.f;
     for (int dk = -1; dk <= 1; dk++) {
-        int kk = iclamp(kc + dk, klo, nz);
-        float wz = wzf[dk + 1], dwz = dwzf[dk + 1];
+        int kb = iclamp(kc + dk, klo, nz) * sk;
+        float P = 0.f, Q = 0.f, Rb = 0.f;
         for (int dj = -1; dj <= 1; dj++) {
-            int jj = iclamp(jc + dj, jlo, ny);
-            float wy = wyf[dj + 1], dwy = dwyf[dj + 1];
-            float wyz = wy * wz, dwy_wz = dwy * wz, wy_dwz = wy * dwz;
-            for (int di = -1; di <= 1; di++) {
-                int ii = iclamp(ic + di, ilo, nx);
-                float wx = wxf[di + 1], dwx = dwxf[di + 1];
-                int idx = (axis == 0) ? lfm_iu(ii, jj, kk, nx, ny)
-                                      : (axis == 1 ? lfm_iv(ii, jj, kk, nx, ny)
-                                                   : lfm_iw(ii, jj, kk, nx, ny));
-                __half v = __ldg(&fld[idx]);
-                __half2 v2 = __half2half2(v);
-                // lane layout: acc0=(w, dwx·wyz), acc1=(wx·dwy_wz, wx·wy_dwz)
-                __half2 w0 = __floats2half2_rn(wx * wyz, dwx * wyz);
-                __half2 w1 = __floats2half2_rn(wx * dwy_wz, wx * wy_dwz);
-                acc0 = __hfma2(v2, w0, acc0);
-                acc1 = __hfma2(v2, w1, acc1);
-            }
+            int base = kb + iclamp(jc + dj, jlo, ny) * sj;
+            float v0 = __half2float(__ldg(&fld[base + ii0]));
+            float v1 = __half2float(__ldg(&fld[base + ii1]));
+            float v2 = __half2float(__ldg(&fld[base + ii2]));
+            float A = wx[0] * v0 + wx[1] * v1 + wx[2] * v2;
+            float B = dwx[0] * v0 + dwx[1] * v1 + dwx[2] * v2;
+            float wyj = wy[dj + 1], dwyj = dwy[dj + 1];
+            P  += wyj * A;
+            Q  += dwyj * A;
+            Rb += wyj * B;
         }
+        float wzk = wz[dk + 1], dwzk = dwz[dk + 1];
+        v  += wzk * P;
+        dx += wzk * Rb;
+        dy += wzk * Q;
+        dz += dwzk * P;
     }
-    float2 a0 = __half22float2(acc0), a1 = __half22float2(acc1);
-    vout = a0.x; gx = a0.y; gy = a1.x; gz = a1.y;
-    (void)icoff; (void)jcoff; (void)kcoff; (void)ilo; (void)jlo; (void)klo;
+    vout = v; gx = dx; gy = dy; gz = dz;
+    (void)icoff; (void)jcoff; (void)kcoff;
 }
 
 // Velocity + 3×3 gradient from FP16 scratch, packed half2 inner loop. Mirrors
