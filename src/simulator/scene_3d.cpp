@@ -1,5 +1,6 @@
 #include "simulator/scene_3d.h"
 #include "config/cli.h"
+#include "io/vtk_slim_3d.h"
 #include "simulator/scenarios/3d/delta_wing.h"
 #include "simulator/scenarios/3d/trefoil_knot.h"
 #include "simulator/scenarios/3d/vortex_ring.h"
@@ -15,7 +16,7 @@ namespace scene3d {
 // The 3D scenarios this launcher provisions itself. Anything else (karman,
 // smoke, …) is a 2D scenario handled by the shared 2D pipeline.
 static const std::set<std::string> kScenarios = {
-    "vortex_ring",  "vortex_collision",    "collision_paper",
+    "vortex_ring",  "vortex_collision",    "collision_paper", "leapfrog_rings",
     "delta_wing",   "vortex_reconnection", "trefoil_knot"};
 
 bool is_3d_scenario(const std::string& name) {
@@ -86,6 +87,29 @@ static void apply_presets(Config& cfg) {
         cfg.out_dir         = "output_collision_paper";
         cfg.extra["cycles"]   = "250";
         cfg.extra["vtk_mode"] = "slim";
+    } else if (s == "leapfrog_rings") {
+        // Two coaxial same-sign rings that leapfrog along +x (paper Fig. 14).
+        // Domain 2x1x1 (long axis = propagation axis), dx=dy=dz=1/128.
+        // Paper recipe: 256x128x128, n=10 steps/cycle, inviscid + BFECC clamp.
+        cfg.NX = 256;
+        cfg.NY = 128;
+        cfg.NZ = 128;
+        cfg.Lx = 2.0;
+        cfg.Ly = 1.0;
+        cfg.Lz = 1.0;
+        cfg.U_inf           = 1.0;
+        cfg.Re              = 0;    // inviscid — stability from BFECC clamp
+        cfg.lfm_bfecc_clamp = true;
+        cfg.cyl_R           = 0.1;
+        cfg.dt              = 1e-3;
+        cfg.solve_iters     = 15; // paper: CG fixed at 15 iterations
+        cfg.solve_tol       = 0.0;
+        cfg.lfm_cycle_steps = 10; // paper: n = 10 steps per reinitialization cycle
+        cfg.frame_skip      = 4;
+        cfg.out_dir         = "output_leapfrog_rings";
+        cfg.extra["cycles"]      = "300";
+        cfg.extra["circulation"] = "1.0";
+        cfg.extra["vtk_mode"]    = "slim";
     } else if (s == "delta_wing") {
         cfg.NX = 256; // domain 2x1x1 (paper aspect), dx=dy=dz=1/128
         cfg.NY = 128;
@@ -146,7 +170,7 @@ static void apply_presets(Config& cfg) {
     } else {
         throw std::runtime_error(
             "cfdsim: unknown scenario '" + s +
-            "'; known: vortex_ring | vortex_collision | collision_paper | delta_wing | "
+            "'; known: vortex_ring | vortex_collision | collision_paper | leapfrog_rings | delta_wing | "
             "vortex_reconnection | trefoil_knot");
     }
 }
@@ -277,6 +301,22 @@ void setup(Grid3D& g, const Config& cfg) {
         right.circulation           = -1.0;
         scenarios::add_vortex_ring(g, left);
         scenarios::add_vortex_ring(g, right);
+    } else if (s == "leapfrog_rings") {
+        // Two coaxial, same-sign rings offset along x. The trailing ring is
+        // induced to contract and slip through the leading one, then they swap
+        // roles — the classic leapfrog (paper Fig. 14).
+        double circ = cfg.dget("circulation", 1.0);
+        scenarios::VortexRing lead;
+        lead.center      = {0.45 * cfg.Lx, 0.5 * cfg.Ly, 0.5 * cfg.Lz};
+        lead.axis        = {1.0, 0.0, 0.0};
+        lead.radius      = 0.18 * cfg.Ly;
+        lead.core        = 0.04 * cfg.Ly;
+        lead.circulation = +circ;
+        lead.n_segments  = 240;
+        scenarios::VortexRing trail = lead;
+        trail.center                = {0.30 * cfg.Lx, 0.5 * cfg.Ly, 0.5 * cfg.Lz};
+        scenarios::add_vortex_ring(g, lead);
+        scenarios::add_vortex_ring(g, trail);
     } else if (s == "delta_wing") {
         std::string sdf = cfg.sget("sdf_path", "");
         if (!sdf.empty()) {
@@ -310,6 +350,15 @@ void setup(Grid3D& g, const Config& cfg) {
         tk.circulation = cfg.dget("circulation", 0.5);
         tk.n_segments  = 360;
         scenarios::add_trefoil_knot(g, tk);
+    }
+
+    // Author cross-check export: dump the EXACT analytic IC our solver will run
+    // (MAC faces) so the reference runner can load the identical field. Wrap the
+    // ic{x,y,z}.raw into init_u_{x,y,z}.npy for any scenario, not just collision.
+    std::string dump_ic = cfg.sget("dump_ic_dir", "");
+    if (!dump_ic.empty()) {
+        io3d::write_face_ic(g, dump_ic);
+        std::printf("  dumped analytic face IC to %s/ic{x,y,z}.raw\n", dump_ic.c_str());
     }
 }
 

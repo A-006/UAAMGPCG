@@ -49,4 +49,41 @@ void write_vel_raw(const Grid3D& g, int frame, const std::string& dir) {
     wr("vz", uz);
 }
 
+void write_face_ic(const Grid3D& g, const std::string& dir) {
+    const int nx = g.nx, ny = g.ny, nz = g.nz;
+    char p[512];
+    auto wr = [&](const char* nm, const std::vector<float>& b) {
+        std::snprintf(p, sizeof(p), "%s/%s.raw", dir.c_str(), nm);
+        std::ofstream f(p, std::ios::binary);
+        f.write((const char*)b.data(), b.size() * sizeof(float));
+    };
+    {   // x-faces: (nx+1, ny, nz), a[ix,iy,iz] = u_at(ix, iy+1, iz+1)
+        std::vector<float> b((long)(nx + 1) * ny * nz);
+        long c = 0;
+        for (int ix = 0; ix <= nx; ix++)
+            for (int iy = 0; iy < ny; iy++)
+                for (int iz = 0; iz < nz; iz++)
+                    b[c++] = (float)g.u_at(ix, iy + 1, iz + 1);
+        wr("icx", b);
+    }
+    {   // y-faces: (nx, ny+1, nz), a[ix,iy,iz] = v_at(ix+1, iy, iz+1)
+        std::vector<float> b((long)nx * (ny + 1) * nz);
+        long c = 0;
+        for (int ix = 0; ix < nx; ix++)
+            for (int iy = 0; iy <= ny; iy++)
+                for (int iz = 0; iz < nz; iz++)
+                    b[c++] = (float)g.v_at(ix + 1, iy, iz + 1);
+        wr("icy", b);
+    }
+    {   // z-faces: (nx, ny, nz+1), a[ix,iy,iz] = w_at(ix+1, iy+1, iz)
+        std::vector<float> b((long)nx * ny * (nz + 1));
+        long c = 0;
+        for (int ix = 0; ix < nx; ix++)
+            for (int iy = 0; iy < ny; iy++)
+                for (int iz = 0; iz <= nz; iz++)
+                    b[c++] = (float)g.w_at(ix + 1, iy + 1, iz);
+        wr("icz", b);
+    }
+}
+
 } // namespace io3d

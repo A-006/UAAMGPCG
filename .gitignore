@@ -51,7 +51,13 @@ tools/karman_vortex_street/figures/
 tools/karman/*
 /slide/*
 /slides1/*
+/preview_logs/*
+/render/*
+*.vtk
+/tools/*
 *.md
+/.claude/
+/render_full/
 
 # simulation outputs (large VTK/GIF)
 output_*/

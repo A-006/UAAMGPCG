@@ -22,6 +22,18 @@ target_link_libraries(test_lfm PRIVATE lfm_lib)
 add_executable(test_integration integration/test_integration.cpp)
 target_link_libraries(test_integration PRIVATE lfm_lib)
 
+add_executable(test_bc_solid integration/test_bc_solid.cpp)
+target_link_libraries(test_bc_solid PRIVATE lfm_lib)
+
+# ── Bulk CPU unit tests (added 2026-06-17) — all link lfm_lib only ──
+foreach(_ut
+        test_bc_patches_2d test_grid_ops_2d test_grid_3d test_scalar_field_3d
+        test_bc_patches_3d test_config_cli test_scenarios_2d test_scenarios_3d
+        test_io_roundtrip test_numerics_interp test_flow_map)
+    add_executable(${_ut} integration/${_ut}.cpp)
+    target_link_libraries(${_ut} PRIVATE lfm_lib)
+endforeach()
+
 add_executable(test_karman_bench integration/test_karman_bench.cpp)
 target_link_libraries(test_karman_bench PRIVATE lfm_lib)
 

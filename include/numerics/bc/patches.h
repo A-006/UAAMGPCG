@@ -58,6 +58,16 @@ public:
     }
 };
 
+// Free-slip wall on LEFT and RIGHT patches (x=0, x=Lx):
+//   u = 0 on the wall, ∂v/∂x = 0 (tangential velocity unchanged).
+class FreeSlipLeftRight : public BoundaryCondition {
+public:
+    void apply(Grid& g) const override;
+    const char* name() const override {
+        return "FreeSlipLeftRight";
+    }
+};
+
 // No-slip on every fluid-solid face inside the domain (immersed obstacles).
 // Sets u/v faces touching a solid cell from a fluid cell to zero.
 class NoSlipImmersedSolid : public BoundaryCondition {
@@ -71,5 +81,6 @@ public:
 // ── Scenario builders: return a fully-constructed BoundaryManager ──
 BoundaryManager karman(double U_inf); // inflow + outflow + slip walls + solid
 BoundaryManager smoke();              // four no-slip walls + solid
+BoundaryManager free_slip_walls();    // four free-slip walls (closed inviscid box, 2D)
 
 } // namespace bc

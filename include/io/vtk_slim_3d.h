@@ -16,4 +16,12 @@ void write_vort_vtk(const Grid3D& g, int frame, const std::string& dir);
 // operator as the author's vx_*.npy — the apples-to-apples cross-check.
 void write_vel_raw(const Grid3D& g, int frame, const std::string& dir);
 
+// Staggered MAC-face IC (float32) as ic{x,y,z}.raw, the SAME layout load_raw_ic
+// reads and dump_collision_ic writes:
+//   icx (nx+1,ny,nz)=u_at(ix,iy+1,iz+1)  icy (nx,ny+1,nz)=v_at(ix+1,iy,iz+1)
+//   icz (nx,ny,nz+1)=w_at(ix+1,iy+1,iz)
+// Lets the author reference runner load the EXACT analytic IC our solver uses
+// (wrap to init_u_{x,y,z}.npy for any scenario, not just collision).
+void write_face_ic(const Grid3D& g, const std::string& dir);
+
 } // namespace io3d

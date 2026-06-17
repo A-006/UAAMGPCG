@@ -35,6 +35,9 @@ private:
     bc::BoundaryManager bcs_;
     FlowMap2D flow_map_;
 
+    // Per-face (staggered MAC) flow maps — FIX① 2D port (see flow_map_2d.h).
+    // Impulse m_x_ lives on u-faces, m_y_ on v-faces (NOT cell centers).
+    FaceFlowMap2D fmu_, fmv_;
     std::vector<double> m_x_, m_y_;
 
     // Midpoint flow map state for path integral quadrature
@@ -69,6 +72,27 @@ private:
     void pullback_impulse(const Grid& u0_grid);
     void forward_pullback(const std::vector<double>& mx, const std::vector<double>& my,
                           std::vector<double>& ux, std::vector<double>& uy);
+
+    // ---- FIX① per-face (staggered MAC) impulse path (2D port of the 3D code) ----
+    void face_set_forward_identity();
+    void face_set_backward_identity();
+    void face_march_point(int axis, double& px, double& py, double T[2],
+                          const std::vector<double>& u, const std::vector<double>& v,
+                          double dt_march) const;
+    void face_march_forward(const std::vector<double>& u, const std::vector<double>& v,
+                            double dt_march);
+    void face_march_backward(const std::vector<double>& u, const std::vector<double>& v,
+                             double dt_march);
+    void face_pullback(const std::vector<double>& su, const std::vector<double>& sv,
+                       std::vector<double>& dst_u, std::vector<double>& dst_v, bool fwd) const;
+    void face_bfecc_clamp(const std::vector<double>& pre_u, const std::vector<double>& pre_v);
+    void face_error_correction(const Grid& u0_grid);
+
+    // Velocity + analytic 2x2 B-spline gradient (consistent with sample_velocity),
+    // 2D reduction of the 3D sample_velocity_gradient. g[2a+b] = ∂u_a/∂x_b.
+    void sample_velocity_gradient(double x, double y, const std::vector<double>& u_vec,
+                                  const std::vector<double>& v_vec, double& vu, double& vv,
+                                  double g[4]) const;
 
     void sample_cell_centered(const std::vector<double>& sx, const std::vector<double>& sy,
                               double x, double y, double& vx, double& vy) const;

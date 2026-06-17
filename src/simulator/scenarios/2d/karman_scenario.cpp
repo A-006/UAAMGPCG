@@ -11,6 +11,12 @@ void KarmanScenario::configure(Config& cfg) const {
     cfg.NY      = std::max(cfg.NX / 4, 16);
     cfg.dt      = 0.5 * (cfg.Lx / cfg.NX) / cfg.U_inf; // CFL ≈ 0.5
     cfg.out_dir = "output_karman";
+    // Validated combo for the vortex street (paper Fig. 8): Chorin + a real
+    // Poisson solver. The CLI defaults (lfm + jacobi) both collapse this flow
+    // to zero — 2D LFM does not preserve the wake, and jacobi cannot project
+    // the inflow field. Override on the CLI to experiment.
+    cfg.time_integrator = "chorin";
+    cfg.solver          = "pcg";
 }
 
 void KarmanScenario::init_grid(Grid& g, const Config& cfg) const {

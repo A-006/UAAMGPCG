@@ -14,6 +14,7 @@ set(LFM_SOURCES
     simulator/scenarios/2d/karman.cpp
     simulator/scenarios/scenario_registry.cpp
     simulator/scenarios/2d/karman_scenario.cpp
+    simulator/scenarios/2d/leapfrog_scenario.cpp
     simulator/scenarios/2d/smoke_scenario.cpp
     simulator/scenarios/scenario_3d_registry.cpp
     simulator/scenarios/3d/vortex_ring.cpp

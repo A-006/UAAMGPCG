@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
     } catch (const std::exception& e) {
         std::cerr << e.what() << "\n"
                   << "Usage: cfdsim [input.in] [key=value]...  (key=value overrides the file)\n"
-                     "  scenarios: vortex_ring | vortex_collision | collision_paper | delta_wing | "
+                     "  scenarios: vortex_ring | vortex_collision | collision_paper | leapfrog_rings | delta_wing | "
                      "vortex_reconnection | trefoil_knot\n";
         return 1;
     }

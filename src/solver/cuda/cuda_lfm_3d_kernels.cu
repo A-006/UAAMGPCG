@@ -872,18 +872,16 @@ __global__ void bc_solid_kernel(double* u, double* v, double* w, const bool* sol
         return;
     if (!solid[lfm_ip(i, j, k, nx, ny)])
         return;
-    if (i > 1 && !solid[lfm_ip(i - 1, j, k, nx, ny)])
-        u[lfm_iu(i - 1, j, k, nx, ny)] = 0.0;
-    if (i < nx && !solid[lfm_ip(i + 1, j, k, nx, ny)])
-        u[lfm_iu(i, j, k, nx, ny)] = 0.0;
-    if (j > 1 && !solid[lfm_ip(i, j - 1, k, nx, ny)])
-        v[lfm_iv(i, j - 1, k, nx, ny)] = 0.0;
-    if (j < ny && !solid[lfm_ip(i, j + 1, k, nx, ny)])
-        v[lfm_iv(i, j, k, nx, ny)] = 0.0;
-    if (k > 1 && !solid[lfm_ip(i, j, k - 1, nx, ny)])
-        w[lfm_iw(i, j, k - 1, nx, ny)] = 0.0;
-    if (k < nz && !solid[lfm_ip(i, j, k + 1, nx, ny)])
-        w[lfm_iw(i, j, k, nx, ny)] = 0.0;
+    // Author-faithful (SetBcByPhiKernel): pin ALL six MAC faces of every solid
+    // cell to zero, unconditionally — including solid↔solid internal faces and
+    // solid faces on the domain boundary. The old interface-only guards left
+    // those faces at freestream (the delta-wing maxabsdiff=U_inf signature).
+    u[lfm_iu(i - 1, j, k, nx, ny)] = 0.0; // x-
+    u[lfm_iu(i, j, k, nx, ny)]     = 0.0; // x+
+    v[lfm_iv(i, j - 1, k, nx, ny)] = 0.0; // y-
+    v[lfm_iv(i, j, k, nx, ny)]     = 0.0; // y+
+    w[lfm_iw(i, j, k - 1, nx, ny)] = 0.0; // z-
+    w[lfm_iw(i, j, k, nx, ny)]     = 0.0; // z+
 }
 
 void lfm_apply_free_slip_box(CudaLFMState3D& s, CudaVel3D vel) {
