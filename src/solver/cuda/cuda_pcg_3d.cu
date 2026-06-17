@@ -710,11 +710,23 @@ void CudaPCG3D::solve_f32_tile(CudaGrid3D& g, double* p, double* rhs, int max_it
     last_iters   = max_iter;
     last_rel_res = 1.0;
 
-    // ── Fixed-iteration device-resident PCG (matches the author's no-early-exit
-    //    streaming loop). No cudaMemcpy / cudaDeviceSynchronize touches the host
-    //    inside the loop; the only host blocking is vcycle_inplace's terminal
-    //    device sync, which copies nothing. alpha/beta/mean are 1-thread kernels
-    //    consuming device scalars; r/x/p updates read those scalars directly. ──
+    // ── Device-resident PCG with a PERIODIC convergence check (every CHECK_EVERY
+    //    iters). Restores the early-exit the original solver had: a *fixed*-iteration
+    //    FP32 CG loses conjugacy and starts DIVERGING on hard problems (delta-wing
+    //    |div| spiked ~5e-1 when forced to run solve_iters=200), and over-iterating
+    //    past convergence is also pure wasted time. Checking only every 20th iter
+    //    keeps ~95% of the no-host-sync benefit. A short solve can't lose enough
+    //    conjugacy to diverge, so CHECK_EVERY (20) is set above every "easy" solve's
+    //    iteration count (collision: project@6, project_end@12) — those never reach a
+    //    check, skip the r0² setup, and run fully device-resident with ZERO added host
+    //    sync, exactly as before. Only the long hard solves (delta-wing 200/400) check. ──
+    const int CHECK_EVERY = 20;
+    double r0_sq = 0.0, tol_abs_sq = 0.0;
+    if (max_iter > CHECK_EVERY) {
+        ddot_dd(rt, rt, 2); // initial residual r0² (one host copy) for the convergence test
+        cudaMemcpy(&r0_sq, d_sc + 2, sizeof(double), cudaMemcpyDeviceToHost);
+        tol_abs_sq = (r0_sq > 0.0) ? r0_sq * tol * tol : tol * tol;
+    }
     for (int k = 0; k < max_iter; k++) {
         precond_f_->matvec_tiled(d_pf, d_Apf); // Ap = A p   (FP32)
         ddot_ff(d_pf, d_Apf, 1);               // pAp → d_sc[1]
@@ -723,6 +735,18 @@ void CudaPCG3D::solve_f32_tile(CudaGrid3D& g, double* p, double* rhs, int max_it
 
         axpy_dmix_dev_kernel<<<nbe, 256>>>(xt, d_pf, d_sc + 4, tsol, Nt);   // x += α p
         axpy_dmix_dev_kernel<<<nbe, 256>>>(rt, d_Apf, d_sc + 5, tsol, Nt);  // r -= α Ap
+
+        // True-residual convergence check. x and r are consistent here (x is the
+        // current solution, r its residual), so breaking leaves x as the answer.
+        if ((k % CHECK_EVERY) == (CHECK_EVERY - 1) && k + 1 < max_iter) {
+            ddot_dd(rt, rt, 2);
+            double rcheck = 0.0;
+            cudaMemcpy(&rcheck, d_sc + 2, sizeof(double), cudaMemcpyDeviceToHost);
+            if (rcheck < tol_abs_sq) {
+                last_iters = k + 1;
+                break;
+            }
+        }
 
         cast_d2f_tile<<<nbe, 256>>>(rt, bf, tsol, Nt); // FP32 V-cycle input
         precond_f_->vcycle_inplace_async();
@@ -734,14 +758,11 @@ void CudaPCG3D::solve_f32_tile(CudaGrid3D& g, double* p, double* rhs, int max_it
         scd_copy_k<<<1, 1>>>(d_sc + 0, d_sc + 3);          // rsold = rz
         xpby_flat_dev_kernel_f<<<nbe, 256>>>(d_pf, zt, d_scf + 0, tsol, Nt); // p = z + β p
     }
-    // One host sync at the very end: final residual (for last_rel_res reporting).
-    ddot_dd(rt, rt, 2); // rsnew → d_sc[2]
-    double rsn, rs0;
+    // Final true residual for last_rel_res reporting (one host sync).
+    ddot_dd(rt, rt, 2);
+    double rsn = 0.0;
     cudaMemcpy(&rsn, d_sc + 2, sizeof(double), cudaMemcpyDeviceToHost);
-    // r0² for the relative residual (reuse d_sc[2] would clobber; recompute cheaply
-    // is not worth it — report absolute sqrt, the projection path ignores rel_res).
-    rs0          = rsn; // placeholder; rel_res not used by the projection routing.
-    last_rel_res = std::sqrt(rsn / (rs0 > 0 ? rs0 : 1.0));
+    last_rel_res = std::sqrt(rsn / (r0_sq > 0.0 ? r0_sq : 1.0));
 
     // solution (FP64 tile) → FP32 tile → pitched FP32 → FP64 output. The output
     // cast through FP32 is harmless: it feeds the velocity correction only.
