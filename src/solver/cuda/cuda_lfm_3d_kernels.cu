@@ -1954,7 +1954,11 @@ void lfm_face_set_backward_identity(CudaLFMState3D& s) {
 static void face_march_run(CudaLFMState3D& s, CudaVel3D vel, double dt_march, bool fwd) {
     GeomParams G = geom(s);
     int im, jm, km;
-    dim3 blk(8, 8, 4);
+    // Wide x (32) packs a full warp of consecutive i per row → the 3-tap i-window
+    // of neighbouring threads overlaps in L1, raising gather reuse for the FMA/L1-
+    // mixed face march (best of the 8×8×4 / 16×8×2 / 16×4×4 / 16×16×1 / 32×8×1
+    // shapes measured). 32×8×1 = 256 threads (matches __launch_bounds__).
+    dim3 blk(32, 8, 1);
     bool fp16 = fp16_sampling(s);
     if (fp16)
         convert_vel_f16(vel, (__half*)s.vu16, (__half*)s.vv16, (__half*)s.vw16,
@@ -1966,7 +1970,7 @@ static void face_march_run(CudaLFMState3D& s, CudaVel3D vel, double dt_march, bo
     for (int axis = 0; axis < 3; axis++) {
         d_face_limits(axis, s.nx, s.ny, s.nz, im, jm, km);
         CudaLFMState3D::CudaFaceFlowMap& f = (axis == 0) ? s.fmu : (axis == 1 ? s.fmv : s.fmw);
-        dim3 gr((im + 7) / 8, (jm + 7) / 8, (km + 3) / 4);
+        dim3 gr((im + 31) / 32, (jm + 7) / 8, km);
         if (fp16)
             face_march_kernel<float, __half><<<gr, blk>>>(face_ptrs(f), axis, fwd, (__half*)s.vu16, (__half*)s.vv16, (__half*)s.vw16, dt_march, G);
         else if (s.fp32_march)
