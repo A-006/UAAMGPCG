@@ -14,6 +14,9 @@ function(add_cuda_test name)
     endif()
 endfunction()
 
+# ── Semi-structured matrix-free MG on GPU (header-only; arXiv:2604.18886) ──
+add_cuda_test(test_semistruct_gpu_2d)
+
 # ── 2D ──
 add_cuda_test(test_cuda_uaamg    cuda_uaamg_lib lfm_lib)
 add_cuda_test(test_cuda_kernels)
