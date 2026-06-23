@@ -6,7 +6,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 # Reproduction of Wang/Sun/Zhu arXiv:2604.18886 (see include/semistruct/).
 foreach(_sst test_operator_2d test_laplacian_accuracy_2d test_poisson_convergence_2d
              test_operator_3d test_laplacian_accuracy_3d test_poisson_convergence_3d
-             test_cutcell_2d)
+             test_cutcell_2d test_cutcell_3d)
     add_executable(${_sst} semistruct/${_sst}.cpp)
 endforeach()
 

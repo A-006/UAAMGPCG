@@ -29,10 +29,11 @@ struct Multigrid3D {
         mode = cmode;
         A.clear(); agg.clear(); nC.clear();
         A.push_back(op.A);
-        const AdaptiveGrid3D& g = *op.g;
-        std::vector<int> rl(g.ndof), ci(g.ndof), cj(g.ndof), ck(g.ndof);
-        for (int d = 0; d < g.ndof; ++d) {
-            rl[d] = g.dof_level[d]; ci[d] = g.dof_i[d]; cj[d] = g.dof_j[d]; ck[d] = g.dof_k[d];
+        // node coords from the operator's ACTIVE (fluid) DOF list → cut-cell solids excluded.
+        int na = op.A.n;
+        std::vector<int> rl(na), ci(na), cj(na), ck(na);
+        for (int d = 0; d < na; ++d) {
+            rl[d] = op.node_level[d]; ci[d] = op.node_i[d]; cj[d] = op.node_j[d]; ck[d] = op.node_k[d];
         }
         const int MAXLEV = 60;
         for (int it = 0; it < MAXLEV && A.back().n > 1; ++it) {
