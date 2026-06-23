@@ -28,6 +28,10 @@ struct PoissonOperator2D {
     // Dirichlet bookkeeping: for each DOF, list of (kappa, side) faces on a
     // Dirichlet domain boundary (the ghost value gd enters the RHS).
     std::vector<std::vector<AdaptiveGrid2D::DirFace>> dir;
+    // Active (fluid) DOF list — index == CSR row. For the non-cut case this is
+    // every leaf; for cut-cell it excludes solid leaves. The multigrid and the
+    // rhs/sample helpers read these coordinates.
+    std::vector<int> node_level, node_i, node_j;
 
     void build(const AdaptiveGrid2D& grid) {
         g = &grid;
@@ -73,6 +77,95 @@ struct PoissonOperator2D {
                 else off[d].push_back(e);
             }
         A = buildCSR(n, off, diagv);
+        node_level = grid.dof_level; node_i = grid.dof_i; node_j = grid.dof_j;
+    }
+
+    // ── Cut-cell build ────────────────────────────────────────────────────
+    // phiSolid(x,y) < 0 inside the solid obstacle (Neumann). Leaf cells whose
+    // centre is inside the solid are excluded from the DOF set. Each fluid face
+    // is weighted by its fluid AREA FRACTION (estimated from phiSolid at the face
+    // end-points, eq.4 generalisation). Domain sides marked Dirichlet act as the
+    // air (p=0) interface. Same-level faces only (use on uniform grids; combine
+    // with T-junctions is left to future work). Produces an SPD system whose
+    // algebraically-consistent (Galerkin) coarsening stays robust on cut cells —
+    // the paper's central claim (Sec. 4.4 / Fig. 14).
+    void buildCut(const AdaptiveGrid2D& grid,
+                  const std::function<double(double, double)>& phiSolid) {
+        g = &grid;
+        // 1. classify leaves: fluid (centre outside solid) → active DOF
+        std::vector<int> gridToActive(grid.ndof, -1);
+        node_level.clear(); node_i.clear(); node_j.clear();
+        for (int d = 0; d < grid.ndof; ++d) {
+            int l = grid.dof_level[d], i = grid.dof_i[d], j = grid.dof_j[d];
+            if (phiSolid(grid.cx(l, i), grid.cy(l, j)) >= 0.0) {  // fluid
+                gridToActive[d] = (int)node_level.size();
+                node_level.push_back(l); node_i.push_back(i); node_j.push_back(j);
+            }
+        }
+        int n = (int)node_level.size();
+        vol.assign(n, 0.0);
+        dir.assign(n, {});
+        std::vector<std::map<int, double>> rows(n);
+        const int di[4] = {-1, 1, 0, 0};
+        const int dj[4] = {0, 0, -1, 1};
+        for (int a = 0; a < n; ++a) {
+            int l = node_level[a], i = node_i[a], j = node_j[a];
+            double h = grid.lev[l].h;
+            vol[a] = h * h;  // (cut volume fraction ignored in the diagonal scaling)
+            for (int s = 0; s < 4; ++s) {
+                int ni = i + di[s], nj = j + dj[s];
+                double frac = faceFluidFraction(grid, phiSolid, l, i, j, s);
+                if (!grid.lev[l].in(ni, nj)) {                    // domain boundary
+                    if (grid.bc[s] == BC::Dirichlet && frac > 0) {
+                        double kappa = frac * h / (0.5 * h);      // frac * 2
+                        rows[a][a] += kappa;
+                        dir[a].push_back({kappa, s});
+                    }
+                    continue;                                     // Neumann wall
+                }
+                if (grid.lev[l].at(ni, nj) != Cell::LEAF) continue;  // (cut: uniform only)
+                int gd = grid.dofAt(l, ni, nj);
+                int b = gridToActive[gd];
+                if (b < 0) continue;                              // neighbour is solid → Neumann
+                if (s == 0 || s == 2) {                           // stamp once
+                    double kappa = frac;                          // frac * kappaSame(=1)
+                    if (kappa > 0) {
+                        rows[a][a] += kappa; rows[b][b] += kappa;
+                        rows[a][b] -= kappa; rows[b][a] -= kappa;
+                    }
+                }
+            }
+        }
+        std::vector<std::vector<std::pair<int, double>>> off(n);
+        std::vector<double> diagv(n, 0.0);
+        for (int d = 0; d < n; ++d)
+            for (auto& e : rows[d]) {
+                if (e.first == d) diagv[d] = e.second;
+                else off[d].push_back(e);
+            }
+        A = buildCSR(n, off, diagv);
+    }
+
+    // Fluid fraction of the face on side s of cell (l,i,j): sample phiSolid at the
+    // two end-points of that edge; linear estimate of the fraction with phi>=0.
+    static double faceFluidFraction(const AdaptiveGrid2D& grid,
+                                    const std::function<double(double, double)>& phiSolid,
+                                    int l, int i, int j, int s) {
+        double h = grid.lev[l].h;
+        double x0 = i * h, y0 = j * h, x1 = (i + 1) * h, y1 = (j + 1) * h;
+        double ax, ay, bx, by;  // the two end-points of the edge on side s
+        switch (s) {
+            case 0: ax = x0; ay = y0; bx = x0; by = y1; break;  // -x edge
+            case 1: ax = x1; ay = y0; bx = x1; by = y1; break;  // +x edge
+            case 2: ax = x0; ay = y0; bx = x1; by = y0; break;  // -y edge
+            default: ax = x0; ay = y1; bx = x1; by = y1; break; // +y edge
+        }
+        double pa = phiSolid(ax, ay), pb = phiSolid(bx, by);
+        bool fa = pa >= 0, fb = pb >= 0;
+        if (fa && fb) return 1.0;
+        if (!fa && !fb) return 0.0;
+        // one fluid, one solid → linear root fraction of the fluid part
+        return fa ? pa / (pa - pb) : pb / (pb - pa);
     }
 
 private:
@@ -114,10 +207,10 @@ public:
     // forcing f(x,y) and Dirichlet boundary value gd(x,y).
     std::vector<double> rhs(const std::function<double(double, double)>& f,
                             const std::function<double(double, double)>& gd) const {
-        int n = g->ndof;
+        int n = A.n;
         std::vector<double> b(n, 0.0);
         for (int d = 0; d < n; ++d) {
-            int l = g->dof_level[d], i = g->dof_i[d], j = g->dof_j[d];
+            int l = node_level[d], i = node_i[d], j = node_j[d];
             double x = g->cx(l, i), y = g->cy(l, j);
             b[d] = vol[d] * f(x, y);
             for (auto& fc : dir[d]) {
@@ -138,17 +231,17 @@ public:
 
     // Sample a field at DOF cell centres.
     std::vector<double> sample(const std::function<double(double, double)>& f) const {
-        int n = g->ndof;
+        int n = A.n;
         std::vector<double> v(n);
         for (int d = 0; d < n; ++d)
-            v[d] = f(g->cx(g->dof_level[d], g->dof_i[d]), g->cy(g->dof_level[d], g->dof_j[d]));
+            v[d] = f(g->cx(node_level[d], node_i[d]), g->cy(node_level[d], node_j[d]));
         return v;
     }
 
     // Volume-weighted RMS of (a-b) over all leaves (eq. 18).
     double rmsV(const std::vector<double>& a, const std::vector<double>& b) const {
         double num = 0.0, den = 0.0;
-        for (int d = 0; d < g->ndof; ++d) {
+        for (int d = 0; d < A.n; ++d) {
             double e = a[d] - b[d];
             num += vol[d] * e * e;
             den += vol[d];
@@ -160,7 +253,7 @@ public:
     std::vector<double> numericalLaplacian(const std::vector<double>& p) const {
         std::vector<double> Ap;
         A.matvec(p, Ap);
-        for (int d = 0; d < g->ndof; ++d) Ap[d] /= vol[d];
+        for (int d = 0; d < A.n; ++d) Ap[d] /= vol[d];
         return Ap;
     }
 };

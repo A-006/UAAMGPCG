@@ -44,11 +44,12 @@ struct Multigrid2D {
         mode = cmode;
         A.clear(); agg.clear(); nC.clear();
         A.push_back(op.A);
-        const AdaptiveGrid2D& g = *op.g;
-        // node coordinates at the finest hierarchy level
-        std::vector<int> rl(g.ndof), ci(g.ndof), cj(g.ndof);
-        for (int d = 0; d < g.ndof; ++d) {
-            rl[d] = g.dof_level[d]; ci[d] = g.dof_i[d]; cj[d] = g.dof_j[d];
+        // node coordinates at the finest hierarchy level — from the operator's
+        // ACTIVE (fluid) DOF list so cut-cell solids are excluded correctly.
+        int na = op.A.n;
+        std::vector<int> rl(na), ci(na), cj(na);
+        for (int d = 0; d < na; ++d) {
+            rl[d] = op.node_level[d]; ci[d] = op.node_i[d]; cj[d] = op.node_j[d];
         }
         const int MAXLEV = 40;
         for (int k = 0; k < MAXLEV && A.back().n > 1; ++k) {
