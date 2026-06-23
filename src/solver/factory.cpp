@@ -5,6 +5,7 @@
  * @date 2026-05-22
  */
 #include "solver/factory.h"
+#include "solver/amgx_solver.h"
 #include "solver/jacobi.h"
 #include "solver/rbgs.h"
 #include "solver/pcg.h"
@@ -28,6 +29,7 @@ util::Registry<Solver>& registry() {
         r.add("pcg_gmg", [] { return std::make_unique<PCG>(std::make_unique<GMGPreconditioner>()); });
         r.add("pcg_amg", [] { return std::make_unique<PCG>(std::make_unique<AMGPreconditioner>()); });
         r.add("pcg_uaamg", [] { return std::make_unique<PCG>(std::make_unique<UAAMGPreconditioner>()); });
+        r.add("amgx", [] { return std::make_unique<AMGXSolver>(); });
         return r;
     }();
     return reg;

@@ -5,6 +5,7 @@
  * @date 2026-05-24
  */
 #include "solver/factory_3d.h"
+#include "solver/amgx_solver_3d.h"
 #include "solver/jacobi_3d.h"
 #include "solver/rbgs_3d.h"
 #include "solver/pcg_3d.h"
@@ -31,6 +32,7 @@ util::Registry<Solver3D>& registry() {
               [] { return std::make_unique<PCG3D>(std::make_unique<AMGPreconditioner3D>()); });
         r.add("pcg_uaamg",
               [] { return std::make_unique<PCG3D>(std::make_unique<UAAMGPreconditioner3D>()); });
+        r.add("amgx", [] { return std::make_unique<AMGXSolver3D>(); });
         return r;
     }();
     return reg;

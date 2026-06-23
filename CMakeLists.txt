@@ -12,6 +12,11 @@ endif()
 
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 
+# Optional NVIDIA AMGX Poisson backend (solver=amgx). Uses AMGX's C API only,
+# so it links the prebuilt libamgxsh.so without needing nvcc. See src/CMakeLists.txt.
+option(UAAMG_WITH_AMGX "Build the AMGX Poisson solver backend" OFF)
+set(AMGX_ROOT "" CACHE PATH "Path to AMGX (with include/amgx_c.h and build/libamgxsh.so)")
+
 # Global include path
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
