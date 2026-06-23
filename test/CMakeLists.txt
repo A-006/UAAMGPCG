@@ -2,6 +2,12 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
+# ── Semi-structured matrix-free multigrid (header-only, no lfm_lib) ──
+# Reproduction of Wang/Sun/Zhu arXiv:2604.18886 (see include/semistruct/).
+foreach(_sst test_operator_2d test_laplacian_accuracy_2d test_poisson_convergence_2d)
+    add_executable(${_sst} semistruct/${_sst}.cpp)
+endforeach()
+
 # ── Standalone solver tests (use test_common.h, no lfm_lib needed) ──
 add_executable(test_jacobi solver/test_jacobi.cpp)
 add_executable(test_cg solver/test_cg.cpp)
