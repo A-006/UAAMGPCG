@@ -5,8 +5,8 @@
 // These exercise the ANALYTIC correctness of the CPU setup code only; no
 // GPU simulator is constructed.
 #include "../test_utils.h"
-#include "ic/2d/karman.h"
-#include "ic/2d/leapfrog.h"
+#include "io/ic/2d/karman.h"
+#include "io/ic/2d/leapfrog.h"
 #include "core/config.h"
 #include "mesh/grid.h"
 #include <cmath>

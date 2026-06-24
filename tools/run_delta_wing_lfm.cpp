@@ -14,7 +14,7 @@
 #include "core/config.h"
 #include "io/vtk_writer_3d.h"
 #include "integrator/lfm/lfm_simulator_3d.h"
-#include "ic/3d/delta_wing.h"
+#include "io/ic/3d/delta_wing.h"
 #include "solver/factory_3d.h"
 #include <chrono>
 #include <cmath>

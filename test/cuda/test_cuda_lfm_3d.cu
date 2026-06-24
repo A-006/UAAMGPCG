@@ -13,7 +13,7 @@
 #include "integrator/ops/pressure_3d.h"
 #include "integrator/lfm/lfm_simulator_3d.h"
 #include "integrator/lfm/cuda_lfm_simulator_3d.h"
-#include "ic/3d/vortex_ring.h"
+#include "io/ic/3d/vortex_ring.h"
 #include "solver/cuda_pcg_solver_3d.h"
 #include "solver/factory_3d.h"
 #include <cmath>

@@ -1,5 +1,5 @@
-#include "ic/3d/wind_turbine.h"
-#include "ic/3d/delta_wing.h" // reuses InflowXMin3D, OutflowXMax3D, FreeSlipYZ3D
+#include "io/ic/3d/wind_turbine.h"
+#include "io/ic/3d/delta_wing.h" // reuses InflowXMin3D, OutflowXMax3D, FreeSlipYZ3D
 #include <cmath>
 
 namespace scenarios {

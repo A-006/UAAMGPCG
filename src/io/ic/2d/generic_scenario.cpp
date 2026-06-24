@@ -1,6 +1,6 @@
-#include "ic/2d/generic_scenario.h"
-#include "ic/2d/params_2d.h"
-#include "ic/2d/primitives_2d.h"
+#include "io/ic/2d/generic_scenario.h"
+#include "io/ic/2d/params_2d.h"
+#include "io/ic/2d/primitives_2d.h"
 #include <algorithm>
 #include <stdexcept>
 #include <utility>

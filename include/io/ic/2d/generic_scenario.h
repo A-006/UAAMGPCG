@@ -1,5 +1,5 @@
 #pragma once
-#include "ic/scenario.h"
+#include "io/ic/scenario.h"
 #include <string>
 
 namespace scenarios {
