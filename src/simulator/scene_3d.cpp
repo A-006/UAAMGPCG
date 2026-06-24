@@ -175,39 +175,48 @@ static void apply_presets(Config& cfg) {
     }
 }
 
-std::string peek_scenario(int argc, char** argv) {
-    std::string scenario = "vortex_ring"; // default
-    try {
-        for (const auto& [k, v] : config::collect_assignments(argc, argv))
-            if (k == "scenario")
-                scenario = v;
-    } catch (...) {
-        // fall through; the chosen path reports the error properly
-    }
+// Which scenario do these assignments select? Last `scenario=` wins; the
+// default applies when none is given.
+static std::string scenario_of(const config::KeyVals& kv) {
+    std::string scenario = "vortex_ring";
+    for (const auto& [k, v] : kv)
+        if (k == "scenario")
+            scenario = v;
     return scenario;
 }
 
+// Delta wing: derive the freestream from |U| at the angle of attack, unless the
+// user set inflow_* explicitly.
+static void derive_freestream(Config& cfg) {
+    bool inflow_set = cfg.inflow_ux != 0.0 || cfg.inflow_uy != 0.0 || cfg.inflow_uz != 0.0;
+    if (cfg.scenario != "delta_wing" || inflow_set)
+        return;
+    double aoa    = cfg.dget("aoa_deg", 20.0) * M_PI / 180.0;
+    cfg.inflow_ux = cfg.U_inf * std::cos(aoa);
+    cfg.inflow_uy = cfg.U_inf * std::sin(aoa);
+}
+
+std::string peek_scenario(int argc, char** argv) {
+    try {
+        return scenario_of(config::collect_assignments(argc, argv));
+    } catch (...) {
+        return "vortex_ring"; // the chosen path reports the real error later
+    }
+}
+
 Config build_config(int argc, char** argv) {
-    // Collect file + CLI assignments, peek the scenario, apply its presets, then
-    // re-apply the assignments so any user override wins.
     config::KeyVals kv = config::collect_assignments(argc, argv);
+    // 1. Pick the scenario and lay down its preset defaults.
     Config cfg;
-    cfg.scenario = "vortex_ring"; // default if none given
-    for (const auto& [k, v] : kv)
-        if (k == "scenario")
-            cfg.scenario = v;
+    cfg.scenario = scenario_of(kv);
     apply_presets(cfg);
+
+    // 2. Re-apply the user's assignments so any explicit override wins.
     for (const auto& [k, v] : kv)
         config::set_field(cfg, k, v);
 
-    // Delta wing: derive the freestream from |U|@angle-of-attack unless the user
-    // set inflow_* explicitly.
-    if (cfg.scenario == "delta_wing" && cfg.inflow_ux == 0.0 && cfg.inflow_uy == 0.0 &&
-        cfg.inflow_uz == 0.0) {
-        double aoa    = cfg.dget("aoa_deg", 20.0) * M_PI / 180.0;
-        cfg.inflow_ux = cfg.U_inf * std::cos(aoa);
-        cfg.inflow_uy = cfg.U_inf * std::sin(aoa);
-    }
+    // 3. Fill in fields derived from others (e.g. delta-wing freestream).
+    derive_freestream(cfg);
     return cfg;
 }
 

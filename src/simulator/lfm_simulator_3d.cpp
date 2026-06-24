@@ -11,9 +11,10 @@
 // Jacobian in place of the 2D 4-component one.
 // ════════════════════════════════════════════════════════════════════
 
-LFMSimulator3D::LFMSimulator3D(const Config& cfg, std::unique_ptr<Solver3D> solver)
+LFMSimulator3D::LFMSimulator3D(const Config& cfg, std::unique_ptr<Solver3D> solver,
+                               bc::BoundaryManager3D bcs)
     : cfg_(cfg), grid_(cfg.NX, cfg.NY, cfg.NZ, cfg.Lx, cfg.Ly, cfg.Lz), solver_(std::move(solver)),
-      bcs_(bc::free_slip_box()),
+      bcs_(std::move(bcs)),
       flow_map_(cfg.NX, cfg.NY, cfg.NZ, cfg.Lx / cfg.NX, cfg.Ly / cfg.NY, cfg.Lz / cfg.NZ) {
     size_t N = (size_t)cfg_.NX * cfg_.NY * cfg_.NZ;
     for (auto* p : {&phi_mid_x_, &phi_mid_y_, &phi_mid_z_, &F_mid_00_, &F_mid_01_, &F_mid_02_,
@@ -33,6 +34,10 @@ LFMSimulator3D::LFMSimulator3D(const Config& cfg, std::unique_ptr<Solver3D> solv
     alloc_face(fmv_, vs);
     alloc_face(fmw_, ws);
     apply_bc();
+}
+
+void LFMSimulator3D::commit() {
+    apply_bc(); // re-apply wall BCs over the injected initial condition
 }
 
 void LFMSimulator3D::apply_bc() {

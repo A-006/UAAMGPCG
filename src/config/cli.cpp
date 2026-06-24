@@ -174,6 +174,10 @@ KeyVals collect_assignments(int argc, char* argv[]) {
     return all;
 }
 
+Config build_config(int argc, char* argv[]) {
+    return build_config(collect_assignments(argc, argv));
+}
+
 void set_field(Config& cfg, const std::string& key, const std::string& value) {
     apply_kv(cfg, key, value);
 }

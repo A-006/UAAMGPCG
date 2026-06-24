@@ -82,3 +82,8 @@ void run(Simulator& sim, const Config& cfg, const RunOptions& opts) {
 }
 
 } // namespace sim
+
+// Simulation::run for every 2D simulator — drives the shared loop above.
+void Simulator::run(const Config& cfg) {
+    sim::run(*this, cfg);
+}

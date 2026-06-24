@@ -44,6 +44,11 @@ KeyVals collect_assignments(int argc, char* argv[]);
 // key / bad value. Pair with collect_assignments to drive it from argv.
 Config build_config(const KeyVals& kv);
 
+// Same, straight from argv (collect_assignments + build_config in one call), so
+// the launcher can mirror scene3d::build_config(argc, argv) for the 2D path.
+// Throws on an unreadable file / unknown scenario / key / bad value.
+Config build_config(int argc, char* argv[]);
+
 // Apply one `key = value` onto cfg. Keys matching a core Config field are set
 // directly (and type-checked); any other key is stored in cfg.extra, to be read
 // later through Config::dget / iget / sget. Throws std::runtime_error on a bad

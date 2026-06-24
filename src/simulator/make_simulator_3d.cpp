@@ -26,8 +26,7 @@ static bool gpu_present() {
 std::unique_ptr<Simulator3D> make_simulator(Config& cfg) {
     std::string backend = cfg.sget("backend", "auto");
     if (backend != "auto" && backend != "gpu" && backend != "cpu")
-        throw std::runtime_error("cfdsim: backend must be 'auto' | 'gpu' | 'cpu' (got '" + backend +
-                                 "')");
+        throw std::runtime_error("cfdsim: backend must be 'auto' | 'gpu' | 'cpu' (got '" + backend + "')");
     if (backend == "auto")
         backend = gpu_present() ? "gpu" : "cpu";
     if (backend == "gpu" && !gpu_present()) {
@@ -47,9 +46,9 @@ std::unique_ptr<Simulator3D> make_simulator(Config& cfg) {
         return s;
     }
 #endif
-    auto s = std::make_unique<LFMSimulator3D>(cfg, Factory3D::create(cfg.solver));
-    setup(s->mutable_grid(), cfg);                // initial condition
-    s->set_boundary_manager(make_cpu_bcs(cfg));   // wall BCs
+    auto s = std::make_unique<LFMSimulator3D>(cfg, Factory3D::create(cfg.solver), make_cpu_bcs(cfg));
+    setup(s->mutable_grid(), cfg); // initial condition
+    s->commit();                   // apply wall BCs
     return s;
 }
 

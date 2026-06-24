@@ -2,6 +2,7 @@
 #include "config/config.h"
 #include "core/grid_3d.h"
 #include "solver/solver_3d.h"
+#include "simulator/simulation.h"
 #include "numerics/bc/patches_3d.h"
 #include <memory>
 #include <string>
@@ -9,13 +10,15 @@
 
 // Minimal 3D Simulator base — parallels include/simulator/simulator_base.h
 // but typed on Grid3D / Solver3D.
-class Simulator3D {
+class Simulator3D : public Simulation {
 public:
-    virtual ~Simulator3D()             = default;
     virtual void step()                = 0;
     virtual const Grid3D& grid() const = 0;
     virtual double time() const        = 0;
     virtual int step_count() const     = 0;
+
+    // Run the 3D cycle loop (sim3d::run) to completion. Defined in runner_3d.cpp.
+    void run(const Config& cfg) override;
 };
 
 // 3D Chorin time integrator: advect → (optional diffuse) → project.

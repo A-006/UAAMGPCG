@@ -15,7 +15,13 @@
 /// there is no 3D scenario registry yet.
 class LFMSimulator3D : public Simulator3D {
 public:
-    LFMSimulator3D(const Config& cfg, std::unique_ptr<Solver3D> solver);
+    LFMSimulator3D(const Config& cfg, std::unique_ptr<Solver3D> solver,
+                   bc::BoundaryManager3D bcs = bc::free_slip_box());
+
+    // Finalize initialization: apply the wall BCs over the injected initial
+    // condition. Mirrors CudaLFMSimulator3D::commit() so the simulator factory
+    // drives both backends the same way (construct → setup → commit).
+    void commit();
 
     void step() override;
     const Grid3D& grid() const override {

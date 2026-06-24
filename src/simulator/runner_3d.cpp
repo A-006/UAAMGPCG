@@ -62,3 +62,8 @@ void run(Simulator3D& sim, const Config& cfg) {
 }
 
 } // namespace sim3d
+
+// Simulation::run for every 3D simulator — drives the cycle loop above.
+void Simulator3D::run(const Config& cfg) {
+    sim3d::run(*this, cfg);
+}
