@@ -19,8 +19,6 @@ set(LFM_SOURCES
     io/3d/vortex_ring.cpp
     io/3d/trefoil_knot.cpp
     io/3d/delta_wing.cpp
-    io/3d/fire_ball.cpp
-    io/3d/wind_turbine.cpp
     core/config.cpp
     io/cli.cpp
     integrator/ops/advection.cpp

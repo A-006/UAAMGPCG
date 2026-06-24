@@ -87,12 +87,10 @@ target_link_libraries(run_karman_chorin PRIVATE lfm_lib)
 # of the unified `cfdsim` launcher (scenario=vortex_reconnection / trefoil_knot).
 add_executable(run_vortex_ring_collision   ../tools/run_vortex_ring_collision.cpp)
 add_executable(run_delta_wing              ../tools/run_delta_wing.cpp)
-add_executable(run_fire_ball               ../tools/run_fire_ball.cpp)
-add_executable(run_wind_turbine            ../tools/run_wind_turbine.cpp)
 add_executable(test_bfecc_clamp            integration/test_bfecc_clamp.cpp)
 add_executable(run_delta_wing_lfm          ../tools/run_delta_wing_lfm.cpp)
 add_executable(dump_collision_ic           ../tools/dump_collision_ic.cpp)
-foreach(_t run_vortex_ring_collision run_delta_wing run_fire_ball run_wind_turbine
+foreach(_t run_vortex_ring_collision run_delta_wing
            test_bfecc_clamp run_delta_wing_lfm dump_collision_ic)
     target_link_libraries(${_t} PRIVATE lfm_lib)
 endforeach()
