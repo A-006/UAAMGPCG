@@ -6,6 +6,7 @@
 # The freestream is derived from U_inf at aoa_deg unless you set inflow_* below.
 
 scenario   = delta_wing
+dim        = 3            # 3D scenario (the launcher routes dim==3 to the 3D engine)
 
 backend    = auto       # auto: 有GPU就用GPU，没有自动保底CPU。也可写死 gpu / cpu
 
@@ -22,15 +23,27 @@ lfm_cycle_steps = 5       # n steps per LFM reinitialization cycle
 solve_tol       = 1e-6
 
 U_inf      = 0.6          # freestream speed
-aoa_deg    = 20           # angle of attack (degrees)
+aoa_deg    = 20           # angle of attack (degrees); also drives the derived freestream
 lfm_bfecc_clamp = 1
 lfm_bc          = freestream
 solve_iters     = 200     # thin plate normal to AoA blocks more flow → more CG
 
+# ── Initial condition: an immersed delta-wing solid + uniform freestream. With
+# no ic.sdf_path, the wing is the analytic flat plate below; ic.aoa_deg defaults
+# to the top-level aoa_deg above. The freestream IC comes from the derived
+# inflow_* (U_inf at aoa_deg). Uncomment ic.sdf_path for the authors' geometry.
+ic              = delta_wing
+ic.leading_x    = 0.5
+ic.chord        = 1.0
+ic.semi_span    = 0.35
+ic.thickness    = 0.02
+ic.y_mid        = 0.5
+# ic.aoa_deg    = 20                       # override the wing tilt (else uses aoa_deg)
+
 frame_skip = 4
 vtk_mode   = slim
 out_dir    = output_delta_wing
-# sdf_path = assets/delta_wing_sdf.npy   # authors' exact geometry (cell-for-cell)
+# ic.sdf_path = assets/delta_wing_sdf.npy  # authors' exact geometry (cell-for-cell)
 # inflow_ux = 0.5638                      # override the derived freestream directly
 # inflow_uy = 0.2052
 # gpu      = 0

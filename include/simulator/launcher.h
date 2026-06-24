@@ -13,10 +13,12 @@
 // base, so it runs any scenario with a single polymorphic call.
 namespace launcher {
 
-// Build the right Config from argv: 3D scenarios go through scene3d's presets,
-// everything else through scene2d's. Throws on bad input.
+// Build the right Config from argv: dim==3 goes through scene3d's presets,
+// everything else through scene2d's. The dimensionality is data — peeked from
+// the case file / CLI `dim` (default 2) — so the launcher knows nothing about
+// scenario names. Throws on bad input.
 inline Config build_config(int argc, char** argv) {
-    if (scene3d::is_3d_scenario(scene3d::peek_scenario(argc, argv)))
+    if (scene3d::peek_key(argc, argv, "dim", "2") == "3")
         return scene3d::build_config(argc, argv);
     return scene2d::build_config(argc, argv);
 }
@@ -24,7 +26,7 @@ inline Config build_config(int argc, char** argv) {
 // Build the matching simulator (3D GPU/CPU, or the 2D CPU pipeline) and return
 // it through the common Simulation base.
 inline std::unique_ptr<Simulation> make_simulation(Config& cfg) {
-    if (scene3d::is_3d_scenario(cfg.scenario))
+    if (cfg.dim == 3)
         return scene3d::make_simulator(cfg);
     return scene2d::make_simulator(cfg);
 }

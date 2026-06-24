@@ -9,18 +9,19 @@
 // into a ready-to-run Config and an initialized Grid3D, backend-agnostic so the
 // GPU and CPU simulators share the exact same presets and initial condition.
 //
-// Supported scenarios: vortex_ring, vortex_collision, collision_paper,
-// delta_wing, vortex_reconnection, trefoil_knot. Anything else is a 2D scenario
-// handled by the shared 2D CPU pipeline.
+// The solver core is data-driven: the 2D-vs-3D split is decided by `dim` (from
+// the case file / CLI), and the initial condition is assembled from the IC
+// sources the case declares (see setup()). No scenario name is special-cased.
 namespace scene3d {
-
-// True if `name` is one of the 3D scenarios this launcher provisions.
-bool is_3d_scenario(const std::string& name);
 
 // Peek the `scenario=` assignment from argv (INI file + CLI) without throwing;
 // returns the default "vortex_ring" if none is given or argv can't be parsed.
-// Used to pick the 2D-vs-3D code path before full Config validation.
 std::string peek_scenario(int argc, char** argv);
+
+// Peek any key's value from argv (INI file + CLI) without throwing; returns
+// `def` if absent or argv can't be parsed. Used to read `dim` before full Config
+// validation, to pick the 2D-vs-3D code path.
+std::string peek_key(int argc, char** argv, const std::string& key, const std::string& def);
 
 // Assemble a Config from argv: apply the scenario's per-scene presets, then the
 // INI/CLI overrides on top (so any user-set field wins), then post-process
