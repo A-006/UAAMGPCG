@@ -5,7 +5,7 @@
  * Tests:
  *   1. UAAMG V-cycle reduces residual (standalone)
  *   2. PCG/UAAMG converges on Poisson problem
- *   3. PCG/UAAMG passes Karman divergence check
+ *   3. PCG/UAAMG passes Cylinder divergence check
  *   4. Comparison with CG
  * @author liutao
  * @date 2026-05-24
@@ -85,9 +85,9 @@ static void test_uaamg_faster_than_cg() {
     test_summary();
 }
 
-// ── Test 2: PCG/UAAMG passes Karman divergence check ──
+// ── Test 2: PCG/UAAMG passes Cylinder divergence check ──
 static void test_karman_uaamg() {
-    test_header("PCG/UAAMG on Karman vortex street");
+    test_header("PCG/UAAMG on Cylinder vortex street");
 
     Config cfg;
     cfg.scenario    = "karman";

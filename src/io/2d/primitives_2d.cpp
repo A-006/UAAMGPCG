@@ -1,6 +1,6 @@
 #include "io/2d/primitives_2d.h"
 #include "mesh/bc/patches.h"
-#include "io/2d/karman.h"
+#include "io/2d/cylinder.h"
 #include "io/2d/leapfrog.h"
 
 // Built-in 2D primitives. Each builder reads its parameters from the Param2D
@@ -16,10 +16,10 @@ const std::unordered_map<std::string, GeomBuilder>& geom_registry() {
         // cyl_* Config fields so `cyl_cx=… cyl_R=…` keep working unprefixed.
         {"cylinder",
          [](Grid& g, const Config& cfg, const Param2D& p) {
-             Karman k{p.d("cx", cfg.cyl_cx), p.d("cy", cfg.cyl_cy), p.d("R", cfg.cyl_R),
+             Cylinder k{p.d("cx", cfg.cyl_cx), p.d("cy", cfg.cyl_cy), p.d("R", cfg.cyl_R),
                       p.d("U", cfg.U_inf)};
              if (k.cyl_R > 0)
-                 setup_karman_cylinder(g, k);
+                 setup_cylinder(g, k);
          }},
     };
     return r;
@@ -36,7 +36,7 @@ const std::unordered_map<std::string, IcBuilder>& ic_registry() {
         // Sinusoidal v-band behind the cylinder, breaks y-symmetry.
         {"wake_perturb",
          [](Grid& g, const Config& cfg, const Param2D& p) {
-             Karman k{p.d("cx", cfg.cyl_cx), p.d("cy", cfg.cyl_cy), p.d("R", cfg.cyl_R),
+             Cylinder k{p.d("cx", cfg.cyl_cx), p.d("cy", cfg.cyl_cy), p.d("R", cfg.cyl_R),
                       p.d("U", cfg.U_inf)};
              seed_wake_perturbation(g, k, p.d("amplitude", 0.01));
          }},

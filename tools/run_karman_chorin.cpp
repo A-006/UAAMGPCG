@@ -1,6 +1,6 @@
 /**
  * @file run_karman_chorin.cpp
- * @brief Chorin reference Karman run (backup if LFM doesn't shed).
+ * @brief Chorin reference Cylinder run (backup if LFM doesn't shed).
  * Usage: run_karman_chorin [t_end] [frame_skip] [NX]
  */
 #include "core/config.h"

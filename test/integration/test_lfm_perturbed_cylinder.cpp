@@ -1,6 +1,6 @@
 /**
  * @file test_lfm_perturbed_cylinder.cpp
- * @brief Simplest Karman test: start with an asymmetric vortex behind cylinder.
+ * @brief Simplest Cylinder test: start with an asymmetric vortex behind cylinder.
  *
  * If LFM can sustain vortex shedding from a large initial perturbation,
  * the algorithm works but needs a trigger. If not, the algorithm itself

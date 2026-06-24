@@ -39,7 +39,7 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
     # GPU unit / benchmark tests (moved out of src/solver/cuda)
     add_subdirectory(test/cuda)
 
-    # GPU Karman benchmark (2D)
+    # GPU Cylinder benchmark (2D)
     add_executable(test_karman_bench_gpu test/integration/test_karman_bench_gpu.cu)
     set_target_properties(test_karman_bench_gpu PROPERTIES
         LINKER_LANGUAGE CUDA
@@ -51,7 +51,7 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
         ${CMAKE_SOURCE_DIR}/test
     )
 
-    # GPU Karman benchmark (3D)
+    # GPU Cylinder benchmark (3D)
     add_executable(test_karman_bench_3d_gpu test/integration/test_karman_bench_3d_gpu.cu)
     set_target_properties(test_karman_bench_3d_gpu PROPERTIES
         LINKER_LANGUAGE CUDA
@@ -63,7 +63,7 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
         ${CMAKE_SOURCE_DIR}/test
     )
 
-    # GPU-solver LFM Karman runner (CPU sim loop, GPU Poisson solve)
+    # GPU-solver LFM Cylinder runner (CPU sim loop, GPU Poisson solve)
     add_executable(run_karman_long_gpu tools/run_karman_long_gpu.cu)
     set_target_properties(run_karman_long_gpu PROPERTIES
         LINKER_LANGUAGE CUDA
@@ -97,7 +97,7 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
     target_link_libraries(cfdsim PRIVATE cuda_lfm_3d_lib cuda_uaamg_3d_lib cuda_cg_3d_lib lfm_lib)
     target_include_directories(cfdsim PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
-    # GPU Karman validate (Cd/Cl/St)
+    # GPU Cylinder validate (Cd/Cl/St)
     add_executable(test_karman_validate_gpu test/integration/test_karman_validate_gpu.cu)
     set_target_properties(test_karman_validate_gpu PROPERTIES
         LINKER_LANGUAGE CUDA

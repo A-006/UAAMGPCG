@@ -2,7 +2,7 @@
  * @file test_lfm_instability.cpp
  * @brief Test whether LFM can amplify flow perturbations (instability prerequisite).
  *
- * Karman vortex street requires the LFM cycle to AMPLIFY small perturbations
+ * Cylinder vortex street requires the LFM cycle to AMPLIFY small perturbations
  * rather than damp them. These tests check this property on simple flows
  * without solid boundaries.
  *

@@ -1,6 +1,6 @@
 /**
  * @file test_karman_bench_3d_gpu.cu
- * @brief 3D Karman vortex street — CPU + GPU solver comparison.
+ * @brief 3D Cylinder vortex street — CPU + GPU solver comparison.
  */
 #include "core/config.h"
 #include "mesh/grid.h"
@@ -50,7 +50,7 @@ static std::vector<double> run_one(const Config& base_cfg, std::unique_ptr<Solve
 }
 
 int main() {
-    test_header("3D Karman Vortex Street — CPU + GPU Solver Benchmark");
+    test_header("3D Cylinder Vortex Street — CPU + GPU Solver Benchmark");
 
     Config cfg;
     cfg.scenario    = "karman";
@@ -103,7 +103,7 @@ int main() {
     run(Factory::create("pcg"), "CPU PCG/GMG", 50);
     run(Factory::create("pcg_uaamg"), "CPU PCG/UAAMG", 50);
 
-    // ── GPU solvers (2D, running on the same 2D Karman scenario) ──
+    // ── GPU solvers (2D, running on the same 2D Cylinder scenario) ──
     run(std::make_unique<CudaPCGSolver>(false), "GPU CG 2D", 200);
     run(std::make_unique<CudaPCGSolver>(true), "GPU PCG/UAAMG 2D", 50);
 

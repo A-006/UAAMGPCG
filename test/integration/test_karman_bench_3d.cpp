@@ -1,6 +1,6 @@
 /**
  * @file test_karman_bench_3d.cpp
- * @brief 3D Karman vortex street — CPU solver comparison.
+ * @brief 3D Cylinder vortex street — CPU solver comparison.
  */
 #include "core/config.h"
 #include "mesh/grid.h" // 2D grid for simulator
@@ -50,7 +50,7 @@ static std::vector<double> run_one(const Config& base_cfg, const std::string& so
 }
 
 int main() {
-    test_header("3D Karman Vortex Street — CPU Solver Benchmark");
+    test_header("3D Cylinder Vortex Street — CPU Solver Benchmark");
 
     Config cfg;
     cfg.scenario    = "karman";

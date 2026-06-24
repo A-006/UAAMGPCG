@@ -1,11 +1,11 @@
 // Unit tests for 2D scenario setup helpers (pure field/mask seeding).
-//   - scenarios::setup_karman_cylinder / set_uniform_inflow (karman.h)
+//   - scenarios::setup_cylinder / set_uniform_inflow (karman.h)
 //   - scenarios::seed_vortex_dipoles (leapfrog.h)
 //
 // These exercise the ANALYTIC correctness of the CPU setup code only; no
 // GPU simulator is constructed.
 #include "../test_utils.h"
-#include "io/2d/karman.h"
+#include "io/2d/cylinder.h"
 #include "io/2d/leapfrog.h"
 #include "core/config.h"
 #include "mesh/grid.h"
@@ -17,13 +17,13 @@ static void test_karman_cylinder() {
     const double Lx = 4.0, Ly = 2.0;
     Grid g(nx, ny, Lx, Ly);
 
-    scenarios::Karman k;
+    scenarios::Cylinder k;
     k.cyl_cx = 2.0;
     k.cyl_cy = 1.0;
     k.cyl_R  = 0.2;
     k.U_inf  = 1.0;
 
-    scenarios::setup_karman_cylinder(g, k);
+    scenarios::setup_cylinder(g, k);
 
     // The cell whose center is nearest the cylinder center must be solid.
     int ic = (int)std::round(k.cyl_cx / g.dx + 0.5);

@@ -1,5 +1,5 @@
 /**
- * Karman vortex street — our UAAMGPCG solver benchmark.
+ * Cylinder vortex street — our UAAMGPCG solver benchmark.
  * Outputs Cd/Cl time history for OpenFOAM comparison.
  *
  * Usage: cd tools/karman/our_solver && ./build_and_run.sh [NX] [t_end]
@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
     int nsteps = (int)(cfg.t_end / cfg.dt);
     double D = 2.0 * cfg.cyl_R, U = cfg.U_inf;
 
-    std::cout << "# Karman UAAMGPCG  NX=" << cfg.NX << " NY=" << cfg.NY << " dt=" << cfg.dt
+    std::cout << "# Cylinder UAAMGPCG  NX=" << cfg.NX << " NY=" << cfg.NY << " dt=" << cfg.dt
               << " steps=" << nsteps << " t_end=" << cfg.t_end << "\n";
     std::cout << "# D=" << D << " Re=" << cfg.Re << " U_inf=" << U << "\n";
     std::cout << "# time,Cd,Cl,max_div\n";

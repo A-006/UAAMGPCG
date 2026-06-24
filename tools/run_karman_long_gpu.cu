@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
     int nframes = nsteps / cfg.frame_skip + 1;
 
     std::cout << "===================================================\n";
-    std::cout << "  LFM Karman Vortex Street (Algorithm 1) — GPU solver\n";
+    std::cout << "  LFM Cylinder Vortex Street (Algorithm 1) — GPU solver\n";
     std::cout << "---------------------------------------------------\n";
     std::cout << "  Grid: " << cfg.NX << "x" << cfg.NY << "   dx=" << dx << "   D/dx=" << (D / dx)
               << "\n";

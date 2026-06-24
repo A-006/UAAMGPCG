@@ -1,9 +1,9 @@
-#include "io/2d/karman.h"
+#include "io/2d/cylinder.h"
 #include <cmath>
 
 namespace scenarios {
 
-void setup_karman_cylinder(Grid& g, const Karman& k) {
+void setup_cylinder(Grid& g, const Cylinder& k) {
     double R2 = k.cyl_R * k.cyl_R;
     for (int j = 1; j <= g.ny; j++) {
         for (int i = 1; i <= g.nx; i++) {
@@ -23,7 +23,7 @@ void set_uniform_inflow(Grid& g, double U_inf) {
             g.u_at(i, j) = U_inf;
 }
 
-void seed_wake_perturbation(Grid& g, const Karman& k, double amplitude) {
+void seed_wake_perturbation(Grid& g, const Cylinder& k, double amplitude) {
     double eps  = amplitude * k.U_inf;
     double x_lo = k.cyl_cx + k.cyl_R;
     double x_hi = k.cyl_cx + 5.0 * k.cyl_R;

@@ -75,7 +75,7 @@ target_link_libraries(test_lfm_perturbed_cylinder PRIVATE lfm_lib)
 add_executable(test_pcg_debug debug/test_pcg_debug.cpp)
 target_link_libraries(test_pcg_debug PRIVATE lfm_lib)
 
-# Long Karman simulation runner (for animation generation)
+# Long Cylinder simulation runner (for animation generation)
 add_executable(run_karman_long ../tools/run_karman_long.cpp)
 target_link_libraries(run_karman_long PRIVATE lfm_lib)
 
@@ -97,4 +97,4 @@ foreach(_t run_vortex_ring_collision run_delta_wing run_fire_ball run_wind_turbi
     target_link_libraries(${_t} PRIVATE lfm_lib)
 endforeach()
 
-# GPU Karman benchmark is defined in top-level CMakeLists.txt (after CUDA setup)
+# GPU Cylinder benchmark is defined in top-level CMakeLists.txt (after CUDA setup)

@@ -10,7 +10,7 @@ namespace scenarios {
 namespace {
 
 // 3D BC implementations specific to the wing scenario. These mirror the
-// 2D Karman patches but for the 3D MAC layout.
+// 2D Cylinder patches but for the 3D MAC layout.
 
 class InflowXMin3D : public bc::BoundaryCondition3D {
 public:

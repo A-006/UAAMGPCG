@@ -1,6 +1,6 @@
 /**
  * @file test_karman_validate_gpu.cu
- * @brief Karman validation with GPU solvers (UAAMG-preconditioned PCG on CUDA).
+ * @brief Cylinder validation with GPU solvers (UAAMG-preconditioned PCG on CUDA).
  *
  * Same as test_karman_validate.cpp but links cuda_uaamg_lib for GPU acceleration.
  * Usage: build/test_karman_validate_gpu [NX] [TEND] [chorin|lfm] [cpu|gpu]
@@ -14,7 +14,7 @@
 #include "solver/cuda_pcg_solver.h"
 #include "io/force.h"
 #include "io/vtk_writer.h"
-#include "io/2d/karman.h"
+#include "io/2d/cylinder.h"
 #include "../test_utils.h"
 #include <iostream>
 #include <chrono>
@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
     double D = 2.0 * cfg.cyl_R;
     double U = cfg.U_inf;
 
-    test_header("Karman Vortex Street Validation (Re=200)");
+    test_header("Cylinder Vortex Street Validation (Re=200)");
     std::cout << "Grid: " << cfg.NX << "x" << cfg.NY << "  dt=" << cfg.dt
               << "  dt/step=" << dt_per_step << "  steps=" << nsteps << "  t_end=" << cfg.t_end
               << "  integrator=" << cfg.time_integrator
@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
     else
         sim = std::make_unique<ChorinSimulator>(cfg, std::move(solver));
 
-    // Karman scenario setup (cylinder + warm inflow + wake perturbation) is
+    // Cylinder scenario setup (cylinder + warm inflow + wake perturbation) is
     // now done inside the simulator constructor, so nothing to do here.
 
     std::vector<double> time_hist, Cd_hist, Cl_hist;

@@ -9,7 +9,7 @@
 // ──────────────────────────────────────────────────────────────────
 namespace scenarios {
 
-struct Karman {
+struct Cylinder {
     double cyl_cx = 2.0;
     double cyl_cy = 1.0;
     double cyl_R  = 0.1;
@@ -17,7 +17,7 @@ struct Karman {
 };
 
 // Mark grid cells inside the cylinder as solid (stair-step approximation).
-void setup_karman_cylinder(Grid& g, const Karman& k);
+void setup_cylinder(Grid& g, const Cylinder& k);
 
 // Initialize u = U_inf everywhere (warm start so the wake develops
 // naturally rather than impulsively from rest).
@@ -27,6 +27,6 @@ void set_uniform_inflow(Grid& g, double U_inf);
 // behind the cylinder. Breaks the y-symmetry so the wake locks into
 // the alternating shedding mode in 2D (where 3D's spanwise modes are
 // absent).
-void seed_wake_perturbation(Grid& g, const Karman& k, double amplitude = 0.01);
+void seed_wake_perturbation(Grid& g, const Cylinder& k, double amplitude = 0.01);
 
 } // namespace scenarios
