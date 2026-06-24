@@ -38,6 +38,12 @@ Config load_file(const std::string& path);
 // file argument.
 KeyVals collect_assignments(int argc, char* argv[]);
 
+// Assemble a Config from an ordered list of assignments (the throwing core of
+// parse_cli): apply the scenario's 2D presets, then the assignments on top so
+// any user-set field wins. Throws std::runtime_error on an unknown scenario /
+// key / bad value. Pair with collect_assignments to drive it from argv.
+Config build_config(const KeyVals& kv);
+
 // Apply one `key = value` onto cfg. Keys matching a core Config field are set
 // directly (and type-checked); any other key is stored in cfg.extra, to be read
 // later through Config::dget / iget / sget. Throws std::runtime_error on a bad

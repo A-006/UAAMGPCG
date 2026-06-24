@@ -86,31 +86,6 @@ std::string join(const std::vector<std::string>& xs) {
     return s;
 }
 
-// Assemble a Config from an ordered list of assignments. Scenario presets fill
-// the derived fields (Ly/NY/dt/out_dir/solve_iters) as defaults; the explicit
-// assignments are then re-applied so anything the user wrote wins.
-Config build_config(const Assignments& kv) {
-    Config cfg;
-    cfg.solver = "jacobi"; // default when unspecified
-
-    auto apply_all = [&] {
-        for (const auto& [key, value] : kv)
-            apply_kv(cfg, key, value);
-    };
-
-    apply_all(); // pick up scenario / NX / U_inf / solver (inputs to the presets)
-
-    auto& registry = scenarios::ScenarioRegistry::instance();
-    if (!registry.contains(cfg.scenario))
-        throw std::runtime_error("config: unknown scenario '" + cfg.scenario +
-                                 "'; known: " + join(registry.names()));
-    registry.create(cfg.scenario)->configure(cfg);
-    cfg.solve_iters = default_solve_iters(cfg.solver);
-
-    apply_all(); // explicit values override the scenario-derived defaults
-    return cfg;
-}
-
 std::string trim(std::string s) {
     auto not_space = [](unsigned char c) { return !std::isspace(c); };
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
@@ -149,6 +124,31 @@ std::string usage() {
 }
 
 } // namespace
+
+// Assemble a Config from an ordered list of assignments. Scenario presets fill
+// the derived fields (Ly/NY/dt/out_dir/solve_iters) as defaults; the explicit
+// assignments are then re-applied so anything the user wrote wins.
+Config build_config(const KeyVals& kv) {
+    Config cfg;
+    cfg.solver = "jacobi"; // default when unspecified
+
+    auto apply_all = [&] {
+        for (const auto& [key, value] : kv)
+            apply_kv(cfg, key, value);
+    };
+
+    apply_all(); // pick up scenario / NX / U_inf / solver (inputs to the presets)
+
+    auto& registry = scenarios::ScenarioRegistry::instance();
+    if (!registry.contains(cfg.scenario))
+        throw std::runtime_error("config: unknown scenario '" + cfg.scenario +
+                                 "'; known: " + join(registry.names()));
+    registry.create(cfg.scenario)->configure(cfg);
+    cfg.solve_iters = default_solve_iters(cfg.solver);
+
+    apply_all(); // explicit values override the scenario-derived defaults
+    return cfg;
+}
 
 Config load_file(const std::string& path) {
     return build_config(read_file(path));

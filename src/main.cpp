@@ -1,5 +1,5 @@
 /**
- * @file src/cfdsim.cpp
+ * @file src/main.cpp
  * @brief Entry point for the unified LFM launcher (GPU or CPU, every scene).
  *
  * One program for the whole project. The scenario and every parameter come from
@@ -29,30 +29,25 @@
 #include "simulator/scene_3d.h"          // scene3d::is_3d_scenario / build_config
 #include <iostream>
 
-// 2D scenarios (karman, smoke, …) use the shared CPU pipeline: the 2D registry
-// configures the run and sim::run drives it.
-static int run_2d(int argc, char** argv) {
-    auto cfg = config::parse_cli(argc, argv);
-    if (!cfg)
-        return 1;
-    auto sim = SimulatorFactory::create(*cfg);
-    sim::run(*sim, *cfg);
-    return 0;
-}
-
 int main(int argc, char** argv) {
-    if (!scene3d::is_3d_scenario(scene3d::peek_scenario(argc, argv)))
-        return run_2d(argc, argv);
-
     try {
-        Config cfg = scene3d::build_config(argc, argv); // presets + your overrides
-        auto sim   = scene3d::make_simulator(cfg);      // GPU if available, else CPU
-        sim3d::run(*sim, cfg);                          // run cycles, write frames
+        if (scene3d::is_3d_scenario(scene3d::peek_scenario(argc, argv))) {
+            // 3D scene: presets + overrides, GPU if available else CPU.
+            Config cfg = scene3d::build_config(argc, argv);
+            auto sim   = scene3d::make_simulator(cfg);
+            sim3d::run(*sim, cfg);
+        } else {
+            // 2D scene: shared CPU pipeline (registry config + sim::run).
+            Config cfg = config::build_config(config::collect_assignments(argc, argv));
+            auto sim   = SimulatorFactory::create(cfg);
+            sim::run(*sim, cfg);
+        }
     } catch (const std::exception& e) {
         std::cerr << e.what() << "\n"
                   << "Usage: cfdsim [input.in] [key=value]...  (key=value overrides the file)\n"
-                     "  scenarios: vortex_ring | vortex_collision | collision_paper | leapfrog_rings | delta_wing | "
-                     "vortex_reconnection | trefoil_knot\n";
+                     "  3D: vortex_ring | vortex_collision | collision_paper | leapfrog_rings | delta_wing | "
+                     "vortex_reconnection | trefoil_knot\n"
+                     "  2D: scenario=NAME (e.g. karman)\n";
         return 1;
     }
     return 0;
