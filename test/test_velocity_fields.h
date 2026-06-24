@@ -1,5 +1,5 @@
 #pragma once
-#include "numerics/bc/patches.h"
+#include "core/bc/patches.h"
 #include "core/grid.h"
 #include <cmath>
 

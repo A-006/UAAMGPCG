@@ -1,5 +1,5 @@
 #pragma once
-#include "numerics/bc/boundary_condition.h"
+#include "core/bc/boundary_condition.h"
 
 // ──────────────────────────────────────────────────────────────────
 // Concrete BCs for 2D simulations.

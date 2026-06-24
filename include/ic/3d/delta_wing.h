@@ -1,6 +1,6 @@
 #pragma once
 #include "core/grid_3d.h"
-#include "numerics/bc/patches_3d.h"
+#include "core/bc/patches_3d.h"
 
 // ──────────────────────────────────────────────────────────────────
 // Delta wing immersed obstacle + inflow BC (paper Fig. 1 left).

@@ -1,4 +1,4 @@
-#include "numerics/advection/advection.h"
+#include "simulator/advection/advection.h"
 #include <algorithm>
 
 double AdvectionScheme::sampleU(const Grid& g, double x, double y) {

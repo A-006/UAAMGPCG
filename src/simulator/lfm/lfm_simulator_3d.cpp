@@ -1,5 +1,5 @@
 #include "simulator/lfm/lfm_simulator_3d.h"
-#include "numerics/pressure/pressure_3d.h"
+#include "simulator/pressure/pressure_3d.h"
 #include <algorithm>
 #include <cmath>
 

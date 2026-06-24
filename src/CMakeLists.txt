@@ -2,9 +2,9 @@
 set(LFM_SOURCES
     core/grid.cpp
     core/grid_3d.cpp
-    numerics/advection/advection_3d.cpp
-    numerics/bc/patches_3d.cpp
-    numerics/pressure/pressure_3d.cpp
+    simulator/advection/advection_3d.cpp
+    core/bc/patches_3d.cpp
+    simulator/pressure/pressure_3d.cpp
     simulator/simulator_3d.cpp
     simulator/scene_3d.cpp
     simulator/runner_3d.cpp
@@ -23,11 +23,11 @@ set(LFM_SOURCES
     ic/3d/wind_turbine.cpp
     config/config.cpp
     config/cli.cpp
-    numerics/advection/advection.cpp
-    numerics/bc/patches.cpp
+    simulator/advection/advection.cpp
+    core/bc/patches.cpp
     io/force.cpp
     io/vtk_writer.cpp
-    numerics/pressure/pressure.cpp
+    simulator/pressure/pressure.cpp
     simulator/chorin/chorin_simulator.cpp
     simulator/runner.cpp
     simulator/factory.cpp

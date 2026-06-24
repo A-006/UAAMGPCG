@@ -1,7 +1,7 @@
 #include "simulator/simulator_3d.h"
-#include "numerics/advection/advection_3d.h"
-#include "numerics/bc/patches_3d.h"
-#include "numerics/pressure/pressure_3d.h"
+#include "simulator/advection/advection_3d.h"
+#include "core/bc/patches_3d.h"
+#include "simulator/pressure/pressure_3d.h"
 
 ChorinSimulator3D::ChorinSimulator3D(const Config& cfg, std::unique_ptr<Solver3D> solver)
     : cfg_(cfg), grid_(cfg.NX, cfg.NY, cfg.NZ, cfg.Lx, cfg.Ly, cfg.Lz),

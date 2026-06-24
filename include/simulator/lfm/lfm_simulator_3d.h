@@ -1,7 +1,7 @@
 #pragma once
 #include "config/config.h"
 #include "core/grid_3d.h"
-#include "numerics/bc/patches_3d.h"
+#include "core/bc/patches_3d.h"
 #include "simulator/lfm/flow_map_3d.h"
 #include "simulator/simulator_3d.h"
 #include "solver/solver_3d.h"

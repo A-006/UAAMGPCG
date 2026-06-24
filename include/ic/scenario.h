@@ -1,5 +1,5 @@
 #pragma once
-#include "numerics/bc/boundary_condition.h"
+#include "core/bc/boundary_condition.h"
 #include "config/config.h"
 #include "core/grid.h"
 

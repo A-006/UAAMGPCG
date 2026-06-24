@@ -1,4 +1,4 @@
-#include "numerics/advection/advection_3d.h"
+#include "simulator/advection/advection_3d.h"
 #include <algorithm>
 
 namespace {

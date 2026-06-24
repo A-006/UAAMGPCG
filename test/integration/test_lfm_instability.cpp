@@ -16,7 +16,7 @@
 #include "simulator/chorin/chorin_simulator.h"
 #include "simulator/simulator_base.h"
 #include "solver/factory.h"
-#include "numerics/pressure/pressure.h"
+#include "simulator/pressure/pressure.h"
 #include "io/force.h"
 #include "io/vtk_writer.h"
 #include "../test_utils.h"

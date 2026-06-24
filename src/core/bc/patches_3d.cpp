@@ -1,4 +1,4 @@
-#include "numerics/bc/patches_3d.h"
+#include "core/bc/patches_3d.h"
 
 namespace bc {
 
