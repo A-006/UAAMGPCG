@@ -38,6 +38,12 @@ Config load_file(const std::string& path);
 // file argument.
 KeyVals collect_assignments(int argc, char* argv[]);
 
+// Read the ordered key=value assignments from one INI file (`#` comments), with
+// NO scenario presets applied — just the raw lines. Used by the 3D launcher to
+// load a scenario's preset file. Throws std::runtime_error on an unreadable file
+// or a malformed line.
+KeyVals read_assignments(const std::string& path);
+
 // Assemble a Config from an ordered list of assignments (the throwing core of
 // parse_cli): apply the scenario's 2D presets, then the assignments on top so
 // any user-set field wins. Throws std::runtime_error on an unknown scenario /

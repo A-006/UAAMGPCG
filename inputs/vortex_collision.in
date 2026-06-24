@@ -13,6 +13,14 @@ NZ         = 96
 cycles     = 120
 dt         = 0.001
 Re         = 0            # 0 = inviscid; set e.g. 300 for a viscous run
+Lx         = 1.0          # domain (cube)
+Ly         = 1.0
+Lz         = 1.0
+U_inf      = 1.0
+cyl_R      = 0.1          # ring size scale
+solve_iters     = 120     # CPU CG iterations (GPU backend uses its own count)
+solve_tol       = 1e-6
+lfm_cycle_steps = 2       # n steps per LFM reinitialization cycle
 
 circulation = 1.0
 perturb_n   = 0           # azimuthal seed mode (0 = none; e.g. 8 to seed the burst)

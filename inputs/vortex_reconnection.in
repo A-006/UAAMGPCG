@@ -14,6 +14,14 @@ NZ         = 64
 cycles     = 200
 dt         = 0.004
 Re         = 2000         # viscous — drives the core annihilation / reconnection
+Lx         = 1.0          # domain (cube)
+Ly         = 1.0
+Lz         = 1.0
+U_inf      = 1.0
+cyl_R      = 0.1          # ring size scale
+solve_iters     = 200     # CPU CG iterations (GPU backend uses its own count)
+solve_tol       = 1e-8
+lfm_cycle_steps = 2       # n steps per LFM reinitialization cycle
 
 circulation = 0.6
 tilt_deg    = 25          # ring tilt so near sides approach

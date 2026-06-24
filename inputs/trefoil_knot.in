@@ -14,6 +14,14 @@ NZ         = 64
 cycles     = 250
 dt         = 0.004
 Re         = 2000
+Lx         = 1.0          # domain (cube)
+Ly         = 1.0
+Lz         = 1.0
+U_inf      = 1.0
+cyl_R      = 0.05         # filament core scale
+solve_iters     = 200     # CPU CG iterations (GPU backend uses its own count)
+solve_tol       = 1e-8
+lfm_cycle_steps = 2       # n steps per LFM reinitialization cycle
 
 circulation = 0.5
 tk_scale    = 0.07        # knot size (bounding box ~ 6 x scale)

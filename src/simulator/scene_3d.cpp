@@ -4,11 +4,14 @@
 #include "simulator/scenarios/3d/delta_wing.h"
 #include "simulator/scenarios/3d/trefoil_knot.h"
 #include "simulator/scenarios/3d/vortex_ring.h"
+#include <climits>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <set>
 #include <stdexcept>
+#include <unistd.h>
 #include <vector>
 
 namespace scene3d {
@@ -23,156 +26,88 @@ bool is_3d_scenario(const std::string& name) {
     return kScenarios.count(name) != 0;
 }
 
+// Helpers used below — defined after the public entry points so this file reads
+// top-down: the launcher's two calls first, the details underneath.
+static void apply_presets(Config& cfg);
+static std::string scenario_of(const config::KeyVals& kv);
+static void derive_freestream(Config& cfg);
+
+std::string peek_scenario(int argc, char** argv) {
+    try {
+        return scenario_of(config::collect_assignments(argc, argv));
+    } catch (...) {
+        return "vortex_ring"; // the chosen path reports the real error later
+    }
+}
+
+Config build_config(int argc, char** argv) {
+    config::KeyVals kv = config::collect_assignments(argc, argv);
+
+    // Lay down the scenario's presets, then apply the user's assignments on top
+    // so any explicit override wins.
+    Config cfg;
+    cfg.scenario = scenario_of(kv);
+    apply_presets(cfg);
+    for (const auto& [k, v] : kv)
+        config::set_field(cfg, k, v);
+
+    // Then fill in fields computed from the others, now that everything is set
+    // (currently just the delta-wing freestream from its angle of attack).
+    derive_freestream(cfg);
+    return cfg;
+}
+
+// Directory holding the running executable (Linux /proc), or "" if unknown.
+static std::string exe_dir() {
+    char buf[PATH_MAX];
+    ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n <= 0)
+        return "";
+    buf[n]           = '\0';
+    std::string path = buf;
+    auto slash       = path.find_last_of('/');
+    return slash == std::string::npos ? "" : path.substr(0, slash);
+}
+
+// Locate a scenario's preset file inputs/<scenario>.in. Search order:
+// $UAAMG_PRESETS_DIR, the inputs/ dir beside (or one level above) the
+// executable, then ./inputs. Returns "" if none of them has the file.
+static std::string find_preset(const std::string& scenario) {
+    std::vector<std::string> dirs;
+    if (const char* env = std::getenv("UAAMG_PRESETS_DIR"))
+        dirs.push_back(env);
+    if (std::string exe = exe_dir(); !exe.empty()) {
+        dirs.push_back(exe + "/../inputs");
+        dirs.push_back(exe + "/inputs");
+    }
+    dirs.push_back("inputs");
+
+    for (const auto& dir : dirs) {
+        std::string path = dir + "/" + scenario + ".in";
+        if (std::ifstream(path).good())
+            return path;
+    }
+    return "";
+}
+
 // ── Per-scene defaults ─────────────────────────────────────────────────────
-// Fill cfg with a scene's baseline; the caller then re-applies the INI/CLI
-// assignments on top so any field the user wrote wins. Scene-specific knobs go
-// into cfg.extra as string defaults (so an explicit override replaces them).
+// Every 3D scenario shares the LFM base below; the rest of the recipe is DATA,
+// read from its preset file inputs/<scenario>.in (so grid size, dt, cycles, …
+// change with no rebuild). build_config then layers the user's INI/CLI
+// assignments on top so any explicit override still wins.
 static void apply_presets(Config& cfg) {
     cfg.dim             = 3;
     cfg.time_integrator = "lfm";
     cfg.solver          = "cg"; // CPU backend: robust 3D choice (GPU has its own CG)
     cfg.extra["backend"] = "auto"; // GPU if available, else CPU (see main)
-    const std::string& s = cfg.scenario;
 
-    if (s == "vortex_ring") {
-        cfg.NX = cfg.NY = cfg.NZ = 64;
-        cfg.Lx = cfg.Ly = cfg.Lz = 1.0;
-        cfg.U_inf = 1.0;
-        cfg.Re    = 0;
-        cfg.cyl_R = 0.1;
-        cfg.dt              = 0.002;
-        cfg.solve_iters     = 200;
-        cfg.solve_tol       = 1e-6;
-        cfg.lfm_cycle_steps = 2;
-        cfg.frame_skip      = 1;
-        cfg.out_dir         = "output_vortex_ring";
-        cfg.extra["cycles"]      = "60";
-        cfg.extra["circulation"] = "1.0";
-        cfg.extra["vtk_mode"]    = "full"; // small grid → nice full-field viz
-    } else if (s == "vortex_collision") {
-        cfg.NX = cfg.NY = cfg.NZ = 96;
-        cfg.Lx = cfg.Ly = cfg.Lz = 1.0;
-        cfg.U_inf = 1.0;
-        cfg.Re    = 0;
-        cfg.cyl_R = 0.1;
-        cfg.dt              = 0.001;
-        cfg.solve_iters     = 120;
-        cfg.solve_tol       = 1e-6;
-        cfg.lfm_cycle_steps = 2;
-        cfg.frame_skip      = 4;
-        cfg.out_dir         = "output_vortex_collision";
-        cfg.extra["cycles"]      = "120";
-        cfg.extra["circulation"] = "1.0";
-        cfg.extra["perturb_n"]   = "0";
-        cfg.extra["perturb_amp"] = "0.0";
-        cfg.extra["vtk_mode"]    = "slim";
-    } else if (s == "collision_paper") {
-        // Paper aspect: collision axis x is the SHORT NX; rings expand into the
-        // large 2NX x 2NX plane. Domain 0.5x1x1 → dx=dy=dz uniform (= 1/256).
-        cfg.NX = 128;
-        cfg.NY = 256;
-        cfg.NZ = 256;
-        cfg.Lx = 0.5;
-        cfg.Ly = 1.0;
-        cfg.Lz = 1.0;
-        cfg.U_inf           = 1.0;
-        cfg.Re              = 0;    // inviscid — stability comes from BFECC clamp
-        cfg.lfm_bfecc_clamp = true; // paper's BfeccClamp (numerical viscosity)
-        cfg.cyl_R           = 0.1;
-        cfg.dt              = 4e-4;
-        cfg.solve_iters     = 8; // paper: CG fixed at 8 iterations
-        cfg.solve_tol       = 0.0;
-        cfg.lfm_cycle_steps = 5; // paper: n = 5 steps per reinitialization cycle
-        cfg.frame_skip      = 4;
-        cfg.out_dir         = "output_collision_paper";
-        cfg.extra["cycles"]   = "250";
-        cfg.extra["vtk_mode"] = "slim";
-    } else if (s == "leapfrog_rings") {
-        // Two coaxial same-sign rings that leapfrog along +x (paper Fig. 14).
-        // Domain 2x1x1 (long axis = propagation axis), dx=dy=dz=1/128.
-        // Paper recipe: 256x128x128, n=10 steps/cycle, inviscid + BFECC clamp.
-        cfg.NX = 256;
-        cfg.NY = 128;
-        cfg.NZ = 128;
-        cfg.Lx = 2.0;
-        cfg.Ly = 1.0;
-        cfg.Lz = 1.0;
-        cfg.U_inf           = 1.0;
-        cfg.Re              = 0;    // inviscid — stability from BFECC clamp
-        cfg.lfm_bfecc_clamp = true;
-        cfg.cyl_R           = 0.1;
-        cfg.dt              = 1e-3;
-        cfg.solve_iters     = 15; // paper: CG fixed at 15 iterations
-        cfg.solve_tol       = 0.0;
-        cfg.lfm_cycle_steps = 10; // paper: n = 10 steps per reinitialization cycle
-        cfg.frame_skip      = 4;
-        cfg.out_dir         = "output_leapfrog_rings";
-        cfg.extra["cycles"]      = "300";
-        cfg.extra["circulation"] = "1.0";
-        cfg.extra["vtk_mode"]    = "slim";
-    } else if (s == "delta_wing") {
-        cfg.NX = 256; // domain 2x1x1 (paper aspect), dx=dy=dz=1/128
-        cfg.NY = 128;
-        cfg.NZ = 128;
-        cfg.Lx = 2.0;
-        cfg.Ly = 1.0;
-        cfg.Lz = 1.0;
-        cfg.U_inf           = 0.6;
-        cfg.Re              = 0;
-        cfg.lfm_bfecc_clamp = true;
-        cfg.dt              = 2e-3;
-        cfg.solve_iters     = 200;
-        cfg.solve_tol       = 1e-6;
-        cfg.lfm_cycle_steps = 5;
-        cfg.lfm_bc          = "freestream";
-        cfg.frame_skip      = 4;
-        cfg.out_dir         = "output_delta_wing";
-        cfg.extra["cycles"]   = "400";
-        cfg.extra["aoa_deg"]  = "20";
-        cfg.extra["sdf_path"] = "";
-        cfg.extra["vtk_mode"] = "slim";
-    } else if (s == "vortex_reconnection") {
-        // Two same-sign rings, offset + tilted 25° so their near sides approach
-        // and reconnect (paper Fig. 5). Reconnection is viscosity-driven → Re>0.
-        cfg.NX = cfg.NY = cfg.NZ = 64;
-        cfg.Lx = cfg.Ly = cfg.Lz = 1.0;
-        cfg.U_inf = 1.0;
-        cfg.Re    = 2000.0;
-        cfg.cyl_R = 0.1;
-        cfg.dt              = 0.004;
-        cfg.solve_iters     = 200;
-        cfg.solve_tol       = 1e-8;
-        cfg.lfm_cycle_steps = 2;
-        cfg.frame_skip      = 4;
-        cfg.out_dir         = "output_vortex_reconnection";
-        cfg.extra["cycles"]      = "200";
-        cfg.extra["circulation"] = "0.6";
-        cfg.extra["tilt_deg"]    = "25";
-        cfg.extra["vtk_mode"]    = "full";
-    } else if (s == "trefoil_knot") {
-        // Trefoil-knot vortex filament (paper Fig. 7): relaxes and breaks into a
-        // large + small vortex. Viscous (Re>0).
-        cfg.NX = cfg.NY = cfg.NZ = 64;
-        cfg.Lx = cfg.Ly = cfg.Lz = 1.0;
-        cfg.U_inf = 1.0;
-        cfg.Re    = 2000.0;
-        cfg.cyl_R = 0.05;
-        cfg.dt              = 0.004;
-        cfg.solve_iters     = 200;
-        cfg.solve_tol       = 1e-8;
-        cfg.lfm_cycle_steps = 2;
-        cfg.frame_skip      = 5;
-        cfg.out_dir         = "output_trefoil";
-        cfg.extra["cycles"]      = "250";
-        cfg.extra["circulation"] = "0.5";
-        cfg.extra["tk_scale"]    = "0.07";
-        cfg.extra["vtk_mode"]    = "full";
-    } else {
-        throw std::runtime_error(
-            "cfdsim: unknown scenario '" + s +
-            "'; known: vortex_ring | vortex_collision | collision_paper | leapfrog_rings | delta_wing | "
-            "vortex_reconnection | trefoil_knot");
-    }
+    std::string path = find_preset(cfg.scenario);
+    if (path.empty())
+        throw std::runtime_error("cfdsim: no preset for scenario '" + cfg.scenario +
+                                 "'; expected inputs/" + cfg.scenario +
+                                 ".in (or set UAAMG_PRESETS_DIR)");
+    for (const auto& [key, value] : config::read_assignments(path))
+        config::set_field(cfg, key, value);
 }
 
 // Which scenario do these assignments select? Last `scenario=` wins; the
@@ -194,30 +129,6 @@ static void derive_freestream(Config& cfg) {
     double aoa    = cfg.dget("aoa_deg", 20.0) * M_PI / 180.0;
     cfg.inflow_ux = cfg.U_inf * std::cos(aoa);
     cfg.inflow_uy = cfg.U_inf * std::sin(aoa);
-}
-
-std::string peek_scenario(int argc, char** argv) {
-    try {
-        return scenario_of(config::collect_assignments(argc, argv));
-    } catch (...) {
-        return "vortex_ring"; // the chosen path reports the real error later
-    }
-}
-
-Config build_config(int argc, char** argv) {
-    config::KeyVals kv = config::collect_assignments(argc, argv);
-    // 1. Pick the scenario and lay down its preset defaults.
-    Config cfg;
-    cfg.scenario = scenario_of(kv);
-    apply_presets(cfg);
-
-    // 2. Re-apply the user's assignments so any explicit override wins.
-    for (const auto& [k, v] : kv)
-        config::set_field(cfg, k, v);
-
-    // 3. Fill in fields derived from others (e.g. delta-wing freestream).
-    derive_freestream(cfg);
-    return cfg;
 }
 
 // ── Author cross-check: load a shared staggered IC (ic{x,y,z}.raw, float32) ──

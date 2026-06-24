@@ -14,6 +14,12 @@ NY         = 128
 NZ         = 128
 cycles     = 400
 dt         = 2e-3
+Lx         = 2.0          # domain 2x1x1 (paper aspect), dx=dy=dz uniform
+Ly         = 1.0
+Lz         = 1.0
+Re         = 0
+lfm_cycle_steps = 5       # n steps per LFM reinitialization cycle
+solve_tol       = 1e-6
 
 U_inf      = 0.6          # freestream speed
 aoa_deg    = 20           # angle of attack (degrees)

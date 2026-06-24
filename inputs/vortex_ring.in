@@ -16,6 +16,14 @@ NZ         = 64
 cycles     = 60           # number of LFM reinitialization cycles
 dt         = 0.002
 Re         = 0            # 0 = inviscid
+Lx         = 1.0          # domain (cube)
+Ly         = 1.0
+Lz         = 1.0
+U_inf      = 1.0
+cyl_R      = 0.1          # ring size scale
+solve_iters     = 200     # CPU CG iterations (GPU backend uses its own count)
+solve_tol       = 1e-6
+lfm_cycle_steps = 2       # n steps per LFM reinitialization cycle
 
 circulation = 1.0         # ring strength
 

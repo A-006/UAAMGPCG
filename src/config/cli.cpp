@@ -23,62 +23,6 @@ int default_solve_iters(const std::string& solver) {
     return (solver == "jacobi" || solver == "rbgs") ? 2000 : 50;
 }
 
-// One row per Config field: how to parse its string value. Adding a field is
-// one line here — the same open/closed shape as the scenario registry. Any key
-// NOT listed here is treated as a scenario-specific knob and stored in
-// cfg.extra (read later via Config::dget / iget / sget).
-void apply_kv(Config& cfg, const std::string& key, const std::string& value) {
-    static const std::unordered_map<std::string, std::function<void(Config&, const std::string&)>>
-        kSetters = {
-            {"dim", [](Config& c, const std::string& v) { c.dim = std::stoi(v); }},
-            {"NX", [](Config& c, const std::string& v) { c.NX = std::stoi(v); }},
-            {"NY", [](Config& c, const std::string& v) { c.NY = std::stoi(v); }},
-            {"NZ", [](Config& c, const std::string& v) { c.NZ = std::stoi(v); }},
-            {"Lx", [](Config& c, const std::string& v) { c.Lx = std::stod(v); }},
-            {"Ly", [](Config& c, const std::string& v) { c.Ly = std::stod(v); }},
-            {"Lz", [](Config& c, const std::string& v) { c.Lz = std::stod(v); }},
-            {"scenario", [](Config& c, const std::string& v) { c.scenario = v; }},
-            {"U_inf", [](Config& c, const std::string& v) { c.U_inf = std::stod(v); }},
-            {"Re", [](Config& c, const std::string& v) { c.Re = std::stod(v); }},
-            {"cyl_cx", [](Config& c, const std::string& v) { c.cyl_cx = std::stod(v); }},
-            {"cyl_cy", [](Config& c, const std::string& v) { c.cyl_cy = std::stod(v); }},
-            {"cyl_cz", [](Config& c, const std::string& v) { c.cyl_cz = std::stod(v); }},
-            {"cyl_R", [](Config& c, const std::string& v) { c.cyl_R = std::stod(v); }},
-            {"cylinder_type", [](Config& c, const std::string& v) { c.cylinder_type = v; }},
-            {"time_integrator", [](Config& c, const std::string& v) { c.time_integrator = v; }},
-            {"dt", [](Config& c, const std::string& v) { c.dt = std::stod(v); }},
-            {"t_end", [](Config& c, const std::string& v) { c.t_end = std::stod(v); }},
-            {"lfm_cycle_steps",
-             [](Config& c, const std::string& v) { c.lfm_cycle_steps = std::stoi(v); }},
-            {"lfm_bfecc_clamp",
-             [](Config& c, const std::string& v) { c.lfm_bfecc_clamp = std::stoi(v) != 0; }},
-            {"lfm_march_fp32",
-             [](Config& c, const std::string& v) { c.lfm_march_fp32 = std::stoi(v) != 0; }},
-            {"lfm_bc", [](Config& c, const std::string& v) { c.lfm_bc = v; }},
-            {"inflow_ux", [](Config& c, const std::string& v) { c.inflow_ux = std::stod(v); }},
-            {"inflow_uy", [](Config& c, const std::string& v) { c.inflow_uy = std::stod(v); }},
-            {"inflow_uz", [](Config& c, const std::string& v) { c.inflow_uz = std::stod(v); }},
-            {"solver", [](Config& c, const std::string& v) { c.solver = v; }},
-            {"solve_iters", [](Config& c, const std::string& v) { c.solve_iters = std::stoi(v); }},
-            {"solve_tol", [](Config& c, const std::string& v) { c.solve_tol = std::stod(v); }},
-            {"frame_skip", [](Config& c, const std::string& v) { c.frame_skip = std::stoi(v); }},
-            {"out_dir", [](Config& c, const std::string& v) { c.out_dir = v; }},
-        };
-
-    auto it = kSetters.find(key);
-    if (it == kSetters.end()) {
-        // Not a core field → scenario-specific knob (see Config::extra). The 3D
-        // scenarios read these via cfg.dget/iget/sget.
-        cfg.extra[key] = value;
-        return;
-    }
-    try {
-        it->second(cfg, value);
-    } catch (const std::logic_error&) { // stoi/stod: invalid_argument / out_of_range
-        throw std::runtime_error("config: bad value '" + value + "' for key '" + key + "'");
-    }
-}
-
 std::string join(const std::vector<std::string>& xs) {
     std::string s;
     for (const auto& x : xs)
@@ -134,7 +78,7 @@ Config build_config(const KeyVals& kv) {
 
     auto apply_all = [&] {
         for (const auto& [key, value] : kv)
-            apply_kv(cfg, key, value);
+            set_field(cfg, key, value);
     };
 
     apply_all(); // pick up scenario / NX / U_inf / solver (inputs to the presets)
@@ -152,6 +96,10 @@ Config build_config(const KeyVals& kv) {
 
 Config load_file(const std::string& path) {
     return build_config(read_file(path));
+}
+
+KeyVals read_assignments(const std::string& path) {
+    return read_file(path);
 }
 
 KeyVals collect_assignments(int argc, char* argv[]) {
@@ -178,8 +126,60 @@ Config build_config(int argc, char* argv[]) {
     return build_config(collect_assignments(argc, argv));
 }
 
+// One row per Config field: how to parse its string value. Adding a field is
+// one line here — the same open/closed shape as the scenario registry. Any key
+// NOT listed here is treated as a scenario-specific knob and stored in
+// cfg.extra (read later via Config::dget / iget / sget).
 void set_field(Config& cfg, const std::string& key, const std::string& value) {
-    apply_kv(cfg, key, value);
+    static const std::unordered_map<std::string, std::function<void(Config&, const std::string&)>>
+        kSetters = {
+            {"dim", [](Config& c, const std::string& v) { c.dim = std::stoi(v); }},
+            {"NX", [](Config& c, const std::string& v) { c.NX = std::stoi(v); }},
+            {"NY", [](Config& c, const std::string& v) { c.NY = std::stoi(v); }},
+            {"NZ", [](Config& c, const std::string& v) { c.NZ = std::stoi(v); }},
+            {"Lx", [](Config& c, const std::string& v) { c.Lx = std::stod(v); }},
+            {"Ly", [](Config& c, const std::string& v) { c.Ly = std::stod(v); }},
+            {"Lz", [](Config& c, const std::string& v) { c.Lz = std::stod(v); }},
+            {"scenario", [](Config& c, const std::string& v) { c.scenario = v; }},
+            {"U_inf", [](Config& c, const std::string& v) { c.U_inf = std::stod(v); }},
+            {"Re", [](Config& c, const std::string& v) { c.Re = std::stod(v); }},
+            {"cyl_cx", [](Config& c, const std::string& v) { c.cyl_cx = std::stod(v); }},
+            {"cyl_cy", [](Config& c, const std::string& v) { c.cyl_cy = std::stod(v); }},
+            {"cyl_cz", [](Config& c, const std::string& v) { c.cyl_cz = std::stod(v); }},
+            {"cyl_R", [](Config& c, const std::string& v) { c.cyl_R = std::stod(v); }},
+            {"cylinder_type", [](Config& c, const std::string& v) { c.cylinder_type = v; }},
+            {"time_integrator", [](Config& c, const std::string& v) { c.time_integrator = v; }},
+            {"dt", [](Config& c, const std::string& v) { c.dt = std::stod(v); }},
+            {"t_end", [](Config& c, const std::string& v) { c.t_end = std::stod(v); }},
+            {"lfm_cycle_steps",
+             [](Config& c, const std::string& v) { c.lfm_cycle_steps = std::stoi(v); }},
+            {"lfm_bfecc_clamp",
+             [](Config& c, const std::string& v) { c.lfm_bfecc_clamp = std::stoi(v) != 0; }},
+            {"lfm_march_fp32",
+             [](Config& c, const std::string& v) { c.lfm_march_fp32 = std::stoi(v) != 0; }},
+            {"lfm_bc", [](Config& c, const std::string& v) { c.lfm_bc = v; }},
+            {"inflow_ux", [](Config& c, const std::string& v) { c.inflow_ux = std::stod(v); }},
+            {"inflow_uy", [](Config& c, const std::string& v) { c.inflow_uy = std::stod(v); }},
+            {"inflow_uz", [](Config& c, const std::string& v) { c.inflow_uz = std::stod(v); }},
+            {"solver", [](Config& c, const std::string& v) { c.solver = v; }},
+            {"solve_iters", [](Config& c, const std::string& v) { c.solve_iters = std::stoi(v); }},
+            {"solve_tol", [](Config& c, const std::string& v) { c.solve_tol = std::stod(v); }},
+            {"frame_skip", [](Config& c, const std::string& v) { c.frame_skip = std::stoi(v); }},
+            {"out_dir", [](Config& c, const std::string& v) { c.out_dir = v; }},
+        };
+
+    auto it = kSetters.find(key);
+    if (it == kSetters.end()) {
+        // Not a core field → scenario-specific knob (see Config::extra). The 3D
+        // scenarios read these via cfg.dget/iget/sget.
+        cfg.extra[key] = value;
+        return;
+    }
+    try {
+        it->second(cfg, value);
+    } catch (const std::logic_error&) { // stoi/stod: invalid_argument / out_of_range
+        throw std::runtime_error("config: bad value '" + value + "' for key '" + key + "'");
+    }
 }
 
 std::optional<Config> parse_cli(int argc, char* argv[]) {

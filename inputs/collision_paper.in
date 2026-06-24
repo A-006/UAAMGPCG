@@ -15,13 +15,22 @@ backend    = auto       # auto: 有GPU就用GPU，没有自动保底CPU。也可
 NX         = 128
 NY         = 256
 NZ         = 256
-cycles     = 250
-dt         = 4e-4
+cycles     = 260
+dt         = 1e-4         # paper value for the SHARP variant-D rings (max|u|~32 →
+                         # CFL~1.6 at dt=1e-4). dt=4e-4 blows up on the sharp IC.
+Lx         = 0.5          # collision axis (short) — keeps dx=dy=dz uniform
+Ly         = 1.0
+Lz         = 1.0
+U_inf      = 1.0
+Re         = 0            # inviscid — stability from the BFECC clamp below
+cyl_R      = 0.1
+lfm_cycle_steps = 5       # paper: n = 5 steps per reinitialization cycle
+solve_tol       = 0.0     # fixed-iteration CG (no tolerance early-out)
 
 lfm_bfecc_clamp = 1       # paper's BfeccClamp (1 = on). Set 0 to see it blow up.
 solve_iters     = 8       # paper: CG fixed at 8 iterations
 
-frame_skip = 4
+frame_skip = 8
 vtk_mode   = slim
 out_dir    = output_collision_paper
 # gpu      = 0
