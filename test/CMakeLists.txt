@@ -10,6 +10,20 @@ foreach(_sst test_operator_2d test_laplacian_accuracy_2d test_poisson_convergenc
     add_executable(${_sst} semistruct/${_sst}.cpp)
 endforeach()
 
+# ── Unstructured FVM (triangle meshes: Poisson + Chorin NS) ──
+# Manufactured-solution checks of the cell-centered FVM assembly and the unsteady
+# NS solver (see include/unstructured/). They need fvm_poisson/ns_solver, which
+# live in lfm_lib. test_fvm_amgx additionally needs the AMGX backend.
+foreach(_uvm test_fvm_mms test_tgv_mms test_neumann_mms)
+    add_executable(${_uvm} unstructured/${_uvm}.cpp)
+    target_link_libraries(${_uvm} PRIVATE lfm_lib)
+endforeach()
+
+if(UAAMG_WITH_AMGX)
+    add_executable(test_fvm_amgx unstructured/test_fvm_amgx.cpp)
+    target_link_libraries(test_fvm_amgx PRIVATE lfm_lib)
+endif()
+
 # ── Standalone solver tests (use test_common.h, no lfm_lib needed) ──
 add_executable(test_jacobi solver/test_jacobi.cpp)
 add_executable(test_cg solver/test_cg.cpp)

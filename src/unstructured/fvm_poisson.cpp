@@ -55,6 +55,115 @@ CSR assemble_laplacian(const PolyMesh& m, const ScalarField&) {
     return A;
 }
 
+CSR assemble_laplacian(const PolyMesh& m, const ScalarField&, const BCTypeField& bctype) {
+    const int n = m.n_cells;
+    std::vector<std::map<int, double>> rows(n);
+    for (int c = 0; c < n; ++c)
+        rows[c][c] += 0.0;
+
+    for (const auto& f : m.faces) {
+        const int P = f.owner, N = f.nb;
+        const double gd = g_diff(f, face_dvec(m, f));
+        if (N >= 0) {
+            rows[P][P] += gd;
+            rows[P][N] -= gd;
+            rows[N][N] += gd;
+            rows[N][P] -= gd;
+        } else if (bctype(f.Cf) == BCType::Dirichlet) {
+            rows[P][P] += gd; // Dirichlet: known value -> RHS
+        }
+        // Neumann (zero-gradient) boundary face: zero flux, contributes nothing.
+    }
+
+    CSR A;
+    A.n = n;
+    A.row_ptr.reserve(n + 1);
+    A.row_ptr.push_back(0);
+    for (int c = 0; c < n; ++c) {
+        for (const auto& e : rows[c]) {
+            A.col_idx.push_back(e.first);
+            A.vals.push_back(e.second);
+        }
+        A.row_ptr.push_back(static_cast<int>(A.col_idx.size()));
+    }
+    A.b.assign(n, 0.0);
+    return A;
+}
+
+std::vector<Vec2> ls_gradient(const PolyMesh& m, const std::vector<double>& p,
+                              const ScalarField& dirichlet, const BCTypeField& bctype) {
+    const int n = m.n_cells;
+    std::vector<double> a11(n, 0), a12(n, 0), a22(n, 0), b1(n, 0), b2(n, 0);
+    auto add = [&](int c, Vec2 d, double dp) {
+        double w = 1.0 / dot(d, d);
+        a11[c] += w * d.x * d.x;
+        a12[c] += w * d.x * d.y;
+        a22[c] += w * d.y * d.y;
+        b1[c] += w * d.x * dp;
+        b2[c] += w * d.y * dp;
+    };
+    for (const auto& f : m.faces) {
+        if (f.nb >= 0) {
+            Vec2 d    = m.centroid[f.nb] - m.centroid[f.owner];
+            double dp = p[f.nb] - p[f.owner];
+            add(f.owner, d, dp);
+            add(f.nb, {-d.x, -d.y}, -dp);
+        } else if (bctype(f.Cf) == BCType::Dirichlet) {
+            Vec2 d = f.Cf - m.centroid[f.owner];
+            add(f.owner, d, dirichlet(f.Cf) - p[f.owner]);
+        }
+        // Neumann face: omit from the LS fit (forcing p_f=p_P would be only
+        // 1st-order); the interior-neighbour rows determine the gradient.
+    }
+    std::vector<Vec2> g(n);
+    for (int c = 0; c < n; ++c) {
+        double det = a11[c] * a22[c] - a12[c] * a12[c];
+        g[c] = {(a22[c] * b1[c] - a12[c] * b2[c]) / det, (a11[c] * b2[c] - a12[c] * b1[c]) / det};
+    }
+    return g;
+}
+
+std::vector<double> build_rhs(const PolyMesh& m, const ScalarField& f, const ScalarField& dirichlet,
+                              const std::vector<Vec2>& grad, const BCTypeField& bctype) {
+    const int n = m.n_cells;
+    std::vector<double> b(n, 0.0);
+    for (int c = 0; c < n; ++c)
+        b[c] = -f(m.centroid[c]) * m.vol[c];
+
+    for (const auto& face : m.faces) {
+        const int P = face.owner, N = face.nb;
+        Vec2 d    = face_dvec(m, face);
+        double gd = g_diff(face, d);
+        Vec2 Tf{face.Sf.x - gd * d.x, face.Sf.y - gd * d.y};
+        Vec2 gf =
+            (N >= 0) ? Vec2{0.5 * (grad[P].x + grad[N].x), 0.5 * (grad[P].y + grad[N].y)} : grad[P];
+        double corr = dot(gf, Tf);
+        if (N >= 0) {
+            b[P] += corr;
+            b[N] -= corr;
+        } else if (bctype(face.Cf) == BCType::Dirichlet) {
+            b[P] += gd * dirichlet(face.Cf) + corr;
+        }
+        // Neumann face: zero flux -> no RHS contribution.
+    }
+    return b;
+}
+
+std::vector<double> solve_poisson(const PolyMesh& m, const ScalarField& f,
+                                  const ScalarField& dirichlet, int n_outer,
+                                  const std::function<std::vector<double>(const CSR&)>& solver,
+                                  const BCTypeField& bctype) {
+    CSR A = assemble_laplacian(m, dirichlet, bctype);
+    std::vector<double> p(m.n_cells, 0.0);
+    std::vector<Vec2> grad(m.n_cells, {0, 0});
+    for (int outer = 0; outer < n_outer; ++outer) {
+        A.b  = build_rhs(m, f, dirichlet, grad, bctype);
+        p    = solver(A);
+        grad = ls_gradient(m, p, dirichlet, bctype);
+    }
+    return p;
+}
+
 std::vector<Vec2> ls_gradient(const PolyMesh& m, const std::vector<double>& p,
                               const ScalarField& dirichlet) {
     const int n = m.n_cells;

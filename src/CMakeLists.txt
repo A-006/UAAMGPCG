@@ -30,27 +30,31 @@ set(LFM_SOURCES
     integrator/chorin/chorin_simulator_2d.cpp
     integrator/runner_2d.cpp
     integrator/factory.cpp
-    solver/jacobi_2d.cpp
-    solver/rbgs_2d.cpp
-    solver/pcg_2d.cpp
-    solver/amgx_solver_2d.cpp
-    solver/amgx_solver_3d.cpp
-    solver/amgx_backend.cpp
-    solver/jacobi_3d.cpp
-    solver/rbgs_3d.cpp
-    solver/pcg_3d.cpp
+    solver/relaxation/jacobi_2d.cpp
+    solver/relaxation/rbgs_2d.cpp
+    solver/krylov/pcg_2d.cpp
+    solver/amgx/amgx_solver_2d.cpp
+    solver/amgx/amgx_solver_3d.cpp
+    solver/amgx/amgx_backend.cpp
+    solver/relaxation/jacobi_3d.cpp
+    solver/relaxation/rbgs_3d.cpp
+    solver/krylov/pcg_3d.cpp
     solver/factory_3d.cpp
-    solver/preconditioner/2d/gmg_preconditioner.cpp
-    solver/preconditioner/2d/amg_preconditioner.cpp
-    solver/preconditioner/2d/uaamg_preconditioner.cpp
-    solver/preconditioner/3d/gmg_preconditioner_3d.cpp
-    solver/preconditioner/3d/amg_preconditioner_3d.cpp
-    solver/preconditioner/3d/uaamg_preconditioner_3d.cpp
+    solver/preconditioner/gmg_preconditioner_2d.cpp
+    solver/preconditioner/amg_preconditioner_2d.cpp
+    solver/preconditioner/uaamg_preconditioner_2d.cpp
+    solver/preconditioner/gmg_preconditioner_3d.cpp
+    solver/preconditioner/amg_preconditioner_3d.cpp
+    solver/preconditioner/uaamg_preconditioner_3d.cpp
     solver/factory_2d.cpp
     integrator/lfm/flow_map_2d.cpp
     integrator/lfm/lfm_simulator_2d.cpp
     integrator/lfm/flow_map_3d.cpp
     integrator/lfm/lfm_simulator_3d.cpp
+    # Unstructured FVM: cell-centered Poisson + Chorin projection NS on triangle
+    # meshes (reuses AmgxBackend for the pressure solve — see include/unstructured/).
+    unstructured/fvm_poisson.cpp
+    unstructured/ns_solver.cpp
 )
 
 add_library(lfm_lib ${LFM_SOURCES})
