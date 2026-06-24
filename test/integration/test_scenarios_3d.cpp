@@ -8,7 +8,6 @@
 #include "io/3d/plate.h"
 #include "io/3d/freestream.h"
 #include "mesh/grid_3d.h"
-#include "core/scalar_field_3d.h"
 #include <cmath>
 
 // Returns {normalized max|div| = max|div|*dx/maxU, raw maxU} for a ring on

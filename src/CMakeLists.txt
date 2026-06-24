@@ -11,7 +11,6 @@ set(LFM_SOURCES
     integrator/runner_3d.cpp
     io/vtk_writer_3d.cpp
     io/vtk_slim_3d.cpp
-    core/scalar_field_3d.cpp
     io/2d/cylinder.cpp
     io/2d/leapfrog.cpp
     io/2d/primitives_2d.cpp

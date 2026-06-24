@@ -35,7 +35,7 @@ target_link_libraries(test_bc_solid PRIVATE lfm_lib)
 
 # ── Bulk CPU unit tests (added 2026-06-17) — all link lfm_lib only ──
 foreach(_ut
-        test_bc_patches_2d test_grid_ops_2d test_grid_3d test_scalar_field_3d
+        test_bc_patches_2d test_grid_ops_2d test_grid_3d
         test_bc_patches_3d test_config_cli test_scenarios_2d test_scenarios_3d
         test_io_roundtrip test_numerics_interp test_flow_map)
     add_executable(${_ut} integration/${_ut}.cpp)
