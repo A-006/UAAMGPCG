@@ -29,7 +29,7 @@ set(LFM_SOURCES
     io/vtk_writer.cpp
     integrator/ops/pressure.cpp
     integrator/chorin/chorin_simulator.cpp
-    integrator/runner.cpp
+    integrator/runner_2d.cpp
     integrator/factory.cpp
     solver/jacobi.cpp
     solver/rbgs.cpp

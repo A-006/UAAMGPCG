@@ -3,7 +3,7 @@
 #include "mesh/grid.h"
 #include "integrator/lfm/flow_map_2d.h"
 #include "io/scenario.h"
-#include "integrator/simulator_base.h"
+#include "integrator/simulator_2d.h"
 #include "solver/solver.h"
 #include <memory>
 #include <vector>

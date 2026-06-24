@@ -1,4 +1,4 @@
-#include "integrator/runner.h"
+#include "integrator/runner_2d.h"
 #include "mesh/grid.h"
 #include "io/vtk_writer.h"
 #include <chrono>

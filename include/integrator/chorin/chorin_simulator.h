@@ -3,7 +3,7 @@
 #include "mesh/grid.h"
 #include "io/scenario.h"
 #include "solver/solver.h"
-#include "integrator/simulator_base.h"
+#include "integrator/simulator_2d.h"
 #include <memory>
 
 /// Standard velocity-based simulator: advect → diffuse → project (Chorin).

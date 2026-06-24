@@ -1,6 +1,6 @@
 #pragma once
 #include "core/config.h"
-#include "integrator/simulator_base.h"
+#include "integrator/simulator_2d.h"
 #include <functional>
 #include <vector>
 

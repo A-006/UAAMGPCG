@@ -1,7 +1,7 @@
 #pragma once
 #include "core/config.h"
 #include "integrator/simulator_3d.h"
-#include "integrator/simulator_base.h"
+#include "integrator/simulator_2d.h"
 #include "solver/solver.h"
 #include "solver/solver_3d.h"
 #include <memory>

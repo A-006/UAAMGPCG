@@ -2,7 +2,7 @@
 #include "io/cli.h"
 #include "core/config.h"
 #include "integrator/factory.h"
-#include "integrator/simulator_base.h"
+#include "integrator/simulator_2d.h"
 #include <memory>
 
 // ── 2D scene provisioning — the peer of scene3d for the launcher ─────────────

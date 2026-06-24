@@ -9,7 +9,7 @@
  */
 #include "core/config.h"
 #include "mesh/grid.h"
-#include "integrator/simulator_base.h"
+#include "integrator/simulator_2d.h"
 #include "integrator/chorin/chorin_simulator.h"
 #include "integrator/lfm/lfm_simulator.h"
 #include "solver/factory.h"

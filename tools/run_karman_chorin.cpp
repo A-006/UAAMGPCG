@@ -6,7 +6,7 @@
 #include "core/config.h"
 #include "io/force.h"
 #include "integrator/factory.h"
-#include "integrator/runner.h"
+#include "integrator/runner_2d.h"
 #include <cmath>
 #include <iomanip>
 #include <iostream>

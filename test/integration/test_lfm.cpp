@@ -18,7 +18,7 @@
 #include "integrator/lfm/flow_map_2d.h"
 #include "integrator/lfm/lfm_simulator.h"
 #include "integrator/chorin/chorin_simulator.h"
-#include "integrator/simulator_base.h"
+#include "integrator/simulator_2d.h"
 #include "solver/factory.h"
 #include "integrator/ops/pressure.h"
 #include "io/force.h"

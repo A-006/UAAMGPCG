@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-// Minimal 3D Simulator base — parallels include/integrator/simulator_base.h
+// Minimal 3D Simulator base — parallels include/integrator/simulator_2d.h
 // but typed on Grid3D / Solver3D.
 class Simulator3D : public Simulation {
 public:
