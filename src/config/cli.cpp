@@ -1,4 +1,5 @@
 #include "config/cli.h"
+#include "simulator/scenarios/2d/generic_scenario.h"
 #include "simulator/scenarios/scenario_registry.h"
 #include <algorithm>
 #include <cctype>
@@ -67,12 +68,39 @@ std::string usage() {
            join(scenarios::ScenarioRegistry::instance().names()) + "\n";
 }
 
+bool file_exists(const std::string& path) {
+    return std::ifstream(path).good();
+}
+
+// Last `scenario=` in the assignments wins; default if none.
+std::string scenario_of(const Assignments& kv) {
+    std::string s = "karman";
+    for (const auto& [k, v] : kv)
+        if (k == "scenario")
+            s = v;
+    return s;
+}
+
+// 2D scenes are data-driven: a bare `scenario=<name>` auto-loads inputs/<name>.in
+// as the lowest-priority layer (explicit file/CLI assignments still win on top).
+// Returns the case-file assignments, or empty if there is no matching file.
+Assignments scenario_case_file(const Assignments& kv) {
+    std::string path = "inputs/" + scenario_of(kv) + ".in";
+    return file_exists(path) ? read_file(path) : Assignments{};
+}
+
 } // namespace
 
-// Assemble a Config from an ordered list of assignments. Scenario presets fill
-// the derived fields (Ly/NY/dt/out_dir/solve_iters) as defaults; the explicit
-// assignments are then re-applied so anything the user wrote wins.
-Config build_config(const KeyVals& kv) {
+// Assemble a Config from an ordered list of assignments. The matching case file
+// inputs/<scenario>.in seeds the presets/geometry/IC as the lowest layer; the
+// GenericScenario then derives NY/dt; finally the explicit assignments are
+// re-applied so anything the user wrote wins.
+Config build_config(const KeyVals& explicit_kv) {
+    // Layer order (low → high priority): scenario case file, then the caller's
+    // explicit (file + CLI) assignments.
+    KeyVals kv = scenario_case_file(explicit_kv);
+    kv.insert(kv.end(), explicit_kv.begin(), explicit_kv.end());
+
     Config cfg;
     cfg.solver = "jacobi"; // default when unspecified
 
@@ -83,11 +111,14 @@ Config build_config(const KeyVals& kv) {
 
     apply_all(); // pick up scenario / NX / U_inf / solver (inputs to the presets)
 
+    // Valid if a registered built-in OR it has a case file inputs/<name>.in;
+    // either way every 2D scene is the same data-driven GenericScenario.
     auto& registry = scenarios::ScenarioRegistry::instance();
-    if (!registry.contains(cfg.scenario))
+    if (!registry.contains(cfg.scenario) && scenario_case_file(kv).empty())
         throw std::runtime_error("config: unknown scenario '" + cfg.scenario +
-                                 "'; known: " + join(registry.names()));
-    registry.create(cfg.scenario)->configure(cfg);
+                                 "' (no inputs/" + cfg.scenario +
+                                 ".in); known: " + join(registry.names()));
+    scenarios::GenericScenario().configure(cfg);
     cfg.solve_iters = default_solve_iters(cfg.solver);
 
     apply_all(); // explicit values override the scenario-derived defaults
@@ -96,6 +127,10 @@ Config build_config(const KeyVals& kv) {
 
 Config load_file(const std::string& path) {
     return build_config(read_file(path));
+}
+
+Config build(const KeyVals& assignments) {
+    return build_config(assignments);
 }
 
 KeyVals read_assignments(const std::string& path) {

@@ -23,6 +23,12 @@ std::string peek_scenario(int argc, char** argv);
 // validation, to pick the 2D-vs-3D code path.
 std::string peek_key(int argc, char** argv, const std::string& key, const std::string& def);
 
+// Resolve dimensionality ("2"/"3") for the 2D-vs-3D dispatch: an explicit `dim`
+// in the args wins; otherwise it is read from the scenario's case file
+// inputs/<scenario>.in (so a bare `scenario=vortex_ring` still routes to 3D via
+// its file's dim); default "2".
+std::string peek_dim(int argc, char** argv);
+
 // Assemble a Config from argv: apply the scenario's per-scene presets, then the
 // INI/CLI overrides on top (so any user-set field wins), then post-process
 // derived fields (e.g. delta-wing freestream from angle of attack).

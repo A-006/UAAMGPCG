@@ -26,6 +26,13 @@ std::optional<Config> parse_cli(int argc, char* argv[]);
 // Throws std::runtime_error on an unreadable file, unknown key, or bad value.
 Config load_file(const std::string& path);
 
+// Build a Config from an ordered assignment list (the same engine parse_cli /
+// load_file use): the scenario case file inputs/<scenario>.in seeds the
+// presets/geometry/IC, then these assignments override on top. Lets a caller
+// (e.g. a test) reproduce the exact production 2D config. Throws on an unknown
+// scenario / key / bad value.
+Config build(const KeyVals& assignments);
+
 // ── Building blocks for callers that need their own preset logic ──────────
 // The 2D `lfm_2d` path above runs the scenario through the 2D ScenarioRegistry.
 // The 3D GPU launcher (`cfdsim`) instead applies its own per-scenario presets,

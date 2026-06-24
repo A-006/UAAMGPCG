@@ -12,10 +12,10 @@ set(LFM_SOURCES
     io/vtk_slim_3d.cpp
     core/scalar_field_3d.cpp
     simulator/scenarios/2d/karman.cpp
+    simulator/scenarios/2d/leapfrog.cpp
+    simulator/scenarios/2d/primitives_2d.cpp
+    simulator/scenarios/2d/generic_scenario.cpp
     simulator/scenarios/scenario_registry.cpp
-    simulator/scenarios/2d/karman_scenario.cpp
-    simulator/scenarios/2d/leapfrog_scenario.cpp
-    simulator/scenarios/2d/smoke_scenario.cpp
     simulator/scenarios/scenario_3d_registry.cpp
     simulator/scenarios/3d/vortex_ring.cpp
     simulator/scenarios/3d/trefoil_knot.cpp

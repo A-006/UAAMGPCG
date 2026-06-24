@@ -18,7 +18,7 @@ namespace launcher {
 // the case file / CLI `dim` (default 2) — so the launcher knows nothing about
 // scenario names. Throws on bad input.
 inline Config build_config(int argc, char** argv) {
-    if (scene3d::peek_key(argc, argv, "dim", "2") == "3")
+    if (scene3d::peek_dim(argc, argv) == "3")
         return scene3d::build_config(argc, argv);
     return scene2d::build_config(argc, argv);
 }

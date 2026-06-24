@@ -1,0 +1,34 @@
+# ── 2D Kármán vortex street (paper Fig. 8) ─────────────────────────────────
+# Immersed circular cylinder in a uniform stream; a thin wake perturbation
+# breaks the y-symmetry so the alternating vortex street locks in.
+# Run: ./build/cfdsim inputs/karman.in    (or: ./build/cfdsim scenario=karman)
+# Override anything on the CLI, e.g.:      ./build/cfdsim scenario=karman NX=128
+
+scenario        = karman
+
+# ── Domain / time presets ──────────────────────────────────────────────────
+Lx              = 4.0
+Ly              = 1.0
+ny_ratio        = 4          # NY = max(NX/4, ny_min)
+ny_min          = 16
+dt_cfl          = 0.5        # dt = 0.5 * (Lx/NX) / U_inf   (CFL ≈ 0.5)
+U_inf           = 1.0
+# Validated combo for the vortex street: Chorin + a real Poisson solver.
+# (lfm + jacobi both collapse this flow to zero — override to experiment.)
+time_integrator = chorin
+solver          = pcg
+out_dir         = output_karman
+
+# ── Geometry: a single immersed cylinder ───────────────────────────────────
+# Position/radius default to the core cyl_* Config fields (cyl_cx=1.0,
+# cyl_cy=0.5, cyl_R=0.1) so they stay overridable via cyl_cx=… / cyl_R=… and
+# cyl_R=0 disables the obstacle. Override here with geom.cx/cy/R if desired.
+geom            = cylinder
+
+# ── Initial condition: uniform stream + a wake-symmetry-breaking band ───────
+ic0             = uniform_inflow   # U defaults to U_inf
+ic1             = wake_perturb     # band reads the cylinder cx,cy,R; off when cyl_R=0
+ic1.amplitude   = 0.01
+
+# ── Boundary stack ─────────────────────────────────────────────────────────
+bc              = karman           # inflow + outflow + slip walls + solid

@@ -24,6 +24,7 @@ namespace scene3d {
 static void apply_presets(Config& cfg);
 static std::string scenario_of(const config::KeyVals& kv);
 static void derive_freestream(Config& cfg);
+static std::string find_preset(const std::string& scenario);
 
 std::string peek_scenario(int argc, char** argv) {
     try {
@@ -43,6 +44,32 @@ std::string peek_key(int argc, char** argv, const std::string& key, const std::s
     } catch (...) {
         return def; // the chosen path reports the real error later
     }
+}
+
+std::string peek_dim(int argc, char** argv) {
+    try {
+        std::string dim, scenario;
+        bool have_dim = false;
+        for (const auto& [k, v] : config::collect_assignments(argc, argv)) {
+            if (k == "dim") {
+                dim      = v;
+                have_dim = true;
+            } else if (k == "scenario")
+                scenario = v;
+        }
+        if (have_dim)
+            return dim; // explicit dim in file/CLI wins
+        // Otherwise take dim from the scenario's case file (where dim=3 lives).
+        if (!scenario.empty())
+            if (std::string path = find_preset(scenario); !path.empty())
+                for (const auto& [k, v] : config::read_assignments(path))
+                    if (k == "dim")
+                        dim = v;
+        if (!dim.empty())
+            return dim;
+    } catch (...) {
+    }
+    return "2";
 }
 
 Config build_config(int argc, char** argv) {

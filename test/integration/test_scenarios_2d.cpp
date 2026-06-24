@@ -1,12 +1,12 @@
 // Unit tests for 2D scenario setup helpers (pure field/mask seeding).
 //   - scenarios::setup_karman_cylinder / set_uniform_inflow (karman.h)
-//   - scenarios::LeapfrogScenario::init_grid (leapfrog_scenario.h)
+//   - scenarios::seed_vortex_dipoles (leapfrog.h)
 //
 // These exercise the ANALYTIC correctness of the CPU setup code only; no
 // GPU simulator is constructed.
 #include "../test_utils.h"
 #include "simulator/scenarios/2d/karman.h"
-#include "simulator/scenarios/2d/leapfrog_scenario.h"
+#include "simulator/scenarios/2d/leapfrog.h"
 #include "config/config.h"
 #include "core/grid.h"
 #include <cmath>
@@ -109,9 +109,7 @@ static void test_uniform_inflow_2d() {
 // Max |divergence| of the leapfrog IC on an N x (N/2) grid over Lx=4, Ly=2.
 static double leapfrog_max_div(int N) {
     Grid g(N, N / 2, 4.0, 2.0);
-    Config cfg; // init_grid ignores cfg, but the signature requires one.
-    scenarios::LeapfrogScenario sc;
-    sc.init_grid(g, cfg);
+    scenarios::seed_vortex_dipoles(g, scenarios::VortexDipoles{});
     double max_div = 0.0;
     for (int j = 1; j <= g.ny; j++)
         for (int i = 1; i <= g.nx; i++)
@@ -124,10 +122,8 @@ static void test_leapfrog_ic() {
     // vortex positions (x=0.9, 1.4) land inside the domain.
     const int nx = 128, ny = 64;
     Grid g(nx, ny, 4.0, 2.0);
-    Config cfg; // init_grid ignores cfg, but the signature requires one.
 
-    scenarios::LeapfrogScenario sc;
-    sc.init_grid(g, cfg);
+    scenarios::seed_vortex_dipoles(g, scenarios::VortexDipoles{});
 
     // The IC is a superposition of Lamb-Oseen vortices, which is analytically
     // divergence-free; on the MAC grid only the discrete truncation error
