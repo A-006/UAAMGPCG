@@ -1,6 +1,6 @@
 // Fast convergence oracle (correct A, matches test_paper_bench). PCG solve at a
 // fused-path size; reports rel residual per iteration. No CPU reference.
-#include "solver/cuda/cuda_pcg_3d.h"
+#include "solver/cuda/krylov/cuda_pcg_3d.h"
 #include "solver/cuda/cuda_common_3d.h"
 #include <cstdio>
 #include <cstdlib>

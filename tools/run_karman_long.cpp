@@ -1,14 +1,14 @@
 /**
  * @file run_karman_long.cpp
- * @brief Long Karman vortex street simulation using LFM (paper's Algorithm 1).
+ * @brief Long Cylinder vortex street simulation using LFM (paper's Algorithm 1).
  *
  * Usage: run_karman_long [t_end] [frame_skip] [NX]
  *   defaults: t_end=40, frame_skip=10, NX=256
  */
-#include "config/config.h"
-#include "core/grid.h"
-#include "simulator/factory.h"
-#include "io/vtk_writer.h"
+#include "io/config.h"
+#include "mesh/grid_2d.h"
+#include "integrator/factory.h"
+#include "io/vtk_writer_2d.h"
 #include "io/force.h"
 #include <iostream>
 #include <iomanip>
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
     int nframes = nsteps / cfg.frame_skip + 1;
 
     std::cout << "===================================================\n";
-    std::cout << "  LFM Karman Vortex Street (Algorithm 1)\n";
+    std::cout << "  LFM Cylinder Vortex Street (Algorithm 1)\n";
     std::cout << "---------------------------------------------------\n";
     std::cout << "  Grid: " << cfg.NX << "x" << cfg.NY << "   dx=" << dx << "   D/dx=" << (D / dx)
               << "\n";

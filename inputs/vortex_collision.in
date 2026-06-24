@@ -4,6 +4,7 @@
 # Higher-res viscous example: ./build/cfdsim inputs/vortex_collision.in NX=192 NY=192 NZ=192 Re=300 dt=0.0007
 
 scenario   = vortex_collision
+dim        = 3            # 3D scenario (the launcher routes dim==3 to the 3D engine)
 
 backend    = auto       # auto: 有GPU就用GPU，没有自动保底CPU。也可写死 gpu / cpu
 
@@ -13,10 +14,37 @@ NZ         = 96
 cycles     = 120
 dt         = 0.001
 Re         = 0            # 0 = inviscid; set e.g. 300 for a viscous run
+Lx         = 1.0          # domain (cube)
+Ly         = 1.0
+Lz         = 1.0
+U_inf      = 1.0
+cyl_R      = 0.1          # ring size scale
+solve_iters     = 120     # CPU CG iterations (GPU backend uses its own count)
+solve_tol       = 1e-6
+lfm_cycle_steps = 2       # n steps per LFM reinitialization cycle
 
-circulation = 1.0
-perturb_n   = 0           # azimuthal seed mode (0 = none; e.g. 8 to seed the burst)
-perturb_amp = 0.0         # seed amplitude
+# ── Initial condition: two coaxial rings of opposite circulation, colliding
+# head-on along x. Two IC sources: ic0 (left, +Γ) and ic1 (right, −Γ).
+# center/radius/core are ABSOLUTE coordinates (cube is 1×1×1).
+ic              = vortex_ring
+ic0.center      = 0.36,0.5,0.5
+ic0.axis        = 1.0,0.0,0.0
+ic0.radius      = 0.10
+ic0.core        = 0.025
+ic0.circulation = 1.0
+ic0.n_segments  = 200
+ic0.perturb_n   = 0           # azimuthal seed mode (0 = none; e.g. 8 to seed the burst)
+ic0.perturb_amp = 0.0         # seed amplitude
+
+ic1             = vortex_ring
+ic1.center      = 0.64,0.5,0.5
+ic1.axis        = 1.0,0.0,0.0
+ic1.radius      = 0.10
+ic1.core        = 0.025
+ic1.circulation = -1.0
+ic1.n_segments  = 200
+ic1.perturb_n   = 0
+ic1.perturb_amp = 0.0
 
 frame_skip = 4
 vtk_mode   = slim         # |omega| only — disk-friendly at higher resolution

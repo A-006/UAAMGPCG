@@ -2,10 +2,10 @@
  * @file test_cuda_cg.cu
  * @brief GPU CG vs CPU CG comparison tests.
  */
-#include "solver/cuda/cuda_cg.h"
-#include "solver/pcg.h"
-#include "solver/preconditioner/2d/identity_preconditioner.h"
-#include "core/grid.h"
+#include "solver/cuda/krylov/cuda_cg_2d.h"
+#include "solver/krylov/pcg_2d.h"
+#include "solver/preconditioner/identity_preconditioner_2d.h"
+#include "mesh/grid_2d.h"
 #include <cstdio>
 #include <cmath>
 #include <vector>

@@ -10,17 +10,17 @@
  *   T5: Pullback roundtrip (Ψ then Φ)
  *   T6: Gauge projection on uniform impulse
  *   T7: Full cycle on uniform flow (no cylinder)
- *   T8: Full cycle on Karman setup (with cylinder)
+ *   T8: Full cycle on Cylinder setup (with cylinder)
  *   T9: Compare Chorin vs LFM one step
  */
-#include "config/config.h"
-#include "core/grid.h"
-#include "simulator/flow_map_2d.h"
-#include "simulator/lfm_simulator.h"
-#include "simulator/chorin_simulator.h"
-#include "simulator/simulator_base.h"
-#include "solver/factory.h"
-#include "numerics/pressure/pressure.h"
+#include "io/config.h"
+#include "mesh/grid_2d.h"
+#include "integrator/lfm/flow_map_2d.h"
+#include "integrator/lfm/lfm_simulator_2d.h"
+#include "integrator/chorin/chorin_simulator_2d.h"
+#include "integrator/simulator_2d.h"
+#include "solver/factory_2d.h"
+#include "integrator/ops/pressure_2d.h"
 #include "io/force.h"
 #include "../test_utils.h"
 #include "../test_velocity_fields.h"
@@ -325,7 +325,7 @@ static void t7_lfm_uniform_cycle() {
 // T8: Full LFM cycle with cylinder
 // ═══════════════════════════════════════════════════════════
 static void t8_lfm_karman_setup() {
-    test_header("T8: Full LFM cycle with cylinder (Karman setup)");
+    test_header("T8: Full LFM cycle with cylinder (Cylinder setup)");
 
     Config cfg;
     cfg.NX              = 64;
@@ -360,9 +360,9 @@ static void t8_lfm_karman_setup() {
                 max_u = std::max(max_u, g.u_at(i, j));
             }
     std::cout << "    max|div|=" << max_div << " u_range=[" << min_u << "," << max_u << "]\n";
-    check(max_div < 100.0, "Karman cycle: div bounded (stair-step cylinder)");
-    check(min_u >= -0.5, "Karman cycle: u ≥ -0.5 (moderate backflow at stair-step)");
-    check(max_u <= 3.0, "Karman cycle: u ≤ 3 (reasonable acceleration)");
+    check(max_div < 100.0, "Cylinder cycle: div bounded (stair-step cylinder)");
+    check(min_u >= -0.5, "Cylinder cycle: u ≥ -0.5 (moderate backflow at stair-step)");
+    check(max_u <= 3.0, "Cylinder cycle: u ≤ 3 (reasonable acceleration)");
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -521,7 +521,7 @@ static void t11_rk4_shear_forward() {
     cfg.cyl_R           = 0;
     cfg.time_integrator = "lfm";
     cfg.lfm_cycle_steps = 1;
-    cfg.scenario        = "smoke"; // no Karman BC
+    cfg.scenario        = "smoke"; // no Cylinder BC
     auto solver         = Factory::create("pcg_uaamg");
     LFMSimulator sim(cfg, std::move(solver));
     Grid& g = const_cast<Grid&>(sim.grid());
@@ -1029,10 +1029,10 @@ static void t19_cylinder_re100() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// T20: Karman vortex street at Re=200
+// T20: Cylinder vortex street at Re=200
 // ═══════════════════════════════════════════════════════════
 static void t20_karman_re200() {
-    test_header("T20: LFM Karman vortex street at Re=200");
+    test_header("T20: LFM Cylinder vortex street at Re=200");
 
     Config cfg;
     cfg.NX              = 256;

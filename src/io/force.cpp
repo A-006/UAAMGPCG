@@ -104,7 +104,7 @@ CylinderForce computeForce(const Grid& g, double dt, double U_inf, double Re, do
 void writeForceHistory(const std::string& filename, const std::vector<double>& time,
                        const std::vector<double>& Cd, const std::vector<double>& Cl) {
     std::ofstream f(filename);
-    f << "# Karman vortex street force history\n";
+    f << "# Cylinder vortex street force history\n";
     f << "# time,Cd,Cl\n";
     f << std::scientific << std::setprecision(10);
     for (size_t i = 0; i < time.size(); i++) {

@@ -1,6 +1,6 @@
 #pragma once
-#include "numerics/bc/patches.h"
-#include "core/grid.h"
+#include "mesh/bc/patches_2d.h"
+#include "mesh/grid_2d.h"
 #include <cmath>
 
 /// Set uniform velocity: u = U, v = V on all fluid faces.

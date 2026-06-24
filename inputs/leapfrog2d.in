@@ -1,0 +1,30 @@
+# ── 2D leapfrogging vortex dipoles (paper Fig. 10) ─────────────────────────
+# Two co-axial counter-rotating Lamb-Oseen pairs self-propel along +x; the
+# trailing pair is drawn through the leading one and they swap roles. Inviscid
+# (Re=0) — the LFM impulse transport must keep the dipoles alive.
+# Run: ./build/cfdsim inputs/leapfrog2d.in  (or: ./build/cfdsim scenario=leapfrog2d)
+
+scenario        = leapfrog2d
+
+# ── Domain / time presets ──────────────────────────────────────────────────
+Lx              = 4.0
+Ly              = 2.0
+ny_ratio        = 2          # NY = max(NX/2, ny_min)
+ny_min          = 16
+dt_cfl          = 0.5        # dt = 0.5 * (Lx/NX) / U_inf   (CFL ≈ 0.5)
+U_inf           = 1.0
+Re              = 0.0        # inviscid — pure impulse-transport test
+time_integrator = lfm
+out_dir         = output_leapfrog
+
+# ── Initial condition: the 4-vortex (two-dipole) leapfrog field ────────────
+ic              = vortex_dipole
+ic.core         = 0.12       # Lamb-Oseen core radius
+ic.gamma        = 1.0        # |circulation| per vortex
+ic.half_d       = 0.30       # half-separation of each dipole in y
+ic.x0           = 1.4        # leading dipole x
+ic.x1           = 0.9        # trailing dipole x
+# ic.yc left unset ⇒ propagation axis = Ly/2
+
+# ── Boundary stack ─────────────────────────────────────────────────────────
+bc              = free_slip_walls  # closed inviscid box

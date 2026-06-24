@@ -1,4 +1,4 @@
-#include "solver/jacobi_3d.h"
+#include "solver/relaxation/jacobi_3d.h"
 #include <cstdio>
 #include <cmath>
 

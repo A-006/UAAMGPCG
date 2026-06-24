@@ -5,6 +5,7 @@
 #  or: ./pipeline.sh inputs/vortex_reconnection.in
 
 scenario   = vortex_reconnection
+dim        = 3            # 3D scenario (the launcher routes dim==3 to the 3D engine)
 
 backend    = auto       # auto: 有GPU就用GPU，没有自动保底CPU。也可写死 gpu / cpu
 
@@ -14,9 +15,34 @@ NZ         = 64
 cycles     = 200
 dt         = 0.004
 Re         = 2000         # viscous — drives the core annihilation / reconnection
+Lx         = 1.0          # domain (cube)
+Ly         = 1.0
+Lz         = 1.0
+U_inf      = 1.0
+cyl_R      = 0.1          # ring size scale
+solve_iters     = 200     # CPU CG iterations (GPU backend uses its own count)
+solve_tol       = 1e-8
+lfm_cycle_steps = 2       # n steps per LFM reinitialization cycle
 
-circulation = 0.6
-tilt_deg    = 25          # ring tilt so near sides approach
+# ── Initial condition: two SAME-sign rings, offset along x and tilted ±25° about
+# z so their near sides approach, deform, and reconnect. The tilt is baked into
+# each ring's `axis` = (cos25°, ±sin25°, 0). center/radius/core are ABSOLUTE
+# coords (cube 1×1×1). (To re-tilt, recompute the axis components.)
+ic              = vortex_ring
+ic0.center      = 0.40,0.50,0.50
+ic0.axis        = 0.90630778703664994,0.42261826174069944,0.0   # +25°
+ic0.radius      = 0.14
+ic0.core        = 0.025
+ic0.circulation = 0.6
+ic0.n_segments  = 240
+
+ic1             = vortex_ring
+ic1.center      = 0.60,0.50,0.50
+ic1.axis        = 0.90630778703664994,-0.42261826174069944,0.0  # −25°
+ic1.radius      = 0.14
+ic1.core        = 0.025
+ic1.circulation = 0.6
+ic1.n_segments  = 240
 
 frame_skip = 4
 vtk_mode   = full         # small grid → velocity-coloured 3D

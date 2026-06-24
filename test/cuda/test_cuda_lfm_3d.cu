@@ -6,15 +6,15 @@
 // P0: free-slip box BC + pressure projection vs CPU FreeSlipAllFaces3D /
 //     PressureProjection3D.
 // ════════════════════════════════════════════════════════════════════
-#include "solver/cuda/cuda_lfm_3d.h"
-#include "core/grid_3d.h"
-#include "config/config.h"
-#include "numerics/bc/patches_3d.h"
-#include "numerics/pressure/pressure_3d.h"
-#include "simulator/lfm_simulator_3d.h"
-#include "simulator/cuda_lfm_simulator_3d.h"
-#include "simulator/scenarios/3d/vortex_ring.h"
-#include "solver/cuda_pcg_solver_3d.h"
+#include "integrator/lfm/cuda_lfm_3d.h"
+#include "mesh/grid_3d.h"
+#include "io/config.h"
+#include "mesh/bc/patches_3d.h"
+#include "integrator/ops/pressure_3d.h"
+#include "integrator/lfm/lfm_simulator_3d.h"
+#include "integrator/lfm/cuda_lfm_simulator_3d.h"
+#include "io/3d/vortex_ring.h"
+#include "solver/cuda/krylov/cuda_pcg_solver_3d.h"
 #include "solver/factory_3d.h"
 #include <cmath>
 #include <cstdio>

@@ -8,9 +8,9 @@
 // Both entry points: apply scenario presets first, then re-apply the INI/CLI
 // assignments so any user-set field wins.
 #include "../test_utils.h"
-#include "config/cli.h"
-#include "config/config.h"
-#include "simulator/scene_3d.h"
+#include "io/cli.h"
+#include "io/config.h"
+#include "io/3d/case_3d.h"
 
 #include <string>
 #include <vector>
@@ -109,7 +109,7 @@ int main() {
         check(cfg.NX == 128, "collision_paper preset NX = 128");
         check(cfg.NY == 256, "collision_paper preset NY = 256");
         check(cfg.NZ == 256, "collision_paper preset NZ = 256");
-        check_approx(cfg.dt, 4e-4, 1e-12, "collision_paper preset dt = 4e-4");
+        check_approx(cfg.dt, 1e-4, 1e-12, "collision_paper preset dt = 1e-4 (variant-D)");
         check_approx(cfg.Re, 0.0, 1e-12, "collision_paper preset Re = 0 (inviscid)");
         check(cfg.lfm_bfecc_clamp, "collision_paper preset enables BFECC clamp");
         check(cfg.lfm_cycle_steps == 5, "collision_paper preset lfm_cycle_steps = 5");

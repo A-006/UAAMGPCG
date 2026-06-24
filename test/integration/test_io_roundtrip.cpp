@@ -8,10 +8,10 @@
 #include "../test_utils.h"
 
 #include "io/vtk_slim_3d.h"
-#include "io/vtk_writer.h"
-#include "core/grid_3d.h"
-#include "core/grid.h"
-#include "config/config.h"
+#include "io/vtk_writer_2d.h"
+#include "mesh/grid_3d.h"
+#include "mesh/grid_2d.h"
+#include "io/config.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -121,7 +121,7 @@ int main() {
     }
 
     // ── Reload into a fresh Grid3D using the documented load_raw_ic layout ──
-    // (load_raw_ic is file-static in scene_3d.cpp; replicate its exact loop.)
+    // (load_raw_ic is file-static in setup_3d.cpp; replicate its exact loop.)
     Grid3D g2(nx, ny, nz, 1.0, 1.0, 1.0);
     {
         long c = 0;

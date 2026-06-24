@@ -2,8 +2,8 @@
  * @file test_paper_bench_f.cu
  * @brief FP32 paper-scale benchmark — float PCG + UAAMG preconditioner
  */
-#include "solver/cuda/cuda_uaamg_preconditioner_3d.h"
-#include "solver/cuda/cuda_pcg_3d.h"
+#include "solver/cuda/preconditioner/cuda_uaamg_preconditioner_3d.h"
+#include "solver/cuda/krylov/cuda_pcg_3d.h"
 #include <cstdio>
 #include <cmath>
 #include <vector>

@@ -1,6 +1,6 @@
 /**
  * @file test_lfm_perturbed_cylinder.cpp
- * @brief Simplest Karman test: start with an asymmetric vortex behind cylinder.
+ * @brief Simplest Cylinder test: start with an asymmetric vortex behind cylinder.
  *
  * If LFM can sustain vortex shedding from a large initial perturbation,
  * the algorithm works but needs a trigger. If not, the algorithm itself
@@ -9,10 +9,10 @@
  * Build: add to test/CMakeLists.txt
  * Run:   ./build/test/test_lfm_perturbed_cylinder
  */
-#include "config/config.h"
-#include "core/grid.h"
-#include "simulator/lfm_simulator.h"
-#include "solver/factory.h"
+#include "io/config.h"
+#include "mesh/grid_2d.h"
+#include "integrator/lfm/lfm_simulator_2d.h"
+#include "solver/factory_2d.h"
 #include "io/force.h"
 #include "../test_utils.h"
 #include <iostream>

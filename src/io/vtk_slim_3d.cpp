@@ -1,5 +1,5 @@
 #include "io/vtk_slim_3d.h"
-#include "numerics/ops/operators_3d.h"
+#include "mesh/ops/operators_3d.h"
 #include <cstdio>
 #include <fstream>
 #include <vector>

@@ -1,0 +1,22 @@
+# ── 2D buoyant smoke in a closed box ───────────────────────────────────────
+# Starts from rest; a constant upward buoyancy drives the plume. Four no-slip
+# walls. Demonstrates the body-force hook with zero immersed geometry.
+# Run: ./build/cfdsim inputs/smoke.in    (or: ./build/cfdsim scenario=smoke)
+
+scenario        = smoke
+
+# ── Domain / time presets ──────────────────────────────────────────────────
+Lx              = 1.0
+Ly              = 1.0
+ny_square       = 1          # NY = NX (square grid)
+dt              = 0.005
+out_dir         = output_smoke
+
+# ── No geometry, no velocity IC (starts from rest) ─────────────────────────
+
+# ── Body force: constant upward buoyancy on every fluid cell ───────────────
+body_force      = buoyancy
+body_force.accel = 5.0
+
+# ── Boundary stack ─────────────────────────────────────────────────────────
+bc              = smoke            # four no-slip walls + solid

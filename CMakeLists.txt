@@ -12,6 +12,11 @@ endif()
 
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 
+# Optional NVIDIA AMGX Poisson backend (solver=amgx). Uses AMGX's C API only,
+# so it links the prebuilt libamgxsh.so without needing nvcc. See src/CMakeLists.txt.
+option(UAAMG_WITH_AMGX "Build the AMGX Poisson solver backend" OFF)
+set(AMGX_ROOT "" CACHE PATH "Path to AMGX (with include/amgx_c.h and build/libamgxsh.so)")
+
 # Global include path
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
@@ -34,7 +39,7 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
     # GPU unit / benchmark tests (moved out of src/solver/cuda)
     add_subdirectory(test/cuda)
 
-    # GPU Karman benchmark (2D)
+    # GPU Cylinder benchmark (2D)
     add_executable(test_karman_bench_gpu test/integration/test_karman_bench_gpu.cu)
     set_target_properties(test_karman_bench_gpu PROPERTIES
         LINKER_LANGUAGE CUDA
@@ -46,7 +51,7 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
         ${CMAKE_SOURCE_DIR}/test
     )
 
-    # GPU Karman benchmark (3D)
+    # GPU Cylinder benchmark (3D)
     add_executable(test_karman_bench_3d_gpu test/integration/test_karman_bench_3d_gpu.cu)
     set_target_properties(test_karman_bench_3d_gpu PROPERTIES
         LINKER_LANGUAGE CUDA
@@ -58,7 +63,7 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
         ${CMAKE_SOURCE_DIR}/test
     )
 
-    # GPU-solver LFM Karman runner (CPU sim loop, GPU Poisson solve)
+    # GPU-solver LFM Cylinder runner (CPU sim loop, GPU Poisson solve)
     add_executable(run_karman_long_gpu tools/run_karman_long_gpu.cu)
     set_target_properties(run_karman_long_gpu PROPERTIES
         LINKER_LANGUAGE CUDA
@@ -79,20 +84,23 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
     # CUDA build: compile the .cpp as CUDA (nvcc) so it can drive the GPU-resident
     # simulator. HAVE_CUDA enables the GPU backend; runs on GPU by default
     # (backend=auto), with a CPU fallback when no device is present.
-    # cfdsim.cpp is just main(); make_simulator_3d.cpp builds the GPU/CPU
+    # main.cpp is just main(); make_simulator_3d.cpp builds the GPU/CPU
     # simulator, so it needs nvcc too. Both compile as CUDA in this build.
-    add_executable(cfdsim src/cfdsim.cpp src/simulator/make_simulator_3d.cpp)
-    set_source_files_properties(src/cfdsim.cpp src/simulator/make_simulator_3d.cpp
+    add_executable(cfdsim src/main.cpp src/integrator/make_simulator_2d.cpp
+        src/integrator/make_simulator_3d.cpp)
+    set_source_files_properties(src/main.cpp src/integrator/make_simulator_2d.cpp
+        src/integrator/make_simulator_3d.cpp
         PROPERTIES LANGUAGE CUDA)
     set_target_properties(cfdsim PROPERTIES
         LINKER_LANGUAGE CUDA
         CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
     )
     target_compile_definitions(cfdsim PRIVATE HAVE_CUDA)
-    target_link_libraries(cfdsim PRIVATE cuda_lfm_3d_lib cuda_uaamg_3d_lib cuda_cg_3d_lib lfm_lib)
+    target_link_libraries(cfdsim PRIVATE cuda_lfm_3d_lib cuda_uaamg_3d_lib cuda_cg_3d_lib
+        cuda_uaamg_lib cuda_cg_lib lfm_lib)
     target_include_directories(cfdsim PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
-    # GPU Karman validate (Cd/Cl/St)
+    # GPU Cylinder validate (Cd/Cl/St)
     add_executable(test_karman_validate_gpu test/integration/test_karman_validate_gpu.cu)
     set_target_properties(test_karman_validate_gpu PROPERTIES
         LINKER_LANGUAGE CUDA
@@ -110,7 +118,8 @@ else()
     # CPU-only cfdsim: the SAME sources, compiled by the C++ compiler (no nvcc).
     # Without HAVE_CUDA make_simulator_3d.cpp pulls in no CUDA headers, so
     # backend=auto/gpu both resolve to the host LFMSimulator3D. GPU optional.
-    add_executable(cfdsim src/cfdsim.cpp src/simulator/make_simulator_3d.cpp)
+    add_executable(cfdsim src/main.cpp src/integrator/make_simulator_2d.cpp
+        src/integrator/make_simulator_3d.cpp)
     target_link_libraries(cfdsim PRIVATE lfm_lib)
     target_include_directories(cfdsim PRIVATE ${CMAKE_SOURCE_DIR}/include)
 endif()

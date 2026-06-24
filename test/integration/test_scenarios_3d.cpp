@@ -1,87 +1,14 @@
 // Unit tests for 3D scenario setup helpers (pure field/mask seeding).
-//   - scenarios::seed_fire_ball (fire_ball.h)
 //   - scenarios::add_vortex_ring (vortex_ring.h)
 //   - scenarios::set_uniform_inflow / set_uniform_freestream (delta_wing.h)
 //
 // CPU setup correctness only; no GPU simulator is constructed.
 #include "../test_utils.h"
-#include "simulator/scenarios/3d/fire_ball.h"
-#include "simulator/scenarios/3d/vortex_ring.h"
-#include "simulator/scenarios/3d/delta_wing.h"
-#include "core/grid_3d.h"
-#include "core/scalar_field_3d.h"
+#include "io/3d/vortex_ring.h"
+#include "io/3d/plate.h"
+#include "io/3d/freestream.h"
+#include "mesh/grid_3d.h"
 #include <cmath>
-
-static void test_fire_ball() {
-    const int n = 48;
-    Grid3D g(n, n, n, 1.0, 1.0, 1.0);
-    ScalarField3D T(g);
-
-    scenarios::FireBall fb;
-    fb.center = {{0.5, 0.5, 0.5}};
-    fb.radius = 0.1;
-    fb.T_hot  = 2.0;
-    fb.T_ref  = 0.3;
-
-    scenarios::seed_fire_ball(T, g, fb);
-
-    // Cell whose center is nearest the fireball center should be ~ T_hot.
-    int ic = (int)std::round(fb.center[0] / g.dx + 0.5);
-    int jc = (int)std::round(fb.center[1] / g.dy + 0.5);
-    int kc = (int)std::round(fb.center[2] / g.dz + 0.5);
-    // Distance of that cell center from fireball center (sub-cell offset).
-    double cx = (ic - 0.5) * g.dx, cy = (jc - 0.5) * g.dy, cz = (kc - 0.5) * g.dz;
-    double d2 = (cx - fb.center[0]) * (cx - fb.center[0]) +
-                (cy - fb.center[1]) * (cy - fb.center[1]) +
-                (cz - fb.center[2]) * (cz - fb.center[2]);
-    double T_center_exact = fb.T_ref + (fb.T_hot - fb.T_ref) * std::exp(-d2 / (fb.radius * fb.radius));
-    check_approx(T(ic, jc, kc), T_center_exact, 1e-9, "fireball center cell == Gaussian value");
-    check(T(ic, jc, kc) > 0.9 * fb.T_hot, "fireball center cell is near T_hot");
-
-    // A far corner cell must be ~ T_ref (Gaussian has decayed to ~0).
-    check_approx(T(1, 1, 1), fb.T_ref, 1e-6, "far corner cell == T_ref");
-    check_approx(T(g.nx, g.ny, g.nz), fb.T_ref, 1e-6, "opposite far corner == T_ref");
-
-    // Every cell is bounded within [T_ref, T_hot].
-    bool bounded = true;
-    for (int k = 1; k <= g.nz && bounded; k++)
-        for (int j = 1; j <= g.ny && bounded; j++)
-            for (int i = 1; i <= g.nx && bounded; i++) {
-                double t = T(i, j, k);
-                if (t < fb.T_ref - 1e-9 || t > fb.T_hot + 1e-9)
-                    bounded = false;
-            }
-    check(bounded, "all temperatures in [T_ref, T_hot]");
-
-    // Monotone decreasing with distance: walk +x from the center cell, T drops.
-    bool monotone = true;
-    double prev = T(ic, jc, kc);
-    for (int i = ic + 1; i <= g.nx; i++) {
-        double t = T(i, jc, kc);
-        if (t > prev + 1e-12) {
-            monotone = false;
-            break;
-        }
-        prev = t;
-    }
-    check(monotone, "T monotonically decreasing moving +x from center");
-
-    // Spherical symmetry: cells equidistant along +x and +y from center match.
-    int off = 5;
-    double tx = T(ic + off, jc, kc);
-    double ty = T(ic, jc + off, kc);
-    double tz = T(ic, jc, kc + off);
-    check_approx(tx, ty, 1e-9, "fireball symmetric: +x offset == +y offset");
-    check_approx(tx, tz, 1e-9, "fireball symmetric: +x offset == +z offset");
-
-    // Mirror symmetry about center plane (center at cell boundary x=0.5).
-    double tp = T(ic + off, jc, kc);
-    double tm = T(ic - 1 - off + 1, jc, kc); // mirror of ic+off about boundary
-    // ic and ic-1 straddle x=0.5; mirror of (ic+off) is (ic-1-off+1)? compute by coords.
-    // Simpler: just compare ic+off vs (2*ic-1)-(ic+off) = ic-1-off.
-    tm = T(ic - 1 - off, jc, kc);
-    check_approx(tp, tm, 1e-9, "fireball mirror-symmetric about center plane in x");
-}
 
 // Returns {normalized max|div| = max|div|*dx/maxU, raw maxU} for a ring on
 // an N^3 grid over the unit cube. The Biot-Savart field has steep gradients
@@ -214,7 +141,6 @@ static void test_uniform_freestream_3d() {
 
 int main() {
     test_header("3D scenario setup helpers");
-    test_fire_ball();
     test_vortex_ring_divergence_free();
     test_uniform_inflow_3d();
     test_uniform_freestream_3d();

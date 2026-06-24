@@ -4,10 +4,10 @@
 // Covers: InflowLeft, OutflowRight, FreeSlipTopBottom, FreeSlipLeftRight, and the
 // scenario builders free_slip_walls() and karman(U_inf). Each test fills a Grid
 // with a known velocity field, applies the BC, and asserts the exact resulting
-// MAC face values, matching the semantics in src/numerics/bc/patches.cpp.
+// MAC face values, matching the semantics in src/core/bc/patches.cpp.
 #include "../test_utils.h"
-#include "core/grid.h"
-#include "numerics/bc/patches.h"
+#include "mesh/grid_2d.h"
+#include "mesh/bc/patches_2d.h"
 
 using bc::FreeSlipLeftRight;
 using bc::FreeSlipTopBottom;

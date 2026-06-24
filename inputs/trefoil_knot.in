@@ -5,6 +5,7 @@
 #  or: ./pipeline.sh inputs/trefoil_knot.in
 
 scenario   = trefoil_knot
+dim        = 3            # 3D scenario (the launcher routes dim==3 to the 3D engine)
 
 backend    = auto       # auto: 有GPU就用GPU，没有自动保底CPU。也可写死 gpu / cpu
 
@@ -14,9 +15,23 @@ NZ         = 64
 cycles     = 250
 dt         = 0.004
 Re         = 2000
+Lx         = 1.0          # domain (cube)
+Ly         = 1.0
+Lz         = 1.0
+U_inf      = 1.0
+cyl_R      = 0.05         # filament core scale
+solve_iters     = 200     # CPU CG iterations (GPU backend uses its own count)
+solve_tol       = 1e-8
+lfm_cycle_steps = 2       # n steps per LFM reinitialization cycle
 
-circulation = 0.5
-tk_scale    = 0.07        # knot size (bounding box ~ 6 x scale)
+# ── Initial condition: a single trefoil-knot vortex filament (paper Fig. 7).
+# center is ABSOLUTE (cube 1×1×1); scale sets the knot size (bbox ≈ 6×scale).
+ic              = trefoil_knot
+ic.center       = 0.5,0.5,0.5
+ic.scale        = 0.07        # knot size (bounding box ~ 6 x scale)
+ic.core         = 0.025
+ic.circulation  = 0.5
+ic.n_segments   = 360
 
 frame_skip = 5
 vtk_mode   = full

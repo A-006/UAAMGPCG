@@ -1,0 +1,55 @@
+# ── Leapfrogging vortex rings (LFM paper Fig. 14) ──────────────────────────
+# Two coaxial same-sign rings that leapfrog along +x. Domain 2x1x1 (long axis =
+# propagation axis), dx=dy=dz=1/128. Inviscid + BFECC clamp.
+# Run: ./build/cfdsim inputs/leapfrog_rings.in
+
+scenario   = leapfrog_rings
+dim        = 3            # 3D scenario (the launcher routes dim==3 to the 3D engine)
+
+backend    = auto       # auto: 有GPU就用GPU，没有自动保底CPU。也可写死 gpu / cpu
+
+NX         = 256          # long axis = propagation axis (domain 2x1x1)
+NY         = 128
+NZ         = 128
+cycles     = 300
+dt         = 1e-3
+Lx         = 2.0
+Ly         = 1.0
+Lz         = 1.0
+U_inf      = 1.0
+Re         = 0            # inviscid — stability from the BFECC clamp
+cyl_R      = 0.1          # ring size scale
+lfm_bfecc_clamp = 1
+solve_iters     = 15      # paper: CG fixed at 15 iterations
+solve_tol       = 0.0     # fixed-iteration CG (no tolerance early-out)
+lfm_cycle_steps = 10      # paper: n = 10 steps per reinitialization cycle
+
+# ── Initial condition: two coaxial, SAME-sign rings offset along x. The trailing
+# ring (ic1) contracts and slips through the leading one (ic0), then they swap —
+# the classic leapfrog (paper Fig. 14). center/radius/core are ABSOLUTE coords
+# (x axis Lx=2.0, so 0.45·Lx=0.90 and 0.30·Lx=0.60; radius/core were 0.18·Ly /
+# 0.04·Ly with Ly=1).
+ic              = vortex_ring
+ic0.center      = 0.90,0.5,0.5   # leading ring
+ic0.axis        = 1.0,0.0,0.0
+ic0.radius      = 0.18
+ic0.core        = 0.04
+ic0.circulation = 1.0
+ic0.n_segments  = 240
+
+ic1             = vortex_ring
+ic1.center      = 0.60,0.5,0.5   # trailing ring (same sign)
+ic1.axis        = 1.0,0.0,0.0
+ic1.radius      = 0.18
+ic1.core        = 0.04
+ic1.circulation = 1.0
+ic1.n_segments  = 240
+
+frame_skip = 4
+vtk_mode   = slim
+out_dir    = output_leapfrog_rings
+
+# ── 后处理（pipeline.sh / render/render.py 读取）──────────────────────────
+render_mode  = iso3d       # iso3d | slice | volume | none（可逗号组合，如 iso3d,slice）
+render_level = 0.15        # 等值面 = 此值 × 全程 99.5 分位 |ω|
+render_orbit = 120         # 转台旋转角度（iso3d）；0 = 固定视角

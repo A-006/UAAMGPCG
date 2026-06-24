@@ -6,6 +6,7 @@
 # Lines you omit fall back to the scenario's built-in defaults.
 
 scenario   = vortex_ring
+dim        = 3            # 3D scenario (the launcher routes dim==3 to the 3D engine)
 
 backend    = auto       # auto: 有GPU就用GPU，没有自动保底CPU。也可写死 gpu / cpu
 # gpu      = 0            # which CUDA device (backend=gpu only); uncomment on multi-GPU
@@ -16,8 +17,25 @@ NZ         = 64
 cycles     = 60           # number of LFM reinitialization cycles
 dt         = 0.002
 Re         = 0            # 0 = inviscid
+Lx         = 1.0          # domain (cube)
+Ly         = 1.0
+Lz         = 1.0
+U_inf      = 1.0
+cyl_R      = 0.1          # ring size scale
+solve_iters     = 200     # CPU CG iterations (GPU backend uses its own count)
+solve_tol       = 1e-6
+lfm_cycle_steps = 2       # n steps per LFM reinitialization cycle
 
-circulation = 1.0         # ring strength
+# ── Initial condition: one Gaussian-cored vortex ring. `ic` selects the
+# primitive; `ic.<param>` tunes source 0. center/radius/core are ABSOLUTE
+# domain coordinates (this cube is 1×1×1, so they equal the old L-fractions).
+ic              = vortex_ring
+ic.center       = 0.5,0.5,0.28
+ic.axis         = 0.0,0.0,1.0
+ic.radius       = 0.18
+ic.core         = 0.045
+ic.circulation  = 1.0            # ring strength
+ic.n_segments   = 240
 
 frame_skip = 1            # write a VTK frame every N cycles
 vtk_mode   = full         # "full" (velocity+scalars) or "slim" (|omega| only)

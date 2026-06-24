@@ -1,5 +1,4 @@
 build/
-set_proxy.sh
 
 # Python
 __pycache__/
@@ -12,52 +11,25 @@ CMakeFiles/
 cmake_install.cmake
 Makefile
 *.cmake
-!CMakeLists.txt
 
 # CUDA build artifacts
 *.o
 *.obj
 *.ptx
 *.cubin
-
 *.gif
 *.png
 *.sh
+*.vtk
+*.md
 
 # Anything user-local (outputs, animations, papers, scratch). Drop them in .local/.
 .local/
 
-# Simulation output dirs (anywhere they may appear)
-output_karman/
-output_karman_*/
-output_smoke/
-output_smoke_*/
-output_vortex_ring_lfm/*
-output_vortex_collision_lfm/*
-output_vortex_collision_lfm_gpu/*
-output_vortex_ring_lfm_gpu/*
-output_collision_256/*
-output_collision_192/*
-diagnostic_output/
-diagnostic_output_*/
-output_burst_re450/*
-output_burst_re600/*
-
-
 # Karman tool outputs
-tools/karman_vortex_street/inputs/
-tools/karman_vortex_street/output/
-tools/karman_vortex_street/figures/
-tools/karman/*
 /slide/*
-/slides1/*
 /preview_logs/*
 /render/*
-*.vtk
 /tools/*
-*.md
 /.claude/
 /render_full/
-
-# simulation outputs (large VTK/GIF)
-output_*/

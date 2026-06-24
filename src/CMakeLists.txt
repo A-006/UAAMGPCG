@@ -1,55 +1,60 @@
 # LFM simulation library
 set(LFM_SOURCES
-    core/grid.cpp
-    core/grid_3d.cpp
-    numerics/advection/advection_3d.cpp
-    numerics/bc/patches_3d.cpp
-    numerics/pressure/pressure_3d.cpp
-    simulator/simulator_3d.cpp
-    simulator/scene_3d.cpp
-    simulator/runner_3d.cpp
+    mesh/grid_2d.cpp
+    mesh/grid_3d.cpp
+    integrator/ops/advection_3d.cpp
+    mesh/bc/patches_3d.cpp
+    integrator/ops/pressure_3d.cpp
+    integrator/chorin/chorin_simulator_3d.cpp
+    io/3d/case_3d.cpp
+    io/3d/setup_3d.cpp
+    integrator/runner_3d.cpp
     io/vtk_writer_3d.cpp
     io/vtk_slim_3d.cpp
-    core/scalar_field_3d.cpp
-    simulator/scenarios/2d/karman.cpp
-    simulator/scenarios/scenario_registry.cpp
-    simulator/scenarios/2d/karman_scenario.cpp
-    simulator/scenarios/2d/leapfrog_scenario.cpp
-    simulator/scenarios/2d/smoke_scenario.cpp
-    simulator/scenarios/scenario_3d_registry.cpp
-    simulator/scenarios/3d/vortex_ring.cpp
-    simulator/scenarios/3d/trefoil_knot.cpp
-    simulator/scenarios/3d/delta_wing.cpp
-    simulator/scenarios/3d/fire_ball.cpp
-    simulator/scenarios/3d/wind_turbine.cpp
-    config/config.cpp
-    config/cli.cpp
-    numerics/advection/advection.cpp
-    numerics/bc/patches.cpp
+    io/2d/cylinder.cpp
+    io/2d/leapfrog.cpp
+    io/2d/primitives_2d.cpp
+    io/2d/generic_scenario.cpp
+    io/scenario_registry.cpp
+    io/3d/vortex_ring.cpp
+    io/3d/trefoil_knot.cpp
+    io/3d/freestream.cpp
+    io/3d/plate.cpp
+    io/config.cpp
+    io/cli.cpp
+    integrator/ops/advection_2d.cpp
+    mesh/bc/patches_2d.cpp
     io/force.cpp
-    io/vtk_writer.cpp
-    numerics/pressure/pressure.cpp
-    simulator/chorin_simulator.cpp
-    simulator/runner.cpp
-    simulator/factory.cpp
-    solver/jacobi.cpp
-    solver/rbgs.cpp
-    solver/pcg.cpp
-    solver/jacobi_3d.cpp
-    solver/rbgs_3d.cpp
-    solver/pcg_3d.cpp
+    io/vtk_writer_2d.cpp
+    integrator/ops/pressure_2d.cpp
+    integrator/chorin/chorin_simulator_2d.cpp
+    integrator/runner_2d.cpp
+    integrator/factory.cpp
+    solver/relaxation/jacobi_2d.cpp
+    solver/relaxation/rbgs_2d.cpp
+    solver/krylov/pcg_2d.cpp
+    solver/amgx/amgx_solver_2d.cpp
+    solver/amgx/amgx_solver_3d.cpp
+    solver/amgx/amgx_backend.cpp
+    solver/relaxation/jacobi_3d.cpp
+    solver/relaxation/rbgs_3d.cpp
+    solver/krylov/pcg_3d.cpp
     solver/factory_3d.cpp
-    solver/preconditioner/2d/gmg_preconditioner.cpp
-    solver/preconditioner/2d/amg_preconditioner.cpp
-    solver/preconditioner/2d/uaamg_preconditioner.cpp
-    solver/preconditioner/3d/gmg_preconditioner_3d.cpp
-    solver/preconditioner/3d/amg_preconditioner_3d.cpp
-    solver/preconditioner/3d/uaamg_preconditioner_3d.cpp
-    solver/factory.cpp
-    simulator/flow_map_2d.cpp
-    simulator/lfm_simulator.cpp
-    simulator/flow_map_3d.cpp
-    simulator/lfm_simulator_3d.cpp
+    solver/preconditioner/gmg_preconditioner_2d.cpp
+    solver/preconditioner/amg_preconditioner_2d.cpp
+    solver/preconditioner/uaamg_preconditioner_2d.cpp
+    solver/preconditioner/gmg_preconditioner_3d.cpp
+    solver/preconditioner/amg_preconditioner_3d.cpp
+    solver/preconditioner/uaamg_preconditioner_3d.cpp
+    solver/factory_2d.cpp
+    integrator/lfm/flow_map_2d.cpp
+    integrator/lfm/lfm_simulator_2d.cpp
+    integrator/lfm/flow_map_3d.cpp
+    integrator/lfm/lfm_simulator_3d.cpp
+    # Unstructured FVM: cell-centered Poisson + Chorin projection NS on triangle
+    # meshes (reuses AmgxBackend for the pressure solve — see include/unstructured/).
+    unstructured/fvm_poisson.cpp
+    unstructured/ns_solver.cpp
 )
 
 add_library(lfm_lib ${LFM_SOURCES})
@@ -62,9 +67,28 @@ if(OpenMP_CXX_FOUND)
     message(STATUS "OpenMP enabled for lfm_lib")
 endif()
 
+# ── Optional NVIDIA AMGX Poisson backend (solver=amgx) ──
+# AMGX is reached through its plain C API (amgx_c.h), so amgx_solver_2d.cpp builds
+# with the host C++ compiler — no nvcc needed here. We only link the prebuilt
+# libamgxsh.so plus the CUDA runtime/cublas it depends on. Enable with:
+#   cmake -DUAAMG_WITH_AMGX=ON -DAMGX_ROOT=/path/to/AMGX ..
+# AMGX_ROOT must contain include/amgx_c.h and build/libamgxsh.so.
+if(UAAMG_WITH_AMGX)
+    if(NOT AMGX_ROOT)
+        message(FATAL_ERROR "UAAMG_WITH_AMGX=ON requires -DAMGX_ROOT=/path/to/AMGX")
+    endif()
+    find_path(AMGX_INCLUDE_DIR amgx_c.h HINTS "${AMGX_ROOT}/include" REQUIRED)
+    find_library(AMGX_LIB amgxsh HINTS "${AMGX_ROOT}/build" "${AMGX_ROOT}/lib" REQUIRED)
+    find_package(CUDAToolkit REQUIRED)
+    target_compile_definitions(lfm_lib PRIVATE HAVE_AMGX)
+    target_include_directories(lfm_lib PRIVATE "${AMGX_INCLUDE_DIR}")
+    target_link_libraries(lfm_lib PUBLIC "${AMGX_LIB}" CUDA::cudart CUDA::cublas)
+    message(STATUS "AMGX backend enabled: ${AMGX_LIB}")
+else()
+    message(STATUS "AMGX backend disabled (set -DUAAMG_WITH_AMGX=ON -DAMGX_ROOT=... to enable)")
+endif()
+
 # The single program is `cfdsim` (defined in the top-level CMakeLists.txt). It
 # handles both 2D (CPU) and 3D (GPU/CPU) scenarios, so the former `lfm_2d`
 # entry point (src/main.cpp) has been removed.
 
-# Ax=b solvers (standalone + MAC-grid Poisson solvers)
-add_subdirectory(solver)

@@ -2,9 +2,9 @@
  * @file test_cuda_cg_3d.cu
  * @brief GPU 3D CG vs CPU 3D CG comparison.
  */
-#include "solver/cuda/cuda_cg_3d.h"
-#include "solver/pcg_3d.h"
-#include "solver/preconditioner/3d/identity_preconditioner_3d.h"
+#include "solver/cuda/krylov/cuda_cg_3d.h"
+#include "solver/krylov/pcg_3d.h"
+#include "solver/preconditioner/identity_preconditioner_3d.h"
 #include <cstdio>
 #include <cmath>
 #include <vector>

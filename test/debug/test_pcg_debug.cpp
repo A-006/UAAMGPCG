@@ -1,8 +1,8 @@
-#include "config/config.h"
-#include "core/grid.h"
-#include "simulator/chorin_simulator.h"
-#include "solver/factory.h"
-#include "numerics/pressure/pressure.h"
+#include "io/config.h"
+#include "mesh/grid_2d.h"
+#include "integrator/chorin/chorin_simulator_2d.h"
+#include "solver/factory_2d.h"
+#include "integrator/ops/pressure_2d.h"
 #include <iostream>
 #include <cmath>
 #include <iomanip>

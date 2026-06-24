@@ -2,23 +2,23 @@
  * @file test_lfm_instability.cpp
  * @brief Test whether LFM can amplify flow perturbations (instability prerequisite).
  *
- * Karman vortex street requires the LFM cycle to AMPLIFY small perturbations
+ * Cylinder vortex street requires the LFM cycle to AMPLIFY small perturbations
  * rather than damp them. These tests check this property on simple flows
  * without solid boundaries.
  *
  * Build: added to test/CMakeLists.txt
  * Run:   ./build/test/test_lfm_instability
  */
-#include "config/config.h"
-#include "core/grid.h"
-#include "simulator/flow_map_2d.h"
-#include "simulator/lfm_simulator.h"
-#include "simulator/chorin_simulator.h"
-#include "simulator/simulator_base.h"
-#include "solver/factory.h"
-#include "numerics/pressure/pressure.h"
+#include "io/config.h"
+#include "mesh/grid_2d.h"
+#include "integrator/lfm/flow_map_2d.h"
+#include "integrator/lfm/lfm_simulator_2d.h"
+#include "integrator/chorin/chorin_simulator_2d.h"
+#include "integrator/simulator_2d.h"
+#include "solver/factory_2d.h"
+#include "integrator/ops/pressure_2d.h"
 #include "io/force.h"
-#include "io/vtk_writer.h"
+#include "io/vtk_writer_2d.h"
 #include "../test_utils.h"
 #include "../test_velocity_fields.h"
 #include <iostream>

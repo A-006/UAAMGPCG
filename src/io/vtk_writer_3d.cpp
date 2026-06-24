@@ -1,5 +1,5 @@
 #include "io/vtk_writer_3d.h"
-#include "numerics/ops/operators_3d.h"
+#include "mesh/ops/operators_3d.h"
 #include <fstream>
 #include <sstream>
 #include <iomanip>

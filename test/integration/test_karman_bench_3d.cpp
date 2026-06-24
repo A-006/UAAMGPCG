@@ -1,11 +1,11 @@
 /**
  * @file test_karman_bench_3d.cpp
- * @brief 3D Karman vortex street — CPU solver comparison.
+ * @brief 3D Cylinder vortex street — CPU solver comparison.
  */
-#include "config/config.h"
-#include "core/grid.h" // 2D grid for simulator
-#include "simulator/chorin_simulator.h"
-#include "solver/factory.h"
+#include "io/config.h"
+#include "mesh/grid_2d.h" // 2D grid for simulator
+#include "integrator/chorin/chorin_simulator_2d.h"
+#include "solver/factory_2d.h"
 #include "../test_utils.h"
 #include <iostream>
 #include <chrono>
@@ -50,7 +50,7 @@ static std::vector<double> run_one(const Config& base_cfg, const std::string& so
 }
 
 int main() {
-    test_header("3D Karman Vortex Street — CPU Solver Benchmark");
+    test_header("3D Cylinder Vortex Street — CPU Solver Benchmark");
 
     Config cfg;
     cfg.scenario    = "karman";

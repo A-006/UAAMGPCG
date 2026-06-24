@@ -2,11 +2,11 @@
  * @file test_solver_perf_3d_gpu.cu
  * @brief 3D GPU vs CPU solver performance — solve Ax=b with timing.
  */
-#include "solver/cuda/cuda_pcg_3d.h"
-#include "solver/cuda/cuda_cg_3d.h"
-#include "solver/pcg_3d.h"
-#include "solver/preconditioner/3d/identity_preconditioner_3d.h"
-#include "solver/preconditioner/3d/uaamg_preconditioner_3d.h"
+#include "solver/cuda/krylov/cuda_pcg_3d.h"
+#include "solver/cuda/krylov/cuda_cg_3d.h"
+#include "solver/krylov/pcg_3d.h"
+#include "solver/preconditioner/identity_preconditioner_3d.h"
+#include "solver/preconditioner/uaamg_preconditioner_3d.h"
 #include <cstdio>
 #include <cmath>
 #include <vector>

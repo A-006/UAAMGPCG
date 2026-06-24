@@ -1,18 +1,18 @@
 /**
  * @file test_karman_validate.cpp
- * @brief Karman vortex street validation — Cd/Cl/St output for OpenFOAM comparison.
+ * @brief Cylinder vortex street validation — Cd/Cl/St output for OpenFOAM comparison.
  *
  * Re=200, cylinder D=0.2 centered at (1.0, 0.5) in domain [0,4]×[0,1].
  * Expected (literature): St ≈ 0.19-0.20, Cd_mean ≈ 1.3-1.4, Cl_rms ≈ 0.3-0.5
  *
  * Reference: Schäfer & Turek 1996, Rajani 2009
  */
-#include "config/config.h"
-#include "core/grid.h"
-#include "simulator/simulator_base.h"
-#include "simulator/chorin_simulator.h"
-#include "simulator/lfm_simulator.h"
-#include "solver/factory.h"
+#include "io/config.h"
+#include "mesh/grid_2d.h"
+#include "integrator/simulator_2d.h"
+#include "integrator/chorin/chorin_simulator_2d.h"
+#include "integrator/lfm/lfm_simulator_2d.h"
+#include "solver/factory_2d.h"
 #include "io/force.h"
 #include "../test_utils.h"
 #include "../test_config.h"
@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
     double D = 2.0 * cfg.cyl_R;
     double U = cfg.U_inf;
 
-    test_header("Karman Vortex Street Validation (Re=200)");
+    test_header("Cylinder Vortex Street Validation (Re=200)");
     std::cout << "Grid: " << cfg.NX << "x" << cfg.NY << "  dt=" << cfg.dt
               << "  dt/step=" << dt_per_step << "  steps=" << nsteps << "  t_end=" << cfg.t_end
               << "  integrator=" << cfg.time_integrator << "\n";

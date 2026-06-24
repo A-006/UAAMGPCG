@@ -1,18 +1,18 @@
 /**
  * @file test_karman_bench_gpu.cu
- * @brief Karman vortex street — solver comparison with GPU solvers.
+ * @brief Cylinder vortex street — solver comparison with GPU solvers.
  * @author liutao
  * @date 2026-05-24
  *
- * Runs the Karman vortex street setup with CPU + GPU solvers
+ * Runs the Cylinder vortex street setup with CPU + GPU solvers
  * and reports wall-clock time, per-step cost, and correctness.
  * Compiled with nvcc to enable GPU solver support.
  */
-#include "config/config.h"
-#include "core/grid.h"
-#include "simulator/chorin_simulator.h"
-#include "solver/factory.h"
-#include "solver/cuda_pcg_solver.h"
+#include "io/config.h"
+#include "mesh/grid_2d.h"
+#include "integrator/chorin/chorin_simulator_2d.h"
+#include "solver/factory_2d.h"
+#include "solver/cuda/krylov/cuda_pcg_solver_2d.h"
 #include "../test_utils.h"
 #include <iostream>
 #include <chrono>
@@ -60,7 +60,7 @@ static std::vector<double> run_one(const Config& base_cfg, std::unique_ptr<Solve
 }
 
 int main() {
-    test_header("Karman Vortex Street — Solver Benchmark (CPU + GPU)");
+    test_header("Cylinder Vortex Street — Solver Benchmark (CPU + GPU)");
 
     // ── Base configuration ──
     Config cfg;

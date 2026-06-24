@@ -3,7 +3,7 @@
 // sphere immersed in the interior. If the GPU PCG converges the SOLID-AWARE residual
 // to ~1e-6, the operator is consistent → the solid handling in the warp non-trivial
 // smoothers is correct. (A wrong solid path makes A inconsistent → no convergence.)
-#include "solver/cuda/cuda_pcg_3d.h"
+#include "solver/cuda/krylov/cuda_pcg_3d.h"
 #include "solver/cuda/cuda_common_3d.h"
 #include <cstdio>
 #include <cstdlib>

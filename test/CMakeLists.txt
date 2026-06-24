@@ -2,6 +2,28 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
+# ── Semi-structured matrix-free multigrid (header-only, no lfm_lib) ──
+# Reproduction of Wang/Sun/Zhu arXiv:2604.18886 (see include/semistruct/).
+foreach(_sst test_operator_2d test_laplacian_accuracy_2d test_poisson_convergence_2d
+             test_operator_3d test_laplacian_accuracy_3d test_poisson_convergence_3d
+             test_cutcell_2d test_cutcell_3d)
+    add_executable(${_sst} semistruct/${_sst}.cpp)
+endforeach()
+
+# ── Unstructured FVM (triangle meshes: Poisson + Chorin NS) ──
+# Manufactured-solution checks of the cell-centered FVM assembly and the unsteady
+# NS solver (see include/unstructured/). They need fvm_poisson/ns_solver, which
+# live in lfm_lib. test_fvm_amgx additionally needs the AMGX backend.
+foreach(_uvm test_fvm_mms test_tgv_mms test_neumann_mms)
+    add_executable(${_uvm} unstructured/${_uvm}.cpp)
+    target_link_libraries(${_uvm} PRIVATE lfm_lib)
+endforeach()
+
+if(UAAMG_WITH_AMGX)
+    add_executable(test_fvm_amgx unstructured/test_fvm_amgx.cpp)
+    target_link_libraries(test_fvm_amgx PRIVATE lfm_lib)
+endif()
+
 # ── Standalone solver tests (use test_common.h, no lfm_lib needed) ──
 add_executable(test_jacobi solver/test_jacobi.cpp)
 add_executable(test_cg solver/test_cg.cpp)
@@ -27,7 +49,7 @@ target_link_libraries(test_bc_solid PRIVATE lfm_lib)
 
 # ── Bulk CPU unit tests (added 2026-06-17) — all link lfm_lib only ──
 foreach(_ut
-        test_bc_patches_2d test_grid_ops_2d test_grid_3d test_scalar_field_3d
+        test_bc_patches_2d test_grid_ops_2d test_grid_3d
         test_bc_patches_3d test_config_cli test_scenarios_2d test_scenarios_3d
         test_io_roundtrip test_numerics_interp test_flow_map)
     add_executable(${_ut} integration/${_ut}.cpp)
@@ -67,7 +89,7 @@ target_link_libraries(test_lfm_perturbed_cylinder PRIVATE lfm_lib)
 add_executable(test_pcg_debug debug/test_pcg_debug.cpp)
 target_link_libraries(test_pcg_debug PRIVATE lfm_lib)
 
-# Long Karman simulation runner (for animation generation)
+# Long Cylinder simulation runner (for animation generation)
 add_executable(run_karman_long ../tools/run_karman_long.cpp)
 target_link_libraries(run_karman_long PRIVATE lfm_lib)
 
@@ -79,14 +101,12 @@ target_link_libraries(run_karman_chorin PRIVATE lfm_lib)
 # of the unified `cfdsim` launcher (scenario=vortex_reconnection / trefoil_knot).
 add_executable(run_vortex_ring_collision   ../tools/run_vortex_ring_collision.cpp)
 add_executable(run_delta_wing              ../tools/run_delta_wing.cpp)
-add_executable(run_fire_ball               ../tools/run_fire_ball.cpp)
-add_executable(run_wind_turbine            ../tools/run_wind_turbine.cpp)
 add_executable(test_bfecc_clamp            integration/test_bfecc_clamp.cpp)
 add_executable(run_delta_wing_lfm          ../tools/run_delta_wing_lfm.cpp)
 add_executable(dump_collision_ic           ../tools/dump_collision_ic.cpp)
-foreach(_t run_vortex_ring_collision run_delta_wing run_fire_ball run_wind_turbine
+foreach(_t run_vortex_ring_collision run_delta_wing
            test_bfecc_clamp run_delta_wing_lfm dump_collision_ic)
     target_link_libraries(${_t} PRIVATE lfm_lib)
 endforeach()
 
-# GPU Karman benchmark is defined in top-level CMakeLists.txt (after CUDA setup)
+# GPU Cylinder benchmark is defined in top-level CMakeLists.txt (after CUDA setup)

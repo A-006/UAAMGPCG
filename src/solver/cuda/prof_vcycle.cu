@@ -4,7 +4,7 @@
  *        at 256x128x128. setupLevels once, then a few vcycle_apply; the first
  *        rbgs/restrict/prolong launches are the finest level (the hot kernels).
  */
-#include "solver/cuda/cuda_uaamg_preconditioner_3d.h"
+#include "solver/cuda/preconditioner/cuda_uaamg_preconditioner_3d.h"
 #include <vector>
 
 int main(int argc, char** argv) {

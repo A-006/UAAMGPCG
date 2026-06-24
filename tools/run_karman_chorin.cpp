@@ -1,12 +1,12 @@
 /**
  * @file run_karman_chorin.cpp
- * @brief Chorin reference Karman run (backup if LFM doesn't shed).
+ * @brief Chorin reference Cylinder run (backup if LFM doesn't shed).
  * Usage: run_karman_chorin [t_end] [frame_skip] [NX]
  */
-#include "config/config.h"
+#include "io/config.h"
 #include "io/force.h"
-#include "simulator/factory.h"
-#include "simulator/runner.h"
+#include "integrator/factory.h"
+#include "integrator/runner_2d.h"
 #include <cmath>
 #include <iomanip>
 #include <iostream>

@@ -1,5 +1,5 @@
 #pragma once
-#include "core/grid_3d.h"
+#include "mesh/grid_3d.h"
 #include <vector>
 #include <string>
 

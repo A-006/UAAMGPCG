@@ -5,7 +5,7 @@
  *   - mixed solve_mixed      (FP64 CG + FP32 preconditioner)
  *   - device solve_device    (FP64, all scalars on device, no per-iter host sync)
  */
-#include "solver/cuda/cuda_pcg_3d.h"
+#include "solver/cuda/krylov/cuda_pcg_3d.h"
 #include "solver/cuda/cuda_common_3d.h"
 #include <cstdio>
 #include <vector>

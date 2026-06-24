@@ -1,17 +1,17 @@
 /**
  * @file test_karman_bench.cpp
- * @brief Karman vortex street — solver comparison test.
+ * @brief Cylinder vortex street — solver comparison test.
  * @author liutao
  * @date 2026-05-22
  *
- * Runs the same Karman vortex street setup with different solvers
+ * Runs the same Cylinder vortex street setup with different solvers
  * (Jacobi, RBGS, CG, PCG/GMG, PCG/AMG) and reports wall-clock time,
  * per-step cost, and correctness.
  */
-#include "config/config.h"
-#include "core/grid.h"
-#include "simulator/chorin_simulator.h"
-#include "solver/factory.h"
+#include "io/config.h"
+#include "mesh/grid_2d.h"
+#include "integrator/chorin/chorin_simulator_2d.h"
+#include "solver/factory_2d.h"
 #include "../test_utils.h"
 #include <iostream>
 #include <chrono>
@@ -59,7 +59,7 @@ static std::vector<double> run_one(const Config& base_cfg, const std::string& so
 }
 
 int main() {
-    test_header("Karman Vortex Street — Solver Benchmark");
+    test_header("Cylinder Vortex Street — Solver Benchmark");
 
     // ── Base configuration (same for all solvers) ──
     Config cfg;

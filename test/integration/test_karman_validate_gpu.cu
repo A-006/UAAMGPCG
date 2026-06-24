@@ -1,21 +1,21 @@
 /**
  * @file test_karman_validate_gpu.cu
- * @brief Karman validation with GPU solvers (UAAMG-preconditioned PCG on CUDA).
+ * @brief Cylinder validation with GPU solvers (UAAMG-preconditioned PCG on CUDA).
  *
  * Same as test_karman_validate.cpp but links cuda_uaamg_lib for GPU acceleration.
  * Usage: build/test_karman_validate_gpu [NX] [TEND] [chorin|lfm] [cpu|gpu]
  */
-#include "config/config.h"
-#include "core/grid.h"
-#include "simulator/simulator_base.h"
-#include "simulator/chorin_simulator.h"
-#include "simulator/lfm_simulator.h"
-#include "solver/factory.h"
-#include "solver/cuda_pcg_solver.h"
+#include "io/config.h"
+#include "mesh/grid_2d.h"
+#include "integrator/simulator_2d.h"
+#include "integrator/chorin/chorin_simulator_2d.h"
+#include "integrator/lfm/lfm_simulator_2d.h"
+#include "solver/factory_2d.h"
+#include "solver/cuda/krylov/cuda_pcg_solver_2d.h"
 #include "io/force.h"
-#include "io/vtk_writer.h"
-#include "simulator/scenarios/2d/karman.h"
+#include "io/vtk_writer_2d.h"
 #include "../test_utils.h"
+#include "../test_config.h"
 #include <iostream>
 #include <chrono>
 #include <iomanip>
@@ -33,43 +33,29 @@ int main(int argc, char** argv) {
     if (argc > 2)
         TEND = std::atof(argv[2]);
 
-    Config cfg;
-    cfg.scenario        = "karman";
-    cfg.NX              = NX;
-    cfg.Lx              = 8.0;
-    cfg.Ly              = 2.0;
-    cfg.U_inf           = 1.0; // larger domain (blockage 10%)
-    cfg.Re              = 200;
-    cfg.cyl_cx          = 2.0;
-    cfg.cyl_cy          = 1.0;
-    cfg.cyl_R           = 0.1;
-    cfg.t_end           = TEND;
-    cfg.dt              = 0.0;
-    cfg.solve_iters     = 100;
+    // Data-driven setup: load the karman case file (geometry + IC + BCs) the
+    // same way production does, then apply the validation-specific overrides.
+    // Hand-setting scalar cfg fields no longer builds the cylinder — the IC is
+    // now declared as data in inputs/karman.in (geom/ic/bc), so a bare Config
+    // would produce an empty domain (zero flow → zero force).
+    Config cfg          = make_karman_config(NX, TEND);
+    cfg.solve_iters     = (cfg.time_integrator == "lfm") ? 200 : 100;
     cfg.solve_tol       = 1e-8;
     cfg.frame_skip      = (cfg.time_integrator == "lfm") ? 1 : 10;
     cfg.out_dir         = "/tmp/karman_lfm_vtk";
     cfg.solver          = "pcg_uaamg";
-    cfg.time_integrator = "chorin";
-    cfg.lfm_cycle_steps = 10;
-    cfg.solve_iters     = 200;
-    cfg.cylinder_type   = "stair";
     if (argc > 3)
         cfg.time_integrator = argv[3];
     if (argc > 4)
-        cfg.cylinder_type = argv[4];
-    if (argc > 5)
-        use_gpu = (std::string(argv[5]) == "gpu");
+        use_gpu = (std::string(argv[4]) == "gpu");
 
-    cfg.NY = std::max(16, cfg.NX / 4);
-    cfg.dt = (cfg.time_integrator == "lfm" ? 0.25 : 0.5) * (cfg.Lx / cfg.NX) / cfg.U_inf;
     double dt_per_step = (cfg.time_integrator == "lfm") ? cfg.dt * cfg.lfm_cycle_steps : cfg.dt;
     int nsteps         = (int)(cfg.t_end / dt_per_step);
 
     double D = 2.0 * cfg.cyl_R;
     double U = cfg.U_inf;
 
-    test_header("Karman Vortex Street Validation (Re=200)");
+    test_header("Cylinder Vortex Street Validation (Re=200)");
     std::cout << "Grid: " << cfg.NX << "x" << cfg.NY << "  dt=" << cfg.dt
               << "  dt/step=" << dt_per_step << "  steps=" << nsteps << "  t_end=" << cfg.t_end
               << "  integrator=" << cfg.time_integrator
@@ -92,7 +78,7 @@ int main(int argc, char** argv) {
     else
         sim = std::make_unique<ChorinSimulator>(cfg, std::move(solver));
 
-    // Karman scenario setup (cylinder + warm inflow + wake perturbation) is
+    // Cylinder scenario setup (cylinder + warm inflow + wake perturbation) is
     // now done inside the simulator constructor, so nothing to do here.
 
     std::vector<double> time_hist, Cd_hist, Cl_hist;
