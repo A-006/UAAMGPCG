@@ -969,7 +969,7 @@ void lfm_apply_freestream_box(CudaLFMState3D& s, CudaVel3D vel, double Ux, doubl
 
 // ──────────────────────────────────────────────────────────────────
 // Pressure projection: rhs = ∇·u/dt → CudaPCG3D::solve → u -= dt·∇p.
-// Mirrors PressureProjection3D::project (src/integrator/pressure/pressure_3d.cpp).
+// Mirrors PressureProjection3D::project (src/integrator/ops/pressure_3d.cpp).
 // ──────────────────────────────────────────────────────────────────
 __global__ void build_divergence_rhs_kernel(const double* u, const double* v, const double* w,
                                              const bool* solid, double* rhs, int nx, int ny, int nz,

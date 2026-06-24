@@ -10,7 +10,7 @@
 #include "core/grid_3d.h"
 #include "core/config.h"
 #include "core/bc/patches_3d.h"
-#include "integrator/pressure/pressure_3d.h"
+#include "integrator/ops/pressure_3d.h"
 #include "integrator/lfm/lfm_simulator_3d.h"
 #include "integrator/lfm/cuda_lfm_simulator_3d.h"
 #include "ic/3d/vortex_ring.h"

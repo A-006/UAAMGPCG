@@ -1,4 +1,4 @@
-#include "integrator/pressure/pressure_3d.h"
+#include "integrator/ops/pressure_3d.h"
 #include "numerics/ops/operators_3d.h"
 #include <algorithm>
 

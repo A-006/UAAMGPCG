@@ -1,4 +1,4 @@
-#include "integrator/advection/advection_3d.h"
+#include "integrator/ops/advection_3d.h"
 #include <algorithm>
 
 namespace {

@@ -1,6 +1,6 @@
 #include "core/config.h"
 #include "core/grid.h"
-#include "integrator/advection/advection.h"
+#include "integrator/ops/advection.h"
 #include "integrator/chorin/chorin_simulator.h"
 #include "solver/jacobi.h"
 #include "solver/rbgs.h"

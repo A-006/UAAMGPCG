@@ -1,6 +1,6 @@
 #include "integrator/chorin/chorin_simulator.h"
-#include "integrator/advection/advection.h"
-#include "integrator/pressure/pressure.h"
+#include "integrator/ops/advection.h"
+#include "integrator/ops/pressure.h"
 #include "ic/scenario_registry.h"
 #include "solver/factory.h"
 #include <cmath>

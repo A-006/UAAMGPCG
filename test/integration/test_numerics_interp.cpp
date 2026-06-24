@@ -6,8 +6,8 @@
 
 #include "core/grid.h"
 #include "core/grid_3d.h"
-#include "integrator/advection/advection.h"
-#include "integrator/advection/advection_3d.h"
+#include "integrator/ops/advection.h"
+#include "integrator/ops/advection_3d.h"
 #include "numerics/ops/operators.h"
 #include "numerics/ops/operators_3d.h"
 
