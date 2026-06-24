@@ -1,10 +1,10 @@
 // ════════════════════════════════════════════════════════════════════
 // Host orchestration of the fully GPU-resident 3D LFM cycle. Mirrors
-// LFMSimulator3D::run_cycle (src/simulator/lfm_simulator_3d.cpp) line-for-line,
+// LFMSimulator3D::run_cycle (src/integrator/lfm_simulator_3d.cpp) line-for-line,
 // but every sub-step is a kernel launch / device Poisson solve — the field
 // never leaves the GPU until sync_to_host().
 // ════════════════════════════════════════════════════════════════════
-#include "simulator/lfm/cuda_lfm_simulator_3d.h"
+#include "integrator/lfm/cuda_lfm_simulator_3d.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdio>

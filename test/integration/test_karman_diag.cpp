@@ -1,6 +1,6 @@
 #include "core/config.h"
 #include "core/grid.h"
-#include "simulator/chorin/chorin_simulator.h"
+#include "integrator/chorin/chorin_simulator.h"
 #include "solver/factory.h"
 #include "../test_config.h"
 #include <iostream>

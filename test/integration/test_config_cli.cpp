@@ -10,7 +10,7 @@
 #include "../test_utils.h"
 #include "io/cli.h"
 #include "core/config.h"
-#include "simulator/scene_3d.h"
+#include "integrator/scene_3d.h"
 
 #include <string>
 #include <vector>

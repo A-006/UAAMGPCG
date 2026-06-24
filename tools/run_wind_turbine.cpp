@@ -8,7 +8,7 @@
  * wing-tip vortices.
  */
 #include "core/config.h"
-#include "simulator/simulator_3d.h"
+#include "integrator/simulator_3d.h"
 #include "solver/factory_3d.h"
 #include "io/vtk_writer_3d.h"
 #include "ic/3d/wind_turbine.h"

@@ -1,6 +1,6 @@
 #pragma once
 #include "core/grid_3d.h"
-#include "simulator/advection/advection_3d.h"
+#include "integrator/advection/advection_3d.h"
 
 // ──────────────────────────────────────────────────────────────────
 // Cell-centered scalar field on a 3D MAC mesh (temperature, smoke, …).

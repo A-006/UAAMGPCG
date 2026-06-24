@@ -6,14 +6,14 @@
 // ════════════════════════════════════════════════════════════════════
 // Device-resident 3D LFM state + kernel launch API.
 //
-// This is the GPU port of src/simulator/lfm_simulator_3d.cpp. All fields live
+// This is the GPU port of src/integrator/lfm_simulator_3d.cpp. All fields live
 // on the device for the whole reinitialization cycle; the host only launches
 // kernels and the device-resident Poisson solve, and copies back to a host
 // Grid3D once per cycle for output. The CPU LFMSimulator3D remains the golden
 // reference that every kernel here is validated against (test_cuda_lfm_3d.cu).
 //
 // Index helpers below MUST match include/core/mesh_3d.h (Mesh3D::iu/iv/iw/ip)
-// and include/simulator/lfm/flow_map_3d.h (FlowMap3D::idx) bit-for-bit, otherwise
+// and include/integrator/lfm/flow_map_3d.h (FlowMap3D::idx) bit-for-bit, otherwise
 // the CPU↔GPU cross-checks fail.
 // ════════════════════════════════════════════════════════════════════
 

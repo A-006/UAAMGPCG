@@ -2,12 +2,12 @@
 set(LFM_SOURCES
     core/grid.cpp
     core/grid_3d.cpp
-    simulator/advection/advection_3d.cpp
+    integrator/advection/advection_3d.cpp
     core/bc/patches_3d.cpp
-    simulator/pressure/pressure_3d.cpp
-    simulator/simulator_3d.cpp
-    simulator/scene_3d.cpp
-    simulator/runner_3d.cpp
+    integrator/pressure/pressure_3d.cpp
+    integrator/simulator_3d.cpp
+    integrator/scene_3d.cpp
+    integrator/runner_3d.cpp
     io/vtk_writer_3d.cpp
     io/vtk_slim_3d.cpp
     core/scalar_field_3d.cpp
@@ -23,14 +23,14 @@ set(LFM_SOURCES
     ic/3d/wind_turbine.cpp
     core/config.cpp
     io/cli.cpp
-    simulator/advection/advection.cpp
+    integrator/advection/advection.cpp
     core/bc/patches.cpp
     io/force.cpp
     io/vtk_writer.cpp
-    simulator/pressure/pressure.cpp
-    simulator/chorin/chorin_simulator.cpp
-    simulator/runner.cpp
-    simulator/factory.cpp
+    integrator/pressure/pressure.cpp
+    integrator/chorin/chorin_simulator.cpp
+    integrator/runner.cpp
+    integrator/factory.cpp
     solver/jacobi.cpp
     solver/rbgs.cpp
     solver/pcg.cpp
@@ -48,10 +48,10 @@ set(LFM_SOURCES
     solver/preconditioner/3d/amg_preconditioner_3d.cpp
     solver/preconditioner/3d/uaamg_preconditioner_3d.cpp
     solver/factory.cpp
-    simulator/lfm/flow_map_2d.cpp
-    simulator/lfm/lfm_simulator.cpp
-    simulator/lfm/flow_map_3d.cpp
-    simulator/lfm/lfm_simulator_3d.cpp
+    integrator/lfm/flow_map_2d.cpp
+    integrator/lfm/lfm_simulator.cpp
+    integrator/lfm/flow_map_3d.cpp
+    integrator/lfm/lfm_simulator_3d.cpp
 )
 
 add_library(lfm_lib ${LFM_SOURCES})

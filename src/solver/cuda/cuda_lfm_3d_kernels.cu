@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════
-// GPU 3D LFM kernels — device port of src/simulator/lfm_simulator_3d.cpp.
+// GPU 3D LFM kernels — device port of src/integrator/lfm_simulator_3d.cpp.
 // This translation unit holds the device-resident state management plus the
 // per-stage kernels. Kernels are added phase-by-phase (see plan); each is
 // validated against the CPU LFMSimulator3D golden reference in
@@ -94,7 +94,7 @@ static bool fp16_sampling(const CudaLFMState3D& s) {
 
 // ════════════════════════════════════════════════════════════════════
 // Shared device functions — exact ports of the corresponding routines in
-// src/simulator/lfm_simulator_3d.cpp (same clamps, B-spline weights, MAC
+// src/integrator/lfm_simulator_3d.cpp (same clamps, B-spline weights, MAC
 // face offsets, and 27-point summation order, so GPU == CPU to fp rounding).
 // ════════════════════════════════════════════════════════════════════
 __device__ inline double dclamp(double v, double lo, double hi) {
@@ -969,7 +969,7 @@ void lfm_apply_freestream_box(CudaLFMState3D& s, CudaVel3D vel, double Ux, doubl
 
 // ──────────────────────────────────────────────────────────────────
 // Pressure projection: rhs = ∇·u/dt → CudaPCG3D::solve → u -= dt·∇p.
-// Mirrors PressureProjection3D::project (src/simulator/pressure/pressure_3d.cpp).
+// Mirrors PressureProjection3D::project (src/integrator/pressure/pressure_3d.cpp).
 // ──────────────────────────────────────────────────────────────────
 __global__ void build_divergence_rhs_kernel(const double* u, const double* v, const double* w,
                                              const bool* solid, double* rhs, int nx, int ny, int nz,
@@ -1339,7 +1339,7 @@ void lfm_rk4_march_backward(CudaLFMState3D& s, CudaVel3D vel, double dt_march) {
 // ══════════════════════════════════════════════════════════════════════
 // P3: impulse chain — viscous force, accumulation, midpoints, pullback,
 // forward pullback, error correction, gauge write-back. Each mirrors the
-// matching routine in src/simulator/lfm_simulator_3d.cpp.
+// matching routine in src/integrator/lfm_simulator_3d.cpp.
 // ══════════════════════════════════════════════════════════════════════
 
 // μ∇²u at cell centers, per component → visc_x/visc_y/visc_z (interior arrays).

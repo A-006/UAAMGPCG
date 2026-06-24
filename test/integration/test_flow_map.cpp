@@ -8,8 +8,8 @@
 // CPU-only. Links against liblfm_lib.a (no GPU/CUDA symbols).
 #include "../test_utils.h"
 
-#include "simulator/lfm/flow_map_2d.h"
-#include "simulator/lfm/flow_map_3d.h"
+#include "integrator/lfm/flow_map_2d.h"
+#include "integrator/lfm/flow_map_3d.h"
 
 #include <cmath>
 

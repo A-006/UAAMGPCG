@@ -9,7 +9,7 @@
  */
 #include "core/config.h"
 #include "core/grid.h"
-#include "simulator/factory.h"
+#include "integrator/factory.h"
 #include "solver/cuda_pcg_solver.h"
 #include "io/vtk_writer.h"
 #include "io/force.h"

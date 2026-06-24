@@ -9,9 +9,9 @@
  */
 #include "core/config.h"
 #include "core/grid.h"
-#include "simulator/simulator_base.h"
-#include "simulator/chorin/chorin_simulator.h"
-#include "simulator/lfm/lfm_simulator.h"
+#include "integrator/simulator_base.h"
+#include "integrator/chorin/chorin_simulator.h"
+#include "integrator/lfm/lfm_simulator.h"
 #include "solver/factory.h"
 #include "io/force.h"
 #include "../test_utils.h"

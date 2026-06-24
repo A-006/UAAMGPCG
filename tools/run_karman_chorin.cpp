@@ -5,8 +5,8 @@
  */
 #include "core/config.h"
 #include "io/force.h"
-#include "simulator/factory.h"
-#include "simulator/runner.h"
+#include "integrator/factory.h"
+#include "integrator/runner.h"
 #include <cmath>
 #include <iomanip>
 #include <iostream>

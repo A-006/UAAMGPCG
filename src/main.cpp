@@ -22,7 +22,7 @@
  * vortex_reconnection, trefoil_knot — see scene_3d.h. Everything else is 2D.)
  */
 #include "core/config.h"
-#include "simulator/launcher.h" // launcher::build_config / make_simulation
+#include "integrator/launcher.h" // launcher::build_config / make_simulation
 #include <iostream>
 
 int main(int argc, char** argv) {

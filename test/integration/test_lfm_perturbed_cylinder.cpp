@@ -11,7 +11,7 @@
  */
 #include "core/config.h"
 #include "core/grid.h"
-#include "simulator/lfm/lfm_simulator.h"
+#include "integrator/lfm/lfm_simulator.h"
 #include "solver/factory.h"
 #include "io/force.h"
 #include "../test_utils.h"
