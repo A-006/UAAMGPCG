@@ -9,7 +9,7 @@
  * Build: add to test/CMakeLists.txt
  * Run:   ./build/test/test_lfm_perturbed_cylinder
  */
-#include "core/config.h"
+#include "io/config.h"
 #include "mesh/grid.h"
 #include "integrator/lfm/lfm_simulator.h"
 #include "solver/factory.h"

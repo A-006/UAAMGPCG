@@ -8,8 +8,8 @@
 #include "mesh/grid_3d.h"
 #include "integrator/ops/advection.h"
 #include "integrator/ops/advection_3d.h"
-#include "numerics/ops/operators.h"
-#include "numerics/ops/operators_3d.h"
+#include "mesh/ops/operators.h"
+#include "mesh/ops/operators_3d.h"
 
 #include <cmath>
 

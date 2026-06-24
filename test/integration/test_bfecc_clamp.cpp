@@ -10,7 +10,7 @@
  *
  * Usage: test_bfecc_clamp [NX] [cycles]   defaults: NX=48 cycles=60
  */
-#include "core/config.h"
+#include "io/config.h"
 #include "mesh/grid_3d.h"
 #include "integrator/lfm/lfm_simulator_3d.h"
 #include "io/3d/vortex_ring.h"

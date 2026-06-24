@@ -9,7 +9,7 @@
  * Build: added to test/CMakeLists.txt
  * Run:   ./build/test/test_lfm_instability
  */
-#include "core/config.h"
+#include "io/config.h"
 #include "mesh/grid.h"
 #include "integrator/lfm/flow_map_2d.h"
 #include "integrator/lfm/lfm_simulator.h"

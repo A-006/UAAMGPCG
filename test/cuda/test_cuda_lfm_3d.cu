@@ -8,7 +8,7 @@
 // ════════════════════════════════════════════════════════════════════
 #include "solver/cuda/cuda_lfm_3d.h"
 #include "mesh/grid_3d.h"
-#include "core/config.h"
+#include "io/config.h"
 #include "mesh/bc/patches_3d.h"
 #include "integrator/ops/pressure_3d.h"
 #include "integrator/lfm/lfm_simulator_3d.h"

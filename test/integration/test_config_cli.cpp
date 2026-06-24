@@ -9,7 +9,7 @@
 // assignments so any user-set field wins.
 #include "../test_utils.h"
 #include "io/cli.h"
-#include "core/config.h"
+#include "io/config.h"
 #include "io/3d/case_3d.h"
 
 #include <string>

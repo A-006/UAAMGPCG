@@ -10,7 +10,7 @@
  * Usage: run_vortex_ring_collision [t_end] [frame_skip] [NX]
  *   defaults: t_end=2.0, frame_skip=2, NX=64
  */
-#include "core/config.h"
+#include "io/config.h"
 #include "mesh/grid_3d.h"
 #include "integrator/simulator_3d.h"
 #include "integrator/chorin/chorin_simulator_3d.h"

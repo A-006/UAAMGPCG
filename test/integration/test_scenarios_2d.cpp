@@ -7,7 +7,7 @@
 #include "../test_utils.h"
 #include "io/2d/cylinder.h"
 #include "io/2d/leapfrog.h"
-#include "core/config.h"
+#include "io/config.h"
 #include "mesh/grid.h"
 #include <cmath>
 

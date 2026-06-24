@@ -1,5 +1,5 @@
 #pragma once
-#include "core/config.h"
+#include "io/config.h"
 
 // Common base for every simulator, 2D or 3D. The 2D (Simulator) and 3D
 // (Simulator3D) hierarchies stay separate — they carry different grid types —

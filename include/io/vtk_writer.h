@@ -1,6 +1,6 @@
 #pragma once
 #include "mesh/grid.h"
-#include "core/config.h"
+#include "io/config.h"
 
 // VTK file output for ParaView visualization.
 class VtkWriter {

@@ -1,5 +1,5 @@
 #pragma once
-#include "core/config.h"
+#include "io/config.h"
 #include "mesh/grid_3d.h"
 #include "mesh/bc/patches_3d.h"
 

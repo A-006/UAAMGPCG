@@ -1,6 +1,6 @@
 #pragma once
 #include "mesh/bc/boundary_condition.h"
-#include "core/config.h"
+#include "io/config.h"
 #include "mesh/grid.h"
 
 // ──────────────────────────────────────────────────────────────────

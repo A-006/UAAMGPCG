@@ -1,5 +1,5 @@
 #pragma once
-#include "core/config.h"
+#include "io/config.h"
 #include <string>
 
 // ── 3D case-config assembly for the launcher ────────────────────────────────

@@ -5,7 +5,7 @@
  * Same as test_karman_validate.cpp but links cuda_uaamg_lib for GPU acceleration.
  * Usage: build/test_karman_validate_gpu [NX] [TEND] [chorin|lfm] [cpu|gpu]
  */
-#include "core/config.h"
+#include "io/config.h"
 #include "mesh/grid.h"
 #include "integrator/simulator_2d.h"
 #include "integrator/chorin/chorin_simulator.h"

@@ -3,7 +3,7 @@
  * @brief Chorin reference Cylinder run (backup if LFM doesn't shed).
  * Usage: run_karman_chorin [t_end] [frame_skip] [NX]
  */
-#include "core/config.h"
+#include "io/config.h"
 #include "io/force.h"
 #include "integrator/factory.h"
 #include "integrator/runner_2d.h"

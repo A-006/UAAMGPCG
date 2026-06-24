@@ -1,4 +1,4 @@
-#include "core/config.h"
+#include "io/config.h"
 #include "mesh/grid.h"
 #include "integrator/chorin/chorin_simulator.h"
 #include "solver/factory.h"

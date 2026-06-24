@@ -1,6 +1,6 @@
 #pragma once
 #include "mesh/grid_3d.h"
-#include "core/config.h"
+#include "io/config.h"
 
 // 3D VTK writer — parallels include/io/vtk_writer.h.
 class VtkWriter3D {

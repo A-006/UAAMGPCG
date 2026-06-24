@@ -1,5 +1,5 @@
 #pragma once
-#include "core/config.h"
+#include "io/config.h"
 #include "integrator/make_simulator_2d.h"
 #include "integrator/make_simulator_3d.h"
 #include "io/2d/case_2d.h"

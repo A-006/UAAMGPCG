@@ -14,8 +14,8 @@
 
 #include "mesh/grid.h"
 #include "mesh/mesh.h"
-#include "core/field.h"
-#include "numerics/ops/operators.h"
+#include "mesh/field.h"
+#include "mesh/ops/operators.h"
 
 int main() {
     test_header("2D core grid + field operators");

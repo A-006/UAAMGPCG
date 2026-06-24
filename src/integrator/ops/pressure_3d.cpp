@@ -1,5 +1,5 @@
 #include "integrator/ops/pressure_3d.h"
-#include "numerics/ops/operators_3d.h"
+#include "mesh/ops/operators_3d.h"
 #include <algorithm>
 
 void PressureProjection3D::project(Grid3D& g, double dt, Solver3D& solver, int max_iter,

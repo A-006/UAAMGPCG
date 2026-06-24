@@ -10,7 +10,7 @@
  *   T5: Pullback roundtrip (Ψ then Φ) on uniform flow
  *   T6: Full LFM cycle on a vortex ring in a free-slip box
  */
-#include "core/config.h"
+#include "io/config.h"
 #include "mesh/grid_3d.h"
 #include "integrator/lfm/flow_map_3d.h"
 #include "integrator/lfm/lfm_simulator_3d.h"

@@ -7,7 +7,7 @@
  *
  * Reference: Schäfer & Turek 1996, Rajani 2009
  */
-#include "core/config.h"
+#include "io/config.h"
 #include "mesh/grid.h"
 #include "integrator/simulator_2d.h"
 #include "integrator/chorin/chorin_simulator.h"

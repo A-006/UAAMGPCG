@@ -20,7 +20,7 @@ set(LFM_SOURCES
     io/3d/trefoil_knot.cpp
     io/3d/freestream.cpp
     io/3d/plate.cpp
-    core/config.cpp
+    io/config.cpp
     io/cli.cpp
     integrator/ops/advection.cpp
     mesh/bc/patches.cpp
