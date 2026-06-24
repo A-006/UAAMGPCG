@@ -5,7 +5,7 @@
  * Times the templated CudaUAAMGPreconditioner3DT<T> V-cycle for T=double and
  * T=float at several grids. FP32 halves global-memory traffic.
  */
-#include "solver/cuda/cuda_uaamg_preconditioner_3d.h"
+#include "solver/cuda/preconditioner/cuda_uaamg_preconditioner_3d.h"
 #include <cstdio>
 #include <vector>
 #include <chrono>

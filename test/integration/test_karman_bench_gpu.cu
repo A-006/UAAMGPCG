@@ -12,7 +12,7 @@
 #include "mesh/grid_2d.h"
 #include "integrator/chorin/chorin_simulator_2d.h"
 #include "solver/factory_2d.h"
-#include "solver/cuda_pcg_solver_2d.h"
+#include "solver/cuda/krylov/cuda_pcg_solver_2d.h"
 #include "../test_utils.h"
 #include <iostream>
 #include <chrono>

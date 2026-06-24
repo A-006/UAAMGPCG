@@ -14,7 +14,7 @@
 #include "mesh/grid_2d.h"
 #include "integrator/chorin/chorin_simulator_2d.h"
 #include "solver/factory_2d.h"
-#include "solver/preconditioner/2d/uaamg_preconditioner.h"
+#include "solver/preconditioner/uaamg_preconditioner_2d.h"
 #include "../test_utils.h"
 #include <iostream>
 #include <chrono>

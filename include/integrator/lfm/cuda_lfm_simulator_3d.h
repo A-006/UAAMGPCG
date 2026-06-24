@@ -2,7 +2,7 @@
 #include "io/config.h"
 #include "mesh/grid_3d.h"
 #include "integrator/simulator_3d.h"
-#include "solver/cuda/cuda_lfm_3d.h"
+#include "integrator/lfm/cuda_lfm_3d.h"
 
 // ════════════════════════════════════════════════════════════════════
 // Fully GPU-resident 3D LFM simulator (Simulator3D). The entire

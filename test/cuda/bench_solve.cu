@@ -1,6 +1,6 @@
 // Time a full FP64 PCG solve (the path the 3D LFM pressure projection uses) at a
 // realistic size — measures the per-iteration cost incl. preconditioner V-cycle.
-#include "solver/cuda/cuda_pcg_3d.h"
+#include "solver/cuda/krylov/cuda_pcg_3d.h"
 #include "solver/cuda/cuda_common_3d.h"
 #include <chrono>
 #include <cstdio>

@@ -18,7 +18,7 @@
  * Usage: bench_vcycle_fresh [nx] [ny] [nz] [reps] [warmup]
  *        default 256 256 256 100 10
  */
-#include "solver/cuda/cuda_uaamg_preconditioner_3d.h"
+#include "solver/cuda/preconditioner/cuda_uaamg_preconditioner_3d.h"
 #include <cmath>
 #include <cstdio>
 #include <cuda_runtime.h>

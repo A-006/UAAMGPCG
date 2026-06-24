@@ -3,7 +3,7 @@
  * @brief Minimal single-size FP32 V-cycle driver for clean ncu profiling.
  * Usage: bench_vcycle256 [nx] [ny] [nz] [reps]   default 256 256 256 10
  */
-#include "solver/cuda/cuda_uaamg_preconditioner_3d.h"
+#include "solver/cuda/preconditioner/cuda_uaamg_preconditioner_3d.h"
 #include <chrono>
 #include <cstdio>
 #include <vector>

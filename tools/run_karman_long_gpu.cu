@@ -10,7 +10,7 @@
 #include "io/config.h"
 #include "mesh/grid_2d.h"
 #include "integrator/factory.h"
-#include "solver/cuda_pcg_solver_2d.h"
+#include "solver/cuda/krylov/cuda_pcg_solver_2d.h"
 #include "io/vtk_writer_2d.h"
 #include "io/force.h"
 #include <iostream>

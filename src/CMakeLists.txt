@@ -88,5 +88,3 @@ endif()
 # handles both 2D (CPU) and 3D (GPU/CPU) scenarios, so the former `lfm_2d`
 # entry point (src/main.cpp) has been removed.
 
-# Ax=b solvers (standalone + MAC-grid Poisson solvers)
-add_subdirectory(solver)

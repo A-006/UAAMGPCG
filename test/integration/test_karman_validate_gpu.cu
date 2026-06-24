@@ -11,7 +11,7 @@
 #include "integrator/chorin/chorin_simulator_2d.h"
 #include "integrator/lfm/lfm_simulator_2d.h"
 #include "solver/factory_2d.h"
-#include "solver/cuda_pcg_solver_2d.h"
+#include "solver/cuda/krylov/cuda_pcg_solver_2d.h"
 #include "io/force.h"
 #include "io/vtk_writer_2d.h"
 #include "../test_utils.h"

@@ -2,8 +2,8 @@
  * Test: call apply() twice with different residuals, compare GPU vs CPU each time.
  * This isolates whether the SECOND apply() call produces the same output.
  */
-#include "solver/cuda/cuda_pcg_2d.h"
-#include "solver/preconditioner/2d/uaamg_preconditioner.h"
+#include "solver/cuda/krylov/cuda_pcg_2d.h"
+#include "solver/preconditioner/uaamg_preconditioner_2d.h"
 #include "mesh/grid_2d.h"
 #include <cstdio>
 #include <cmath>

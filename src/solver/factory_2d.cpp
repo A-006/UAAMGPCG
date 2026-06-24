@@ -5,14 +5,14 @@
  * @date 2026-05-22
  */
 #include "solver/factory_2d.h"
-#include "solver/amgx_solver_2d.h"
-#include "solver/jacobi_2d.h"
-#include "solver/rbgs_2d.h"
-#include "solver/pcg_2d.h"
-#include "solver/preconditioner/2d/identity_preconditioner.h"
-#include "solver/preconditioner/2d/gmg_preconditioner.h"
-#include "solver/preconditioner/2d/amg_preconditioner.h"
-#include "solver/preconditioner/2d/uaamg_preconditioner.h"
+#include "solver/amgx/amgx_solver_2d.h"
+#include "solver/relaxation/jacobi_2d.h"
+#include "solver/relaxation/rbgs_2d.h"
+#include "solver/krylov/pcg_2d.h"
+#include "solver/preconditioner/identity_preconditioner_2d.h"
+#include "solver/preconditioner/gmg_preconditioner_2d.h"
+#include "solver/preconditioner/amg_preconditioner_2d.h"
+#include "solver/preconditioner/uaamg_preconditioner_2d.h"
 #include "util/registry.h"
 
 namespace {
