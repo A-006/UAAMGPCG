@@ -86,15 +86,18 @@ if(DEFINED ENV{CUDACXX} OR DEFINED CMAKE_CUDA_COMPILER)
     # (backend=auto), with a CPU fallback when no device is present.
     # main.cpp is just main(); make_simulator_3d.cpp builds the GPU/CPU
     # simulator, so it needs nvcc too. Both compile as CUDA in this build.
-    add_executable(cfdsim src/main.cpp src/integrator/make_simulator_3d.cpp)
-    set_source_files_properties(src/main.cpp src/integrator/make_simulator_3d.cpp
+    add_executable(cfdsim src/main.cpp src/integrator/make_simulator_2d.cpp
+        src/integrator/make_simulator_3d.cpp)
+    set_source_files_properties(src/main.cpp src/integrator/make_simulator_2d.cpp
+        src/integrator/make_simulator_3d.cpp
         PROPERTIES LANGUAGE CUDA)
     set_target_properties(cfdsim PROPERTIES
         LINKER_LANGUAGE CUDA
         CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
     )
     target_compile_definitions(cfdsim PRIVATE HAVE_CUDA)
-    target_link_libraries(cfdsim PRIVATE cuda_lfm_3d_lib cuda_uaamg_3d_lib cuda_cg_3d_lib lfm_lib)
+    target_link_libraries(cfdsim PRIVATE cuda_lfm_3d_lib cuda_uaamg_3d_lib cuda_cg_3d_lib
+        cuda_uaamg_lib cuda_cg_lib lfm_lib)
     target_include_directories(cfdsim PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
     # GPU Cylinder validate (Cd/Cl/St)
@@ -115,7 +118,8 @@ else()
     # CPU-only cfdsim: the SAME sources, compiled by the C++ compiler (no nvcc).
     # Without HAVE_CUDA make_simulator_3d.cpp pulls in no CUDA headers, so
     # backend=auto/gpu both resolve to the host LFMSimulator3D. GPU optional.
-    add_executable(cfdsim src/main.cpp src/integrator/make_simulator_3d.cpp)
+    add_executable(cfdsim src/main.cpp src/integrator/make_simulator_2d.cpp
+        src/integrator/make_simulator_3d.cpp)
     target_link_libraries(cfdsim PRIVATE lfm_lib)
     target_include_directories(cfdsim PRIVATE ${CMAKE_SOURCE_DIR}/include)
 endif()
