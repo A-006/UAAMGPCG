@@ -1,4 +1,4 @@
-#include "simulator/scenarios/3d/delta_wing.h"
+#include "ic/3d/delta_wing.h"
 #include <cmath>
 #include <cstdint>
 #include <fstream>

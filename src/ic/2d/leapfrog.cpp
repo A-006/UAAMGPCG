@@ -1,4 +1,4 @@
-#include "simulator/scenarios/2d/leapfrog.h"
+#include "ic/2d/leapfrog.h"
 #include <cmath>
 
 namespace scenarios {

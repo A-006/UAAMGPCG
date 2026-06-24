@@ -1,7 +1,7 @@
 #pragma once
 #include "core/grid.h"
 #include "numerics/bc/boundary_condition.h"
-#include "simulator/scenarios/2d/params_2d.h"
+#include "ic/2d/params_2d.h"
 #include "util/registry.h"
 #include <functional>
 #include <string>

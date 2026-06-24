@@ -1,7 +1,7 @@
-#include "simulator/scenarios/2d/primitives_2d.h"
+#include "ic/2d/primitives_2d.h"
 #include "numerics/bc/patches.h"
-#include "simulator/scenarios/2d/karman.h"
-#include "simulator/scenarios/2d/leapfrog.h"
+#include "ic/2d/karman.h"
+#include "ic/2d/leapfrog.h"
 
 // Built-in 2D primitives. Each builder reads its parameters from the Param2D
 // namespace it was handed and delegates to the existing field/geometry math;

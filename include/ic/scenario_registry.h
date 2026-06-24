@@ -1,6 +1,6 @@
 #pragma once
-#include "simulator/scenarios/2d/generic_scenario.h"
-#include "simulator/scenarios/scenario.h"
+#include "ic/2d/generic_scenario.h"
+#include "ic/scenario.h"
 #include "util/registry.h"
 #include <memory>
 

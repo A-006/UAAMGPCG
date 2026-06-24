@@ -1,9 +1,9 @@
 #include "simulator/scene_3d.h"
 #include "config/cli.h"
 #include "io/vtk_slim_3d.h"
-#include "simulator/scenarios/3d/delta_wing.h"
-#include "simulator/scenarios/3d/trefoil_knot.h"
-#include "simulator/scenarios/3d/vortex_ring.h"
+#include "ic/3d/delta_wing.h"
+#include "ic/3d/trefoil_knot.h"
+#include "ic/3d/vortex_ring.h"
 #include <array>
 #include <climits>
 #include <cmath>

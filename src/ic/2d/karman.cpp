@@ -1,4 +1,4 @@
-#include "simulator/scenarios/2d/karman.h"
+#include "ic/2d/karman.h"
 #include <cmath>
 
 namespace scenarios {

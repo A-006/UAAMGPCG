@@ -11,17 +11,16 @@ set(LFM_SOURCES
     io/vtk_writer_3d.cpp
     io/vtk_slim_3d.cpp
     core/scalar_field_3d.cpp
-    simulator/scenarios/2d/karman.cpp
-    simulator/scenarios/2d/leapfrog.cpp
-    simulator/scenarios/2d/primitives_2d.cpp
-    simulator/scenarios/2d/generic_scenario.cpp
-    simulator/scenarios/scenario_registry.cpp
-    simulator/scenarios/scenario_3d_registry.cpp
-    simulator/scenarios/3d/vortex_ring.cpp
-    simulator/scenarios/3d/trefoil_knot.cpp
-    simulator/scenarios/3d/delta_wing.cpp
-    simulator/scenarios/3d/fire_ball.cpp
-    simulator/scenarios/3d/wind_turbine.cpp
+    ic/2d/karman.cpp
+    ic/2d/leapfrog.cpp
+    ic/2d/primitives_2d.cpp
+    ic/2d/generic_scenario.cpp
+    ic/scenario_registry.cpp
+    ic/3d/vortex_ring.cpp
+    ic/3d/trefoil_knot.cpp
+    ic/3d/delta_wing.cpp
+    ic/3d/fire_ball.cpp
+    ic/3d/wind_turbine.cpp
     config/config.cpp
     config/cli.cpp
     numerics/advection/advection.cpp

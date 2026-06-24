@@ -1,5 +1,5 @@
-#include "simulator/scenarios/scenario_registry.h"
-#include "simulator/scenarios/2d/generic_scenario.h"
+#include "ic/scenario_registry.h"
+#include "ic/2d/generic_scenario.h"
 
 namespace scenarios {
 
