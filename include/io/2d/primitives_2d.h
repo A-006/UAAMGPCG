@@ -1,5 +1,5 @@
 #pragma once
-#include "mesh/grid.h"
+#include "mesh/grid_2d.h"
 #include "mesh/bc/boundary_condition.h"
 #include "io/2d/params_2d.h"
 #include "util/registry.h"

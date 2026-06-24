@@ -5,9 +5,9 @@
  * Usage: cd tools/karman/our_solver && ./build_and_run.sh [NX] [t_end]
  */
 #include "io/config.h"
-#include "mesh/grid.h"
-#include "integrator/chorin/chorin_simulator.h"
-#include "solver/factory.h"
+#include "mesh/grid_2d.h"
+#include "integrator/chorin/chorin_simulator_2d.h"
+#include "solver/factory_2d.h"
 #include "io/force.h"
 #include <iostream>
 #include <fstream>

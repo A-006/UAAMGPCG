@@ -1,6 +1,6 @@
 #include "integrator/runner_2d.h"
-#include "mesh/grid.h"
-#include "io/vtk_writer.h"
+#include "mesh/grid_2d.h"
+#include "io/vtk_writer_2d.h"
 #include <chrono>
 #include <cstdio>
 #include <fstream>

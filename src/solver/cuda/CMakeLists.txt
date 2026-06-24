@@ -2,14 +2,14 @@
 
 # CUDA UAAMG library (2D)
 add_library(cuda_uaamg_lib STATIC
-    cuda_uaamg_preconditioner.cu
-    cuda_pcg.cu
-    cuda_pcg_solver.cu
+    cuda_uaamg_preconditioner_2d.cu
+    cuda_pcg_2d.cu
+    cuda_pcg_solver_2d.cu
 )
 
 # CUDA CG library (2D, no preconditioner)
 add_library(cuda_cg_lib STATIC
-    cuda_cg.cu
+    cuda_cg_2d.cu
 )
 set_target_properties(cuda_cg_lib PROPERTIES LINKER_LANGUAGE CUDA)
 target_include_directories(cuda_cg_lib PUBLIC ${CMAKE_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})

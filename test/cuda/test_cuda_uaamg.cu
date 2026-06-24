@@ -7,10 +7,10 @@
  *   2. Full PCG solve (uniform RHS, compare CPU vs GPU pressure)
  *   3. V-cycle with solid obstacles (Karman-like cylinder)
  */
-#include "solver/cuda/cuda_pcg.h"
-#include "solver/pcg.h"
+#include "solver/cuda/cuda_pcg_2d.h"
+#include "solver/pcg_2d.h"
 #include "solver/preconditioner/2d/uaamg_preconditioner.h"
-#include "mesh/grid.h"
+#include "mesh/grid_2d.h"
 #include <cstdio>
 #include <cmath>
 #include <vector>

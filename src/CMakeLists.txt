@@ -1,6 +1,6 @@
 # LFM simulation library
 set(LFM_SOURCES
-    mesh/grid.cpp
+    mesh/grid_2d.cpp
     mesh/grid_3d.cpp
     integrator/ops/advection_3d.cpp
     mesh/bc/patches_3d.cpp
@@ -22,18 +22,18 @@ set(LFM_SOURCES
     io/3d/plate.cpp
     io/config.cpp
     io/cli.cpp
-    integrator/ops/advection.cpp
-    mesh/bc/patches.cpp
+    integrator/ops/advection_2d.cpp
+    mesh/bc/patches_2d.cpp
     io/force.cpp
-    io/vtk_writer.cpp
-    integrator/ops/pressure.cpp
-    integrator/chorin/chorin_simulator.cpp
+    io/vtk_writer_2d.cpp
+    integrator/ops/pressure_2d.cpp
+    integrator/chorin/chorin_simulator_2d.cpp
     integrator/runner_2d.cpp
     integrator/factory.cpp
-    solver/jacobi.cpp
-    solver/rbgs.cpp
-    solver/pcg.cpp
-    solver/amgx_solver.cpp
+    solver/jacobi_2d.cpp
+    solver/rbgs_2d.cpp
+    solver/pcg_2d.cpp
+    solver/amgx_solver_2d.cpp
     solver/amgx_solver_3d.cpp
     solver/amgx_backend.cpp
     solver/jacobi_3d.cpp
@@ -46,9 +46,9 @@ set(LFM_SOURCES
     solver/preconditioner/3d/gmg_preconditioner_3d.cpp
     solver/preconditioner/3d/amg_preconditioner_3d.cpp
     solver/preconditioner/3d/uaamg_preconditioner_3d.cpp
-    solver/factory.cpp
+    solver/factory_2d.cpp
     integrator/lfm/flow_map_2d.cpp
-    integrator/lfm/lfm_simulator.cpp
+    integrator/lfm/lfm_simulator_2d.cpp
     integrator/lfm/flow_map_3d.cpp
     integrator/lfm/lfm_simulator_3d.cpp
 )
@@ -64,7 +64,7 @@ if(OpenMP_CXX_FOUND)
 endif()
 
 # ── Optional NVIDIA AMGX Poisson backend (solver=amgx) ──
-# AMGX is reached through its plain C API (amgx_c.h), so amgx_solver.cpp builds
+# AMGX is reached through its plain C API (amgx_c.h), so amgx_solver_2d.cpp builds
 # with the host C++ compiler — no nvcc needed here. We only link the prebuilt
 # libamgxsh.so plus the CUDA runtime/cublas it depends on. Enable with:
 #   cmake -DUAAMG_WITH_AMGX=ON -DAMGX_ROOT=/path/to/AMGX ..

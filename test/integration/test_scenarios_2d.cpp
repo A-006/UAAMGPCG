@@ -8,7 +8,7 @@
 #include "io/2d/cylinder.h"
 #include "io/2d/leapfrog.h"
 #include "io/config.h"
-#include "mesh/grid.h"
+#include "mesh/grid_2d.h"
 #include <cmath>
 
 static void test_karman_cylinder() {

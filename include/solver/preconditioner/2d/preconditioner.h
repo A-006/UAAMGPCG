@@ -5,7 +5,7 @@
  * @date 2026-05-22
  */
 #pragma once
-#include "mesh/grid.h"
+#include "mesh/grid_2d.h"
 #include <vector>
 #include <string>
 

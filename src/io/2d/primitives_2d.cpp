@@ -1,5 +1,5 @@
 #include "io/2d/primitives_2d.h"
-#include "mesh/bc/patches.h"
+#include "mesh/bc/patches_2d.h"
 #include "io/2d/cylinder.h"
 #include "io/2d/leapfrog.h"
 

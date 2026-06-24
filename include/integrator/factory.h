@@ -1,7 +1,7 @@
 #pragma once
 #include "io/config.h"
 #include "integrator/simulator_2d.h"
-#include "solver/solver.h"
+#include "solver/solver_2d.h"
 #include <memory>
 
 // ──────────────────────────────────────────────────────────────────

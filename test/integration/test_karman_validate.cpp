@@ -8,11 +8,11 @@
  * Reference: Schäfer & Turek 1996, Rajani 2009
  */
 #include "io/config.h"
-#include "mesh/grid.h"
+#include "mesh/grid_2d.h"
 #include "integrator/simulator_2d.h"
-#include "integrator/chorin/chorin_simulator.h"
-#include "integrator/lfm/lfm_simulator.h"
-#include "solver/factory.h"
+#include "integrator/chorin/chorin_simulator_2d.h"
+#include "integrator/lfm/lfm_simulator_2d.h"
+#include "solver/factory_2d.h"
 #include "io/force.h"
 #include "../test_utils.h"
 #include "../test_config.h"

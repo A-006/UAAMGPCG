@@ -2,7 +2,7 @@
 #include "mesh/grid_3d.h"
 #include "io/config.h"
 
-// 3D VTK writer — parallels include/io/vtk_writer.h.
+// 3D VTK writer — parallels include/io/vtk_writer_2d.h.
 class VtkWriter3D {
 public:
     // Writes a structured-points VTK file with velocity (3-vector),

@@ -1,5 +1,5 @@
 #pragma once
-#include "mesh/grid.h"
+#include "mesh/grid_2d.h"
 #include <vector>
 #include <string>
 

@@ -9,7 +9,7 @@
 #include <vector>
 
 /// 3D LFM simulator per Algorithm 1 of Sun et al. 2025 (impulse-based).
-/// Port of the 2D LFMSimulator (include/integrator/lfm/lfm_simulator.h) onto the
+/// Port of the 2D LFMSimulator (include/integrator/lfm/lfm_simulator_2d.h) onto the
 /// Grid3D / Solver3D stack. Like ChorinSimulator3D, the initial condition is
 /// injected via mutable_grid() and the BC stack via set_boundary_manager();
 /// there is no 3D scenario registry yet.

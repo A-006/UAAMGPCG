@@ -6,14 +6,14 @@
  * Usage: build/test_karman_validate_gpu [NX] [TEND] [chorin|lfm] [cpu|gpu]
  */
 #include "io/config.h"
-#include "mesh/grid.h"
+#include "mesh/grid_2d.h"
 #include "integrator/simulator_2d.h"
-#include "integrator/chorin/chorin_simulator.h"
-#include "integrator/lfm/lfm_simulator.h"
-#include "solver/factory.h"
-#include "solver/cuda_pcg_solver.h"
+#include "integrator/chorin/chorin_simulator_2d.h"
+#include "integrator/lfm/lfm_simulator_2d.h"
+#include "solver/factory_2d.h"
+#include "solver/cuda_pcg_solver_2d.h"
 #include "io/force.h"
-#include "io/vtk_writer.h"
+#include "io/vtk_writer_2d.h"
 #include "io/2d/cylinder.h"
 #include "../test_utils.h"
 #include <iostream>

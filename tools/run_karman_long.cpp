@@ -6,9 +6,9 @@
  *   defaults: t_end=40, frame_skip=10, NX=256
  */
 #include "io/config.h"
-#include "mesh/grid.h"
+#include "mesh/grid_2d.h"
 #include "integrator/factory.h"
-#include "io/vtk_writer.h"
+#include "io/vtk_writer_2d.h"
 #include "io/force.h"
 #include <iostream>
 #include <iomanip>

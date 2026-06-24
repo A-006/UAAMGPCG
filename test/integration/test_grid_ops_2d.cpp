@@ -12,10 +12,10 @@
 //   - fields::Field<> typed wrapper (sizes, layout, round-trip)
 #include "../test_utils.h"
 
-#include "mesh/grid.h"
-#include "mesh/mesh.h"
-#include "mesh/field.h"
-#include "mesh/ops/operators.h"
+#include "mesh/grid_2d.h"
+#include "mesh/mesh_2d.h"
+#include "mesh/field_2d.h"
+#include "mesh/ops/operators_2d.h"
 
 int main() {
     test_header("2D core grid + field operators");

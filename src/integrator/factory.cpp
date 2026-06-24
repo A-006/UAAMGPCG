@@ -1,7 +1,7 @@
 #include "integrator/factory.h"
-#include "integrator/chorin/chorin_simulator.h"
-#include "integrator/lfm/lfm_simulator.h"
-#include "solver/factory.h"
+#include "integrator/chorin/chorin_simulator_2d.h"
+#include "integrator/lfm/lfm_simulator_2d.h"
+#include "solver/factory_2d.h"
 
 // The 2D simulator factory. 3D provisioning (backend GPU/CPU selection +
 // construction + IC setup) lives in make_simulator_3d.cpp, not here.

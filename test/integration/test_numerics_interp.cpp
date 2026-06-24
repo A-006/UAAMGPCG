@@ -4,11 +4,11 @@
 // CPU-only. Links against liblfm_lib.a (no GPU/CUDA symbols).
 #include "../test_utils.h"
 
-#include "mesh/grid.h"
+#include "mesh/grid_2d.h"
 #include "mesh/grid_3d.h"
-#include "integrator/ops/advection.h"
+#include "integrator/ops/advection_2d.h"
 #include "integrator/ops/advection_3d.h"
-#include "mesh/ops/operators.h"
+#include "mesh/ops/operators_2d.h"
 #include "mesh/ops/operators_3d.h"
 
 #include <cmath>

@@ -5,7 +5,7 @@
 // CUDA is OPTIONAL: compiled by nvcc (HAVE_CUDA) so backend=gpu can inject the
 // GPU Poisson solver, or by the C++ compiler for a CPU-only binary.
 #ifdef HAVE_CUDA
-#include "solver/cuda_pcg_solver.h"
+#include "solver/cuda_pcg_solver_2d.h"
 #include <cuda_runtime.h>
 #endif
 

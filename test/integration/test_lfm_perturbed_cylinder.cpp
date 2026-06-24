@@ -10,9 +10,9 @@
  * Run:   ./build/test/test_lfm_perturbed_cylinder
  */
 #include "io/config.h"
-#include "mesh/grid.h"
-#include "integrator/lfm/lfm_simulator.h"
-#include "solver/factory.h"
+#include "mesh/grid_2d.h"
+#include "integrator/lfm/lfm_simulator_2d.h"
+#include "solver/factory_2d.h"
 #include "io/force.h"
 #include "../test_utils.h"
 #include <iostream>

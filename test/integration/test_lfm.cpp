@@ -14,13 +14,13 @@
  *   T9: Compare Chorin vs LFM one step
  */
 #include "io/config.h"
-#include "mesh/grid.h"
+#include "mesh/grid_2d.h"
 #include "integrator/lfm/flow_map_2d.h"
-#include "integrator/lfm/lfm_simulator.h"
-#include "integrator/chorin/chorin_simulator.h"
+#include "integrator/lfm/lfm_simulator_2d.h"
+#include "integrator/chorin/chorin_simulator_2d.h"
 #include "integrator/simulator_2d.h"
-#include "solver/factory.h"
-#include "integrator/ops/pressure.h"
+#include "solver/factory_2d.h"
+#include "integrator/ops/pressure_2d.h"
 #include "io/force.h"
 #include "../test_utils.h"
 #include "../test_velocity_fields.h"

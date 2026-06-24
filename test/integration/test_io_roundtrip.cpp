@@ -8,9 +8,9 @@
 #include "../test_utils.h"
 
 #include "io/vtk_slim_3d.h"
-#include "io/vtk_writer.h"
+#include "io/vtk_writer_2d.h"
 #include "mesh/grid_3d.h"
-#include "mesh/grid.h"
+#include "mesh/grid_2d.h"
 #include "io/config.h"
 
 #include <cstdio>

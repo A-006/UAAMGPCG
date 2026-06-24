@@ -1,8 +1,8 @@
 // Quick test: does flipping RHS sign fix CG?
 #include "io/config.h"
-#include "mesh/grid.h"
-#include "solver/factory.h"
-#include "integrator/ops/pressure.h"
+#include "mesh/grid_2d.h"
+#include "solver/factory_2d.h"
+#include "integrator/ops/pressure_2d.h"
 #include <iostream>
 #include <cmath>
 #include <iomanip>

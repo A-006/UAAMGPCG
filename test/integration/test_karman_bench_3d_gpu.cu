@@ -3,10 +3,10 @@
  * @brief 3D Cylinder vortex street — CPU + GPU solver comparison.
  */
 #include "io/config.h"
-#include "mesh/grid.h"
-#include "integrator/chorin/chorin_simulator.h"
-#include "solver/factory.h"
-#include "solver/cuda_pcg_solver.h"    // 2D GPU wrapper
+#include "mesh/grid_2d.h"
+#include "integrator/chorin/chorin_simulator_2d.h"
+#include "solver/factory_2d.h"
+#include "solver/cuda_pcg_solver_2d.h"    // 2D GPU wrapper
 #include "solver/cuda_pcg_solver_3d.h" // 3D GPU wrapper
 #include "../test_utils.h"
 #include <iostream>

@@ -1,7 +1,7 @@
 #pragma once
 #include "mesh/bc/boundary_condition.h"
 #include "io/config.h"
-#include "mesh/grid.h"
+#include "mesh/grid_2d.h"
 
 // ──────────────────────────────────────────────────────────────────
 // Scenario — a first-class object owning everything scenario-specific
