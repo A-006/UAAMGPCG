@@ -14,8 +14,8 @@
 #include "solver/cuda_pcg_solver_2d.h"
 #include "io/force.h"
 #include "io/vtk_writer_2d.h"
-#include "io/2d/cylinder.h"
 #include "../test_utils.h"
+#include "../test_config.h"
 #include <iostream>
 #include <chrono>
 #include <iomanip>
@@ -33,36 +33,22 @@ int main(int argc, char** argv) {
     if (argc > 2)
         TEND = std::atof(argv[2]);
 
-    Config cfg;
-    cfg.scenario        = "karman";
-    cfg.NX              = NX;
-    cfg.Lx              = 8.0;
-    cfg.Ly              = 2.0;
-    cfg.U_inf           = 1.0; // larger domain (blockage 10%)
-    cfg.Re              = 200;
-    cfg.cyl_cx          = 2.0;
-    cfg.cyl_cy          = 1.0;
-    cfg.cyl_R           = 0.1;
-    cfg.t_end           = TEND;
-    cfg.dt              = 0.0;
-    cfg.solve_iters     = 100;
+    // Data-driven setup: load the karman case file (geometry + IC + BCs) the
+    // same way production does, then apply the validation-specific overrides.
+    // Hand-setting scalar cfg fields no longer builds the cylinder — the IC is
+    // now declared as data in inputs/karman.in (geom/ic/bc), so a bare Config
+    // would produce an empty domain (zero flow → zero force).
+    Config cfg          = make_karman_config(NX, TEND);
+    cfg.solve_iters     = (cfg.time_integrator == "lfm") ? 200 : 100;
     cfg.solve_tol       = 1e-8;
     cfg.frame_skip      = (cfg.time_integrator == "lfm") ? 1 : 10;
     cfg.out_dir         = "/tmp/karman_lfm_vtk";
     cfg.solver          = "pcg_uaamg";
-    cfg.time_integrator = "chorin";
-    cfg.lfm_cycle_steps = 10;
-    cfg.solve_iters     = 200;
-    cfg.cylinder_type   = "stair";
     if (argc > 3)
         cfg.time_integrator = argv[3];
     if (argc > 4)
-        cfg.cylinder_type = argv[4];
-    if (argc > 5)
-        use_gpu = (std::string(argv[5]) == "gpu");
+        use_gpu = (std::string(argv[4]) == "gpu");
 
-    cfg.NY = std::max(16, cfg.NX / 4);
-    cfg.dt = (cfg.time_integrator == "lfm" ? 0.25 : 0.5) * (cfg.Lx / cfg.NX) / cfg.U_inf;
     double dt_per_step = (cfg.time_integrator == "lfm") ? cfg.dt * cfg.lfm_cycle_steps : cfg.dt;
     int nsteps         = (int)(cfg.t_end / dt_per_step);
 
