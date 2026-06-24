@@ -13,7 +13,7 @@
 // reference that every kernel here is validated against (test_cuda_lfm_3d.cu).
 //
 // Index helpers below MUST match include/core/mesh_3d.h (Mesh3D::iu/iv/iw/ip)
-// and include/simulator/flow_map_3d.h (FlowMap3D::idx) bit-for-bit, otherwise
+// and include/simulator/lfm/flow_map_3d.h (FlowMap3D::idx) bit-for-bit, otherwise
 // the CPU↔GPU cross-checks fail.
 // ════════════════════════════════════════════════════════════════════
 

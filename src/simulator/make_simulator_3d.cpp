@@ -1,5 +1,5 @@
 #include "simulator/make_simulator_3d.h"
-#include "simulator/lfm_simulator_3d.h"
+#include "simulator/lfm/lfm_simulator_3d.h"
 #include "simulator/scene_3d.h"
 #include "solver/factory_3d.h"
 #include <iostream>
@@ -7,7 +7,7 @@
 // CUDA is OPTIONAL: this file is compiled by nvcc (HAVE_CUDA) so it can build
 // the GPU-resident simulator, or by the C++ compiler for a CPU-only binary.
 #ifdef HAVE_CUDA
-#include "simulator/cuda_lfm_simulator_3d.h"
+#include "simulator/lfm/cuda_lfm_simulator_3d.h"
 #include <cuda_runtime.h>
 #endif
 

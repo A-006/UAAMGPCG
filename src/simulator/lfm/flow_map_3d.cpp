@@ -1,4 +1,4 @@
-#include "simulator/flow_map_3d.h"
+#include "simulator/lfm/flow_map_3d.h"
 
 FlowMap3D::FlowMap3D(int nx_, int ny_, int nz_, double dx_, double dy_, double dz_)
     : nx(nx_), ny(ny_), nz(nz_), dx(dx_), dy(dy_), dz(dz_) {

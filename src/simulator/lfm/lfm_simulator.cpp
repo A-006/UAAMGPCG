@@ -1,4 +1,4 @@
-#include "simulator/lfm_simulator.h"
+#include "simulator/lfm/lfm_simulator.h"
 #include "numerics/pressure/pressure.h"
 #include "simulator/scenarios/scenario_registry.h"
 #include "io/vtk_writer.h"

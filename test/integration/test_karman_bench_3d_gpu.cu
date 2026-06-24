@@ -4,7 +4,7 @@
  */
 #include "config/config.h"
 #include "core/grid.h"
-#include "simulator/chorin_simulator.h"
+#include "simulator/chorin/chorin_simulator.h"
 #include "solver/factory.h"
 #include "solver/cuda_pcg_solver.h"    // 2D GPU wrapper
 #include "solver/cuda_pcg_solver_3d.h" // 3D GPU wrapper

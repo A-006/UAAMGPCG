@@ -1,4 +1,4 @@
-#include "simulator/chorin_simulator.h"
+#include "simulator/chorin/chorin_simulator.h"
 #include "numerics/advection/advection.h"
 #include "numerics/pressure/pressure.h"
 #include "simulator/scenarios/scenario_registry.h"

@@ -6,7 +6,7 @@
 /// Φ(X) maps initial position X to current position x.
 /// F is the 3×3 Jacobian with Fab = ∂Φ_a/∂X_b (a = row/output axis,
 /// b = column/input axis; a,b ∈ {0,1,2} ≙ {x,y,z}). At identity F = I.
-/// This mirrors include/simulator/flow_map_2d.h, doubled up for the extra axis.
+/// This mirrors include/simulator/lfm/flow_map_2d.h, doubled up for the extra axis.
 struct FlowMap3D {
     int nx, ny, nz;
     double dx, dy, dz;

@@ -11,9 +11,9 @@
  */
 #include "config/config.h"
 #include "core/grid.h"
-#include "simulator/flow_map_2d.h"
-#include "simulator/lfm_simulator.h"
-#include "simulator/chorin_simulator.h"
+#include "simulator/lfm/flow_map_2d.h"
+#include "simulator/lfm/lfm_simulator.h"
+#include "simulator/chorin/chorin_simulator.h"
 #include "simulator/simulator_base.h"
 #include "solver/factory.h"
 #include "numerics/pressure/pressure.h"

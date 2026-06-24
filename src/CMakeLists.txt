@@ -29,7 +29,7 @@ set(LFM_SOURCES
     io/force.cpp
     io/vtk_writer.cpp
     numerics/pressure/pressure.cpp
-    simulator/chorin_simulator.cpp
+    simulator/chorin/chorin_simulator.cpp
     simulator/runner.cpp
     simulator/factory.cpp
     solver/jacobi.cpp
@@ -49,10 +49,10 @@ set(LFM_SOURCES
     solver/preconditioner/3d/amg_preconditioner_3d.cpp
     solver/preconditioner/3d/uaamg_preconditioner_3d.cpp
     solver/factory.cpp
-    simulator/flow_map_2d.cpp
-    simulator/lfm_simulator.cpp
-    simulator/flow_map_3d.cpp
-    simulator/lfm_simulator_3d.cpp
+    simulator/lfm/flow_map_2d.cpp
+    simulator/lfm/lfm_simulator.cpp
+    simulator/lfm/flow_map_3d.cpp
+    simulator/lfm/lfm_simulator_3d.cpp
 )
 
 add_library(lfm_lib ${LFM_SOURCES})

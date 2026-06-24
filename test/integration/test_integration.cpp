@@ -1,7 +1,7 @@
 #include "config/config.h"
 #include "core/grid.h"
 #include "numerics/advection/advection.h"
-#include "simulator/chorin_simulator.h"
+#include "simulator/chorin/chorin_simulator.h"
 #include "solver/jacobi.h"
 #include "solver/rbgs.h"
 #include "solver/pcg.h"

@@ -4,7 +4,7 @@
 // but every sub-step is a kernel launch / device Poisson solve — the field
 // never leaves the GPU until sync_to_host().
 // ════════════════════════════════════════════════════════════════════
-#include "simulator/cuda_lfm_simulator_3d.h"
+#include "simulator/lfm/cuda_lfm_simulator_3d.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdio>

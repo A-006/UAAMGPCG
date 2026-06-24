@@ -12,8 +12,8 @@
  */
 #include "config/config.h"
 #include "core/grid_3d.h"
-#include "simulator/flow_map_3d.h"
-#include "simulator/lfm_simulator_3d.h"
+#include "simulator/lfm/flow_map_3d.h"
+#include "simulator/lfm/lfm_simulator_3d.h"
 #include "simulator/scenarios/3d/vortex_ring.h"
 #include "solver/factory_3d.h"
 #include "../test_utils.h"

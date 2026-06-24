@@ -2,14 +2,14 @@
 #include "config/config.h"
 #include "core/grid_3d.h"
 #include "numerics/bc/patches_3d.h"
-#include "simulator/flow_map_3d.h"
+#include "simulator/lfm/flow_map_3d.h"
 #include "simulator/simulator_3d.h"
 #include "solver/solver_3d.h"
 #include <memory>
 #include <vector>
 
 /// 3D LFM simulator per Algorithm 1 of Sun et al. 2025 (impulse-based).
-/// Port of the 2D LFMSimulator (include/simulator/lfm_simulator.h) onto the
+/// Port of the 2D LFMSimulator (include/simulator/lfm/lfm_simulator.h) onto the
 /// Grid3D / Solver3D stack. Like ChorinSimulator3D, the initial condition is
 /// injected via mutable_grid() and the BC stack via set_boundary_manager();
 /// there is no 3D scenario registry yet.
