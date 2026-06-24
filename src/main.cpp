@@ -19,7 +19,7 @@
  *   launcher::make_simulation — build the 2D or 3D simulator for this scenario
  *   Simulation::run         — run to completion and write the output frames
  * (3D scenes — vortex_ring, vortex_collision, collision_paper, delta_wing,
- * vortex_reconnection, trefoil_knot — see scene_3d.h. Everything else is 2D.)
+ * vortex_reconnection, trefoil_knot — see io/3d/case_3d.h. Everything else is 2D.)
  */
 #include "core/config.h"
 #include "integrator/launcher.h" // launcher::build_config / make_simulation

@@ -121,7 +121,7 @@ int main() {
     }
 
     // ── Reload into a fresh Grid3D using the documented load_raw_ic layout ──
-    // (load_raw_ic is file-static in scene_3d.cpp; replicate its exact loop.)
+    // (load_raw_ic is file-static in setup_3d.cpp; replicate its exact loop.)
     Grid3D g2(nx, ny, nz, 1.0, 1.0, 1.0);
     {
         long c = 0;
