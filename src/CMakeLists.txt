@@ -5,7 +5,7 @@ set(LFM_SOURCES
     integrator/ops/advection_3d.cpp
     mesh/bc/patches_3d.cpp
     integrator/ops/pressure_3d.cpp
-    integrator/simulator_3d.cpp
+    integrator/chorin/chorin_simulator_3d.cpp
     io/3d/case_3d.cpp
     io/3d/setup_3d.cpp
     integrator/runner_3d.cpp

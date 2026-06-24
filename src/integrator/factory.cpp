@@ -1,5 +1,6 @@
 #include "integrator/factory.h"
 #include "integrator/chorin/chorin_simulator.h"
+#include "integrator/chorin/chorin_simulator_3d.h"
 #include "integrator/lfm/lfm_simulator.h"
 #include "integrator/lfm/lfm_simulator_3d.h"
 #include "integrator/simulator_3d.h"

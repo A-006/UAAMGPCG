@@ -1,4 +1,4 @@
-#include "integrator/simulator_3d.h"
+#include "integrator/chorin/chorin_simulator_3d.h"
 #include "integrator/ops/advection_3d.h"
 #include "mesh/bc/patches_3d.h"
 #include "integrator/ops/pressure_3d.h"

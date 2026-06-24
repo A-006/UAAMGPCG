@@ -13,6 +13,7 @@
 #include "core/config.h"
 #include "mesh/grid_3d.h"
 #include "integrator/simulator_3d.h"
+#include "integrator/chorin/chorin_simulator_3d.h"
 #include "solver/factory_3d.h"
 #include "io/vtk_writer_3d.h"
 #include "io/3d/vortex_ring.h"
