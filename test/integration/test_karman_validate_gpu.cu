@@ -14,7 +14,7 @@
 #include "solver/cuda_pcg_solver.h"
 #include "io/force.h"
 #include "io/vtk_writer.h"
-#include "io/ic/2d/karman.h"
+#include "io/2d/karman.h"
 #include "../test_utils.h"
 #include <iostream>
 #include <chrono>

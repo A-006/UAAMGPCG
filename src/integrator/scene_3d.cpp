@@ -1,9 +1,9 @@
 #include "integrator/scene_3d.h"
 #include "io/cli.h"
 #include "io/vtk_slim_3d.h"
-#include "io/ic/3d/delta_wing.h"
-#include "io/ic/3d/trefoil_knot.h"
-#include "io/ic/3d/vortex_ring.h"
+#include "io/3d/delta_wing.h"
+#include "io/3d/trefoil_knot.h"
+#include "io/3d/vortex_ring.h"
 #include <array>
 #include <climits>
 #include <cmath>

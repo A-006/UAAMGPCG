@@ -1,4 +1,4 @@
-#include "io/ic/3d/delta_wing.h"
+#include "io/3d/delta_wing.h"
 #include <cmath>
 #include <cstdint>
 #include <fstream>

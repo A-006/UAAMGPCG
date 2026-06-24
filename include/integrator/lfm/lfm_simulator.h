@@ -2,7 +2,7 @@
 #include "core/config.h"
 #include "mesh/grid.h"
 #include "integrator/lfm/flow_map_2d.h"
-#include "io/ic/scenario.h"
+#include "io/scenario.h"
 #include "integrator/simulator_base.h"
 #include "solver/solver.h"
 #include <memory>

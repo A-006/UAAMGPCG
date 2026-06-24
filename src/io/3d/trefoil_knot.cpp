@@ -1,4 +1,4 @@
-#include "io/ic/3d/trefoil_knot.h"
+#include "io/3d/trefoil_knot.h"
 #include <cmath>
 
 namespace scenarios {

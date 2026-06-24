@@ -14,7 +14,7 @@
 #include "mesh/grid_3d.h"
 #include "integrator/lfm/flow_map_3d.h"
 #include "integrator/lfm/lfm_simulator_3d.h"
-#include "io/ic/3d/vortex_ring.h"
+#include "io/3d/vortex_ring.h"
 #include "solver/factory_3d.h"
 #include "../test_utils.h"
 #include <cmath>

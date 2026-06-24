@@ -1,7 +1,7 @@
 #pragma once
 #include "core/config.h"
 #include "mesh/grid.h"
-#include "io/ic/scenario.h"
+#include "io/scenario.h"
 #include "solver/solver.h"
 #include "integrator/simulator_base.h"
 #include <memory>

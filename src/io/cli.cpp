@@ -1,6 +1,6 @@
 #include "io/cli.h"
-#include "io/ic/2d/generic_scenario.h"
-#include "io/ic/scenario_registry.h"
+#include "io/2d/generic_scenario.h"
+#include "io/scenario_registry.h"
 #include <algorithm>
 #include <cctype>
 #include <fstream>

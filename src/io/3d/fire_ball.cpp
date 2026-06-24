@@ -1,4 +1,4 @@
-#include "io/ic/3d/fire_ball.h"
+#include "io/3d/fire_ball.h"
 #include <cmath>
 
 namespace scenarios {

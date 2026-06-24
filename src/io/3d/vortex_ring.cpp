@@ -1,4 +1,4 @@
-#include "io/ic/3d/vortex_ring.h"
+#include "io/3d/vortex_ring.h"
 #include <cmath>
 
 namespace scenarios {

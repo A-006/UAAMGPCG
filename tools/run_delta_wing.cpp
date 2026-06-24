@@ -9,7 +9,7 @@
 #include "integrator/simulator_3d.h"
 #include "solver/factory_3d.h"
 #include "io/vtk_writer_3d.h"
-#include "io/ic/3d/delta_wing.h"
+#include "io/3d/delta_wing.h"
 #include <iostream>
 #include <iomanip>
 #include <chrono>

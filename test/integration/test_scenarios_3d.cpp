@@ -5,9 +5,9 @@
 //
 // CPU setup correctness only; no GPU simulator is constructed.
 #include "../test_utils.h"
-#include "io/ic/3d/fire_ball.h"
-#include "io/ic/3d/vortex_ring.h"
-#include "io/ic/3d/delta_wing.h"
+#include "io/3d/fire_ball.h"
+#include "io/3d/vortex_ring.h"
+#include "io/3d/delta_wing.h"
 #include "mesh/grid_3d.h"
 #include "core/scalar_field_3d.h"
 #include <cmath>
