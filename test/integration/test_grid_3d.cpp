@@ -1,5 +1,5 @@
 #include "../test_utils.h"
-#include "core/grid_3d.h"
+#include "mesh/grid_3d.h"
 
 // Unit tests for Grid3D (3D MAC grid topology + field data, CPU).
 

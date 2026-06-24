@@ -1,5 +1,5 @@
 #pragma once
-#include "core/grid.h"
+#include "mesh/grid.h"
 
 // Advection schemes for the convection term (u·∇)u.
 class AdvectionScheme {

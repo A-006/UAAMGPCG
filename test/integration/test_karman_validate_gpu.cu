@@ -6,7 +6,7 @@
  * Usage: build/test_karman_validate_gpu [NX] [TEND] [chorin|lfm] [cpu|gpu]
  */
 #include "core/config.h"
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include "integrator/simulator_base.h"
 #include "integrator/chorin/chorin_simulator.h"
 #include "integrator/lfm/lfm_simulator.h"

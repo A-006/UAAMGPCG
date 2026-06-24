@@ -1,5 +1,5 @@
 #pragma once
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include "integrator/simulation.h"
 
 /// Abstract 2D simulator interface. Choose implementation via Config::time_integrator.

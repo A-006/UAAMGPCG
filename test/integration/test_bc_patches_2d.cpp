@@ -6,8 +6,8 @@
 // with a known velocity field, applies the BC, and asserts the exact resulting
 // MAC face values, matching the semantics in src/core/bc/patches.cpp.
 #include "../test_utils.h"
-#include "core/grid.h"
-#include "core/bc/patches.h"
+#include "mesh/grid.h"
+#include "mesh/bc/patches.h"
 
 using bc::FreeSlipLeftRight;
 using bc::FreeSlipTopBottom;

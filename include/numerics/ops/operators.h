@@ -1,5 +1,5 @@
 #pragma once
-#include "core/grid.h"
+#include "mesh/grid.h"
 
 // ──────────────────────────────────────────────────────────────────
 // Finite-volume calculus (OpenFOAM-style fvc:: namespace).

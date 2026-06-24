@@ -1,6 +1,6 @@
 #include "integrator/simulator_3d.h"
 #include "integrator/ops/advection_3d.h"
-#include "core/bc/patches_3d.h"
+#include "mesh/bc/patches_3d.h"
 #include "integrator/ops/pressure_3d.h"
 
 ChorinSimulator3D::ChorinSimulator3D(const Config& cfg, std::unique_ptr<Solver3D> solver)

@@ -5,7 +5,7 @@
  * @date 2026-06-23
  */
 #include "solver/amgx_solver_3d.h"
-#include "core/grid_3d.h"
+#include "mesh/grid_3d.h"
 #include "solver/amgx_backend.h"
 
 #include <algorithm>

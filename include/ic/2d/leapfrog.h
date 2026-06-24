@@ -1,5 +1,5 @@
 #pragma once
-#include "core/grid.h"
+#include "mesh/grid.h"
 
 // ──────────────────────────────────────────────────────────────────
 // Leapfrogging vortex-dipole initial condition (paper Fig. 10).

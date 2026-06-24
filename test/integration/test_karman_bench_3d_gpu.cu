@@ -3,7 +3,7 @@
  * @brief 3D Karman vortex street — CPU + GPU solver comparison.
  */
 #include "core/config.h"
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include "integrator/chorin/chorin_simulator.h"
 #include "solver/factory.h"
 #include "solver/cuda_pcg_solver.h"    // 2D GPU wrapper

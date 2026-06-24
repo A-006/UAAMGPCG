@@ -1,5 +1,5 @@
 #include "ic/2d/primitives_2d.h"
-#include "core/bc/patches.h"
+#include "mesh/bc/patches.h"
 #include "ic/2d/karman.h"
 #include "ic/2d/leapfrog.h"
 

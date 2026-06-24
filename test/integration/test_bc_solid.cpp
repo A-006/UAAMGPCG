@@ -8,8 +8,8 @@
 //
 // These tests pin the fixed behaviour so it cannot regress.
 #include "../test_utils.h"
-#include "core/grid.h"
-#include "core/bc/patches.h"
+#include "mesh/grid.h"
+#include "mesh/bc/patches.h"
 
 #include <cmath>
 

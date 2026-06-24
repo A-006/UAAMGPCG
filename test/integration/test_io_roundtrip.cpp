@@ -9,8 +9,8 @@
 
 #include "io/vtk_slim_3d.h"
 #include "io/vtk_writer.h"
-#include "core/grid_3d.h"
-#include "core/grid.h"
+#include "mesh/grid_3d.h"
+#include "mesh/grid.h"
 #include "core/config.h"
 
 #include <cstdio>

@@ -1,6 +1,6 @@
 #pragma once
-#include "core/grid.h"
-#include "core/bc/boundary_condition.h"
+#include "mesh/grid.h"
+#include "mesh/bc/boundary_condition.h"
 #include "ic/2d/params_2d.h"
 #include "util/registry.h"
 #include <functional>

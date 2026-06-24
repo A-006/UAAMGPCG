@@ -1,5 +1,5 @@
 #include "integrator/runner.h"
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include "io/vtk_writer.h"
 #include <chrono>
 #include <cstdio>

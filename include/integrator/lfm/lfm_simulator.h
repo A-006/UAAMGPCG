@@ -1,6 +1,6 @@
 #pragma once
 #include "core/config.h"
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include "integrator/lfm/flow_map_2d.h"
 #include "ic/scenario.h"
 #include "integrator/simulator_base.h"

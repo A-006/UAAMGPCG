@@ -1,9 +1,9 @@
 # LFM simulation library
 set(LFM_SOURCES
-    core/grid.cpp
-    core/grid_3d.cpp
+    mesh/grid.cpp
+    mesh/grid_3d.cpp
     integrator/ops/advection_3d.cpp
-    core/bc/patches_3d.cpp
+    mesh/bc/patches_3d.cpp
     integrator/ops/pressure_3d.cpp
     integrator/simulator_3d.cpp
     integrator/scene_3d.cpp
@@ -24,7 +24,7 @@ set(LFM_SOURCES
     core/config.cpp
     io/cli.cpp
     integrator/ops/advection.cpp
-    core/bc/patches.cpp
+    mesh/bc/patches.cpp
     io/force.cpp
     io/vtk_writer.cpp
     integrator/ops/pressure.cpp

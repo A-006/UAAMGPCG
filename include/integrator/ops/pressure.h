@@ -1,5 +1,5 @@
 #pragma once
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include "solver/solver.h"
 
 // Pressure projection: enforce incompressibility ∇·u = 0.

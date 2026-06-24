@@ -3,7 +3,7 @@
  * @brief 3D Karman vortex street — CPU solver comparison.
  */
 #include "core/config.h"
-#include "core/grid.h" // 2D grid for simulator
+#include "mesh/grid.h" // 2D grid for simulator
 #include "integrator/chorin/chorin_simulator.h"
 #include "solver/factory.h"
 #include "../test_utils.h"

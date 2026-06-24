@@ -1,8 +1,8 @@
 // Unit tests for 3D patch-based boundary conditions.
 // Real headers: core/bc/patches_3d.h, core/grid_3d.h.
 #include "../test_utils.h"
-#include "core/bc/patches_3d.h"
-#include "core/grid_3d.h"
+#include "mesh/bc/patches_3d.h"
+#include "mesh/grid_3d.h"
 
 // Fill every MAC face with a distinct nonzero sentinel so we can detect
 // exactly which faces a BC touches.

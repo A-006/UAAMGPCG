@@ -7,9 +7,9 @@
 //     PressureProjection3D.
 // ════════════════════════════════════════════════════════════════════
 #include "solver/cuda/cuda_lfm_3d.h"
-#include "core/grid_3d.h"
+#include "mesh/grid_3d.h"
 #include "core/config.h"
-#include "core/bc/patches_3d.h"
+#include "mesh/bc/patches_3d.h"
 #include "integrator/ops/pressure_3d.h"
 #include "integrator/lfm/lfm_simulator_3d.h"
 #include "integrator/lfm/cuda_lfm_simulator_3d.h"

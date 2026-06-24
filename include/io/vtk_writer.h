@@ -1,5 +1,5 @@
 #pragma once
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include "core/config.h"
 
 // VTK file output for ParaView visualization.

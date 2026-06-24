@@ -8,7 +8,7 @@
 #include "ic/2d/karman.h"
 #include "ic/2d/leapfrog.h"
 #include "core/config.h"
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include <cmath>
 
 static void test_karman_cylinder() {

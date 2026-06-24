@@ -5,7 +5,7 @@
  * Usage: cd tools/karman/our_solver && ./build_and_run.sh [NX] [t_end]
  */
 #include "core/config.h"
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include "integrator/chorin/chorin_simulator.h"
 #include "solver/factory.h"
 #include "io/force.h"

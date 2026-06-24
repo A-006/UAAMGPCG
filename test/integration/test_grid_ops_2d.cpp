@@ -12,8 +12,8 @@
 //   - fields::Field<> typed wrapper (sizes, layout, round-trip)
 #include "../test_utils.h"
 
-#include "core/grid.h"
-#include "core/mesh.h"
+#include "mesh/grid.h"
+#include "mesh/mesh.h"
 #include "core/field.h"
 #include "numerics/ops/operators.h"
 

@@ -4,7 +4,7 @@
  */
 #include "solver/cuda/cuda_pcg.h"
 #include "solver/preconditioner/2d/uaamg_preconditioner.h"
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include <cstdio>
 #include <cmath>
 #include <vector>

@@ -4,8 +4,8 @@
 // CPU-only. Links against liblfm_lib.a (no GPU/CUDA symbols).
 #include "../test_utils.h"
 
-#include "core/grid.h"
-#include "core/grid_3d.h"
+#include "mesh/grid.h"
+#include "mesh/grid_3d.h"
 #include "integrator/ops/advection.h"
 #include "integrator/ops/advection_3d.h"
 #include "numerics/ops/operators.h"

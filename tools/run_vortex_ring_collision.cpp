@@ -11,7 +11,7 @@
  *   defaults: t_end=2.0, frame_skip=2, NX=64
  */
 #include "core/config.h"
-#include "core/grid_3d.h"
+#include "mesh/grid_3d.h"
 #include "integrator/simulator_3d.h"
 #include "solver/factory_3d.h"
 #include "io/vtk_writer_3d.h"

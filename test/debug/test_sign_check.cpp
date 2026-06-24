@@ -1,6 +1,6 @@
 // Quick test: does flipping RHS sign fix CG?
 #include "core/config.h"
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include "solver/factory.h"
 #include "integrator/ops/pressure.h"
 #include <iostream>

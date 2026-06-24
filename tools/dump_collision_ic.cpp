@@ -13,7 +13,7 @@
  *
  * Usage: dump_collision_ic [NX] [out_dir]   defaults: NX=128 out=/tmp/coll_ic
  */
-#include "core/grid_3d.h"
+#include "mesh/grid_3d.h"
 #include "ic/3d/vortex_ring.h"
 #include <cstdio>
 #include <fstream>

@@ -1,5 +1,5 @@
 #pragma once
-#include "core/grid_3d.h"
+#include "mesh/grid_3d.h"
 #include "solver/solver_3d.h"
 
 // 3D pressure projection — parallels include/pressure/pressure.h.

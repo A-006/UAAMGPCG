@@ -1,6 +1,6 @@
 #pragma once
-#include "core/grid_3d.h"
-#include "core/bc/patches_3d.h"
+#include "mesh/grid_3d.h"
+#include "mesh/bc/patches_3d.h"
 
 // ──────────────────────────────────────────────────────────────────
 // Wind turbine in uniform inflow (paper Fig. 2).

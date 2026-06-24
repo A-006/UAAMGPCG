@@ -8,7 +8,7 @@
  * Reference: Schäfer & Turek 1996, Rajani 2009
  */
 #include "core/config.h"
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include "integrator/simulator_base.h"
 #include "integrator/chorin/chorin_simulator.h"
 #include "integrator/lfm/lfm_simulator.h"

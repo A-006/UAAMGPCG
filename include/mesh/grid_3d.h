@@ -1,5 +1,5 @@
 #pragma once
-#include "core/mesh_3d.h"
+#include "mesh/mesh_3d.h"
 #include <vector>
 #include <cstddef>
 

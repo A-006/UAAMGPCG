@@ -1,5 +1,5 @@
 #include "core/config.h"
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include "integrator/ops/advection.h"
 #include "integrator/chorin/chorin_simulator.h"
 #include "solver/jacobi.h"

@@ -10,7 +10,7 @@
  * Run:   ./build/test/test_lfm_instability
  */
 #include "core/config.h"
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include "integrator/lfm/flow_map_2d.h"
 #include "integrator/lfm/lfm_simulator.h"
 #include "integrator/chorin/chorin_simulator.h"

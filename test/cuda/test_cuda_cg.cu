@@ -5,7 +5,7 @@
 #include "solver/cuda/cuda_cg.h"
 #include "solver/pcg.h"
 #include "solver/preconditioner/2d/identity_preconditioner.h"
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include <cstdio>
 #include <cmath>
 #include <vector>

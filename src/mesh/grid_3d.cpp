@@ -1,4 +1,4 @@
-#include "core/grid_3d.h"
+#include "mesh/grid_3d.h"
 
 Grid3D::Grid3D(int nx_, int ny_, int nz_, double lx, double ly, double lz)
     : Mesh3D(nx_, ny_, nz_, lx, ly, lz) {

@@ -1,5 +1,5 @@
 #pragma once
-#include "core/grid.h"
+#include "mesh/grid.h"
 
 // ──────────────────────────────────────────────────────────────────
 // 2D Kármán vortex street (paper Fig. 8).

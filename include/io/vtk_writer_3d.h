@@ -1,5 +1,5 @@
 #pragma once
-#include "core/grid_3d.h"
+#include "mesh/grid_3d.h"
 #include "core/config.h"
 
 // 3D VTK writer — parallels include/io/vtk_writer.h.

@@ -1,4 +1,4 @@
-#include "core/bc/patches.h"
+#include "mesh/bc/patches.h"
 
 namespace bc {
 

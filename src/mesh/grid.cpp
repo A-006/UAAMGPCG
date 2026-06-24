@@ -1,4 +1,4 @@
-#include "core/grid.h"
+#include "mesh/grid.h"
 
 Grid::Grid(int nx_, int ny_, double lx, double ly) : Mesh2D(nx_, ny_, lx, ly) {
     u.assign(u_size(), 0.0);

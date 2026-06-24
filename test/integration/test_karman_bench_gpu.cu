@@ -9,7 +9,7 @@
  * Compiled with nvcc to enable GPU solver support.
  */
 #include "core/config.h"
-#include "core/grid.h"
+#include "mesh/grid.h"
 #include "integrator/chorin/chorin_simulator.h"
 #include "solver/factory.h"
 #include "solver/cuda_pcg_solver.h"
