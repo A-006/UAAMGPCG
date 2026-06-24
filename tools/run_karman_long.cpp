@@ -5,7 +5,7 @@
  * Usage: run_karman_long [t_end] [frame_skip] [NX]
  *   defaults: t_end=40, frame_skip=10, NX=256
  */
-#include "config/config.h"
+#include "core/config.h"
 #include "core/grid.h"
 #include "simulator/factory.h"
 #include "io/vtk_writer.h"

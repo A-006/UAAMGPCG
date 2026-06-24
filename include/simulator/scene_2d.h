@@ -1,6 +1,6 @@
 #pragma once
-#include "config/cli.h"
-#include "config/config.h"
+#include "io/cli.h"
+#include "core/config.h"
 #include "simulator/factory.h"
 #include "simulator/simulator_base.h"
 #include <memory>

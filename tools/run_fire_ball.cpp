@@ -8,7 +8,7 @@
  * proportional to (T - T_ref). Vorticity organizes naturally as the
  * plume rises.
  */
-#include "config/config.h"
+#include "core/config.h"
 #include "simulator/simulator_3d.h"
 #include "solver/factory_3d.h"
 #include "io/vtk_writer_3d.h"

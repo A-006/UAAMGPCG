@@ -8,7 +8,7 @@
  * (Jacobi, RBGS, CG, PCG/GMG, PCG/AMG) and reports wall-clock time,
  * per-step cost, and correctness.
  */
-#include "config/config.h"
+#include "core/config.h"
 #include "core/grid.h"
 #include "simulator/chorin/chorin_simulator.h"
 #include "solver/factory.h"

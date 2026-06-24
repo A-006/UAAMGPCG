@@ -11,7 +11,7 @@
  * Usage: run_delta_wing_lfm [cycles] [NX] [dt] [out_dir]
  *   defaults: cycles=160 NX=96 dt=0.005 out=output_delta_wing_lfm
  */
-#include "config/config.h"
+#include "core/config.h"
 #include "io/vtk_writer_3d.h"
 #include "simulator/lfm/lfm_simulator_3d.h"
 #include "ic/3d/delta_wing.h"

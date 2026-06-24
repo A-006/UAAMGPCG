@@ -7,7 +7,7 @@
  *
  * Usage: run_karman_long_gpu [t_end] [frame_skip] [NX]
  */
-#include "config/config.h"
+#include "core/config.h"
 #include "core/grid.h"
 #include "simulator/factory.h"
 #include "solver/cuda_pcg_solver.h"

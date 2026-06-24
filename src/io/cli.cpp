@@ -1,4 +1,4 @@
-#include "config/cli.h"
+#include "io/cli.h"
 #include "ic/2d/generic_scenario.h"
 #include "ic/scenario_registry.h"
 #include <algorithm>

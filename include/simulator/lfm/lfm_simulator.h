@@ -1,5 +1,5 @@
 #pragma once
-#include "config/config.h"
+#include "core/config.h"
 #include "core/grid.h"
 #include "simulator/lfm/flow_map_2d.h"
 #include "ic/scenario.h"

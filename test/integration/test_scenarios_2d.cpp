@@ -7,7 +7,7 @@
 #include "../test_utils.h"
 #include "ic/2d/karman.h"
 #include "ic/2d/leapfrog.h"
-#include "config/config.h"
+#include "core/config.h"
 #include "core/grid.h"
 #include <cmath>
 

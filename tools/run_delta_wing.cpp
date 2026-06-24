@@ -5,7 +5,7 @@
  * A triangular wing at angle-of-attack sheds wingtip vortices into a
  * uniform stream. Demonstrates immersed solids + inflow/outflow BCs in 3D.
  */
-#include "config/config.h"
+#include "core/config.h"
 #include "simulator/simulator_3d.h"
 #include "solver/factory_3d.h"
 #include "io/vtk_writer_3d.h"

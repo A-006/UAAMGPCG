@@ -8,8 +8,8 @@
 // Both entry points: apply scenario presets first, then re-apply the INI/CLI
 // assignments so any user-set field wins.
 #include "../test_utils.h"
-#include "config/cli.h"
-#include "config/config.h"
+#include "io/cli.h"
+#include "core/config.h"
 #include "simulator/scene_3d.h"
 
 #include <string>

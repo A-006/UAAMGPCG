@@ -1,5 +1,5 @@
 #include "simulator/scene_3d.h"
-#include "config/cli.h"
+#include "io/cli.h"
 #include "io/vtk_slim_3d.h"
 #include "ic/3d/delta_wing.h"
 #include "ic/3d/trefoil_knot.h"

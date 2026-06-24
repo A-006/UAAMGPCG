@@ -2,7 +2,7 @@
  * @file test_karman_bench_3d_gpu.cu
  * @brief 3D Karman vortex street — CPU + GPU solver comparison.
  */
-#include "config/config.h"
+#include "core/config.h"
 #include "core/grid.h"
 #include "simulator/chorin/chorin_simulator.h"
 #include "solver/factory.h"

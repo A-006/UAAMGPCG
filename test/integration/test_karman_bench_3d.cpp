@@ -2,7 +2,7 @@
  * @file test_karman_bench_3d.cpp
  * @brief 3D Karman vortex street — CPU solver comparison.
  */
-#include "config/config.h"
+#include "core/config.h"
 #include "core/grid.h" // 2D grid for simulator
 #include "simulator/chorin/chorin_simulator.h"
 #include "solver/factory.h"

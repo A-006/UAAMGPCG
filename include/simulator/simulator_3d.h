@@ -1,5 +1,5 @@
 #pragma once
-#include "config/config.h"
+#include "core/config.h"
 #include "core/grid_3d.h"
 #include "solver/solver_3d.h"
 #include "simulator/simulation.h"

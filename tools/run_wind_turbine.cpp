@@ -7,7 +7,7 @@
  * re-applied. The downstream helical trail emerges from the moving
  * wing-tip vortices.
  */
-#include "config/config.h"
+#include "core/config.h"
 #include "simulator/simulator_3d.h"
 #include "solver/factory_3d.h"
 #include "io/vtk_writer_3d.h"

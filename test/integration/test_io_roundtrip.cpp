@@ -11,7 +11,7 @@
 #include "io/vtk_writer.h"
 #include "core/grid_3d.h"
 #include "core/grid.h"
-#include "config/config.h"
+#include "core/config.h"
 
 #include <cstdio>
 #include <cstdlib>

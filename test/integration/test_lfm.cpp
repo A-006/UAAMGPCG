@@ -13,7 +13,7 @@
  *   T8: Full cycle on Karman setup (with cylinder)
  *   T9: Compare Chorin vs LFM one step
  */
-#include "config/config.h"
+#include "core/config.h"
 #include "core/grid.h"
 #include "simulator/lfm/flow_map_2d.h"
 #include "simulator/lfm/lfm_simulator.h"

@@ -1,6 +1,6 @@
 #pragma once
 #include "core/bc/boundary_condition.h"
-#include "config/config.h"
+#include "core/config.h"
 #include "core/grid.h"
 
 // ──────────────────────────────────────────────────────────────────

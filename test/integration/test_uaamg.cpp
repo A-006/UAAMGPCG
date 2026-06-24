@@ -10,7 +10,7 @@
  * @author liutao
  * @date 2026-05-24
  */
-#include "config/config.h"
+#include "core/config.h"
 #include "core/grid.h"
 #include "simulator/chorin/chorin_simulator.h"
 #include "solver/factory.h"

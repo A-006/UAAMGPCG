@@ -21,7 +21,7 @@
  * (3D scenes — vortex_ring, vortex_collision, collision_paper, delta_wing,
  * vortex_reconnection, trefoil_knot — see scene_3d.h. Everything else is 2D.)
  */
-#include "config/config.h"
+#include "core/config.h"
 #include "simulator/launcher.h" // launcher::build_config / make_simulation
 #include <iostream>
 

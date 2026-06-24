@@ -7,7 +7,7 @@
  *
  * Reference: Schäfer & Turek 1996, Rajani 2009
  */
-#include "config/config.h"
+#include "core/config.h"
 #include "core/grid.h"
 #include "simulator/simulator_base.h"
 #include "simulator/chorin/chorin_simulator.h"

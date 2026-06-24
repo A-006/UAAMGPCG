@@ -21,8 +21,8 @@ set(LFM_SOURCES
     ic/3d/delta_wing.cpp
     ic/3d/fire_ball.cpp
     ic/3d/wind_turbine.cpp
-    config/config.cpp
-    config/cli.cpp
+    core/config.cpp
+    io/cli.cpp
     simulator/advection/advection.cpp
     core/bc/patches.cpp
     io/force.cpp

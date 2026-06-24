@@ -1,6 +1,6 @@
 #pragma once
-#include "config/cli.h"
-#include "config/config.h"
+#include "io/cli.h"
+#include "core/config.h"
 
 // ──────────────────────────────────────────────────────────────────
 // Shared Config builders for tests. They go through the SAME production

@@ -1,4 +1,4 @@
-#include "config/config.h"
+#include "core/config.h"
 #include "core/grid.h"
 #include "simulator/advection/advection.h"
 #include "simulator/chorin/chorin_simulator.h"

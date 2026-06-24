@@ -1,5 +1,5 @@
 #pragma once
-#include "config/config.h"
+#include "core/config.h"
 #include "simulator/simulator_base.h"
 #include <functional>
 #include <vector>

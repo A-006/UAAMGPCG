@@ -1,4 +1,4 @@
-#include "config/config.h"
+#include "core/config.h"
 // Most Config fields are a simple aggregate with inline defaults in the header.
 // The `extra` map carries scenario-specific knobs read from INPUT files; the
 // accessors below turn its string values into the type each scenario needs.
