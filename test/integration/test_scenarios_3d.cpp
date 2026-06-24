@@ -5,7 +5,8 @@
 // CPU setup correctness only; no GPU simulator is constructed.
 #include "../test_utils.h"
 #include "io/3d/vortex_ring.h"
-#include "io/3d/delta_wing.h"
+#include "io/3d/plate.h"
+#include "io/3d/freestream.h"
 #include "mesh/grid_3d.h"
 #include "core/scalar_field_3d.h"
 #include <cmath>

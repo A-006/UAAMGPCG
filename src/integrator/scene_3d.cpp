@@ -1,7 +1,8 @@
 #include "integrator/scene_3d.h"
 #include "io/cli.h"
 #include "io/vtk_slim_3d.h"
-#include "io/3d/delta_wing.h"
+#include "io/3d/freestream.h"
+#include "io/3d/plate.h"
 #include "io/3d/trefoil_knot.h"
 #include "io/3d/vortex_ring.h"
 #include <array>
@@ -269,21 +270,21 @@ static void build_trefoil_knot(Grid3D& g, const Config& cfg, const IcParams& p) 
     scenarios::add_trefoil_knot(g, tk);
 }
 
-// kind "delta_wing": immersed solid (authors' SDF if sdf_path is set, else an
+// kind "plate": immersed solid (authors' SDF if sdf_path is set, else an
 // analytic flat plate) + a uniform freestream IC from the derived inflow_*.
-static void build_delta_wing(Grid3D& g, const Config& cfg, const IcParams& p) {
+static void build_plate(Grid3D& g, const Config& cfg, const IcParams& p) {
     std::string sdf = p.s("sdf_path", "");
     if (!sdf.empty()) {
-        scenarios::load_sdf_solid(g, sdf); // authors' exact wing geometry
+        scenarios::load_sdf_solid(g, sdf); // exact geometry from a data file
     } else {
-        scenarios::DeltaWing wing;
-        wing.leading_x = p.d("leading_x", 0.5);
-        wing.chord     = p.d("chord", 1.0);
-        wing.semi_span = p.d("semi_span", 0.35);
-        wing.thickness = p.d("thickness", 0.02);
-        wing.tilt_deg  = p.d("tilt_deg", 20.0); // plate orientation (geometry)
-        wing.y_mid     = p.d("y_mid", 0.5);
-        scenarios::setup_delta_wing(g, wing);
+        scenarios::Plate plate;
+        plate.leading_x = p.d("leading_x", 0.5);
+        plate.chord     = p.d("chord", 1.0);
+        plate.semi_span = p.d("semi_span", 0.35);
+        plate.thickness = p.d("thickness", 0.02);
+        plate.tilt_deg  = p.d("tilt_deg", 20.0);
+        plate.y_mid     = p.d("y_mid", 0.5);
+        scenarios::setup_plate(g, plate);
     }
     scenarios::set_uniform_freestream(g, cfg.inflow_ux, cfg.inflow_uy, cfg.inflow_uz);
 }
@@ -292,7 +293,7 @@ static const std::unordered_map<std::string, IcBuilder>& ic_registry() {
     static const std::unordered_map<std::string, IcBuilder> kReg = {
         {"vortex_ring", build_vortex_ring},
         {"trefoil_knot", build_trefoil_knot},
-        {"delta_wing", build_delta_wing},
+        {"plate", build_plate},
     };
     return kReg;
 }

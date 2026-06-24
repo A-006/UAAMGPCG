@@ -37,7 +37,7 @@ inflow_uy  = 0.20521208599540122
 # above. With no ic.sdf_path the plate is built analytically; ic.tilt_deg is the
 # plate's orientation (a geometry property). Uncomment ic.sdf_path for the
 # authors' exact geometry.
-ic              = delta_wing
+ic              = plate
 ic.leading_x    = 0.5
 ic.chord        = 1.0
 ic.semi_span    = 0.35

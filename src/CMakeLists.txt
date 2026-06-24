@@ -18,7 +18,8 @@ set(LFM_SOURCES
     io/scenario_registry.cpp
     io/3d/vortex_ring.cpp
     io/3d/trefoil_knot.cpp
-    io/3d/delta_wing.cpp
+    io/3d/freestream.cpp
+    io/3d/plate.cpp
     core/config.cpp
     io/cli.cpp
     integrator/ops/advection.cpp

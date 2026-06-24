@@ -14,7 +14,8 @@
 #include "core/config.h"
 #include "io/vtk_writer_3d.h"
 #include "integrator/lfm/lfm_simulator_3d.h"
-#include "io/3d/delta_wing.h"
+#include "io/3d/plate.h"
+#include "io/3d/freestream.h"
 #include "solver/factory_3d.h"
 #include <chrono>
 #include <cmath>
@@ -66,7 +67,7 @@ int main(int argc, char** argv) {
     LFMSimulator3D sim(cfg, Factory3D::create(cfg.solver));
 
     // Analytic delta wing scaled into the 2x1x1 box, at 20-degree AoA.
-    scenarios::DeltaWing wing;
+    scenarios::Plate wing;
     wing.leading_x = 0.5;
     wing.chord     = 1.0;
     wing.semi_span = 0.35;
@@ -77,7 +78,7 @@ int main(int argc, char** argv) {
     double aoa = 20.0 * M_PI / 180.0;
     double Ux  = cfg.U_inf * std::cos(aoa); // 0.5638 at U=0.6
     double Uy  = cfg.U_inf * std::sin(aoa); // 0.2052 at U=0.6
-    scenarios::setup_delta_wing(sim.mutable_grid(), wing);
+    scenarios::setup_plate(sim.mutable_grid(), wing);
     scenarios::set_uniform_freestream(sim.mutable_grid(), Ux, Uy, 0.0);
     sim.set_boundary_manager(scenarios::freestream_box_bcs(Ux, Uy, 0.0));
 

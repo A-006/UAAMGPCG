@@ -9,7 +9,8 @@
 #include "integrator/simulator_3d.h"
 #include "solver/factory_3d.h"
 #include "io/vtk_writer_3d.h"
-#include "io/3d/delta_wing.h"
+#include "io/3d/plate.h"
+#include "io/3d/freestream.h"
 #include <iostream>
 #include <iomanip>
 #include <chrono>
@@ -59,16 +60,16 @@ int main(int argc, char** argv) {
     ChorinSimulator3D sim(cfg, std::move(solver));
 
     // Wing + inflow/outflow BCs + initial uniform stream.
-    scenarios::DeltaWing wing{};
+    scenarios::Plate wing{};
     wing.leading_x = 0.7;
     wing.chord     = 0.8;
     wing.semi_span = 0.4;
     wing.thickness = 0.025;
     wing.tilt_deg   = 15.0;
     wing.y_mid     = 0.75;
-    scenarios::setup_delta_wing(sim.mutable_grid(), wing);
+    scenarios::setup_plate(sim.mutable_grid(), wing);
 
-    sim.set_boundary_manager(scenarios::delta_wing_bcs(cfg.U_inf));
+    sim.set_boundary_manager(scenarios::inflow_outflow_bcs(cfg.U_inf));
     scenarios::set_uniform_inflow(sim.mutable_grid(), cfg.U_inf);
 
     VtkWriter3D::write(sim.grid(), 0, cfg);
