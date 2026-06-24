@@ -22,21 +22,27 @@ Re         = 0
 lfm_cycle_steps = 5       # n steps per LFM reinitialization cycle
 solve_tol       = 1e-6
 
-U_inf      = 0.6          # freestream speed
-aoa_deg    = 20           # angle of attack (degrees); also drives the derived freestream
+U_inf      = 0.6
 lfm_bfecc_clamp = 1
 lfm_bc          = freestream
-solve_iters     = 200     # thin plate normal to AoA blocks more flow → more CG
+solve_iters     = 200     # thin plate normal to the flow blocks more → more CG
 
-# ── Initial condition: an immersed delta-wing solid + uniform freestream. With
-# no ic.sdf_path, the wing is the analytic flat plate below; ic.aoa_deg defaults
-# to the top-level aoa_deg above. The freestream IC comes from the derived
-# inflow_* (U_inf at aoa_deg). Uncomment ic.sdf_path for the authors' geometry.
+# Freestream as a direct velocity vector (BC). These are U=0.6 tilted 20°:
+# 0.6·cos20°, 0.6·sin20°. No "angle of attack" parameter — the tilt is the
+# plate's geometry (ic.tilt_deg) and the flow is just this vector.
+inflow_ux  = 0.563815572471545
+inflow_uy  = 0.20521208599540122
+
+# ── Initial condition: an immersed flat-plate solid + the uniform freestream
+# above. With no ic.sdf_path the plate is built analytically; ic.tilt_deg is the
+# plate's orientation (a geometry property). Uncomment ic.sdf_path for the
+# authors' exact geometry.
 ic              = delta_wing
 ic.leading_x    = 0.5
 ic.chord        = 1.0
 ic.semi_span    = 0.35
 ic.thickness    = 0.02
+ic.tilt_deg     = 20
 ic.y_mid        = 0.5
 # ic.aoa_deg    = 20                       # override the wing tilt (else uses aoa_deg)
 

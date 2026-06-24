@@ -23,7 +23,6 @@ namespace scene3d {
 // top-down: the launcher's two calls first, the details underneath.
 static void apply_presets(Config& cfg);
 static std::string scenario_of(const config::KeyVals& kv);
-static void derive_freestream(Config& cfg);
 static std::string find_preset(const std::string& scenario);
 
 std::string peek_scenario(int argc, char** argv) {
@@ -82,10 +81,6 @@ Config build_config(int argc, char** argv) {
     apply_presets(cfg);
     for (const auto& [k, v] : kv)
         config::set_field(cfg, k, v);
-
-    // Then fill in fields computed from the others, now that everything is set
-    // (currently just the delta-wing freestream from its angle of attack).
-    derive_freestream(cfg);
     return cfg;
 }
 
@@ -150,17 +145,6 @@ static std::string scenario_of(const config::KeyVals& kv) {
         if (k == "scenario")
             scenario = v;
     return scenario;
-}
-
-// Delta wing: derive the freestream from |U| at the angle of attack, unless the
-// user set inflow_* explicitly.
-static void derive_freestream(Config& cfg) {
-    bool inflow_set = cfg.inflow_ux != 0.0 || cfg.inflow_uy != 0.0 || cfg.inflow_uz != 0.0;
-    if (cfg.scenario != "delta_wing" || inflow_set)
-        return;
-    double aoa    = cfg.dget("aoa_deg", 20.0) * M_PI / 180.0;
-    cfg.inflow_ux = cfg.U_inf * std::cos(aoa);
-    cfg.inflow_uy = cfg.U_inf * std::sin(aoa);
 }
 
 // ── Author cross-check: load a shared staggered IC (ic{x,y,z}.raw, float32) ──
@@ -297,7 +281,7 @@ static void build_delta_wing(Grid3D& g, const Config& cfg, const IcParams& p) {
         wing.chord     = p.d("chord", 1.0);
         wing.semi_span = p.d("semi_span", 0.35);
         wing.thickness = p.d("thickness", 0.02);
-        wing.aoa_deg   = p.d("aoa_deg", cfg.dget("aoa_deg", 20.0));
+        wing.tilt_deg  = p.d("tilt_deg", 20.0); // plate orientation (geometry)
         wing.y_mid     = p.d("y_mid", 0.5);
         scenarios::setup_delta_wing(g, wing);
     }

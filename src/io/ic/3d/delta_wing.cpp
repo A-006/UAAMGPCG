@@ -139,8 +139,8 @@ private:
 } // namespace
 
 void setup_delta_wing(Grid3D& g, const DeltaWing& wing) {
-    double aoa = wing.aoa_deg * M_PI / 180.0;
-    double cs = std::cos(aoa), sn = std::sin(aoa);
+    double tilt = wing.tilt_deg * M_PI / 180.0;
+    double cs = std::cos(tilt), sn = std::sin(tilt);
     double z_mid = 0.5 * g.Lz();
 
     for (int k = 1; k <= g.nz; k++) {

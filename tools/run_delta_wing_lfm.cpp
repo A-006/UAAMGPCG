@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
     wing.chord     = 1.0;
     wing.semi_span = 0.35;
     wing.thickness = 0.02;
-    wing.aoa_deg   = 20.0;
+    wing.tilt_deg   = 20.0;
     wing.y_mid     = 0.5;
     // Paper-style freestream at 20-degree attack angle (mass-balanced box BC).
     double aoa = 20.0 * M_PI / 180.0;

@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
     wing.chord     = 0.8;
     wing.semi_span = 0.4;
     wing.thickness = 0.025;
-    wing.aoa_deg   = 15.0;
+    wing.tilt_deg   = 15.0;
     wing.y_mid     = 0.75;
     scenarios::setup_delta_wing(sim.mutable_grid(), wing);
 

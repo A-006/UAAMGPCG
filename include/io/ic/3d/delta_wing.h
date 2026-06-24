@@ -18,7 +18,7 @@ struct DeltaWing {
     double chord     = 0.8;  // root chord length (apex → trailing edge)
     double semi_span = 0.4;  // half of the wing span (z direction)
     double thickness = 0.02; // wing half-thickness (y direction)
-    double aoa_deg   = 12.0; // angle of attack (rotation about z)
+    double tilt_deg  = 12.0; // plate orientation: rotation about z (geometry)
     double y_mid     = 0.5;  // wing mid-plane y position
 };
 
